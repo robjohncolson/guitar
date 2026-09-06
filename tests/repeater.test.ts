@@ -8,6 +8,15 @@ const note = (t: number, hz = 220) => {
   return { t,hz,midi:Math.round(midi),pitchClass:pitchClass(midi),cents:centsOffset(midi),confidence:0.9 };
 };
 describe('two-beat repeater', () => {
+  it('repeats touch and measured note length without postponing the attack', () => {
+    const repeater = new Repeater(); repeater.setTempo(120);
+    repeater.accept({...note(0),level:0.04}); repeater.finish(0,0.15);
+    repeater.accept({...note(0.3,330),level:0.01}); repeater.finish(0.3,0.95);
+    const first = repeater.takeDue(1,0)[0], second = repeater.takeDue(1.3,0)[0];
+    expect(first.at).toBe(1); expect(first.duration).toBeCloseTo(0.15);
+    expect(second.duration).toBeCloseTo(0.65); expect(second.velocity).toBeLessThan(first.velocity);
+    repeater.accept(note(2)); expect(repeater.takeDue(3,0)[0].duration).toBe(1);
+  });
   it('answers the very first note exactly two beats after its attack, retaining its tuning', () => {
     const repeater = new Repeater(); repeater.setTempo(120);
     expect(repeater.accept(note(5.13,221.7))).toBe(true);

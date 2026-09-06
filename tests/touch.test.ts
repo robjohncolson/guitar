@@ -1,0 +1,23 @@
+import { expect, it } from 'vitest';
+import { Touch } from '../src/music/touch';
+import { Repeater } from '../src/music/repeater';
+
+it('keeps soft/loud differences at different microphone levels with bounded output', () => {
+  const near = new Touch(), far = new Touch();
+  const levels = [0.04,0.01,0.08,0.02];
+  const velocities = levels.map(level => near.velocity(level));
+  expect(velocities).toEqual(levels.map(level => far.velocity(level/100)));
+  expect(velocities[1]).toBeLessThan(velocities[0]); expect(velocities[2]).toBeGreaterThan(velocities[1]);
+  expect(near.velocity(10)).toBe(1); expect(near.velocity(0.000001)).toBe(0.25);
+  expect(near.velocity(NaN)).toBe(0.75);
+  near.reset(); expect(near.velocity(0.001)).toBe(0.75);
+});
+it('only learns dynamics from accepted player attacks, including while looping', () => {
+  const repeater = new Repeater();
+  const note = {t:0,hz:220,midi:57,pitchClass:9,cents:0,confidence:0.9,level:0.04};
+  repeater.accept(note,false); expect(repeater.lastPlayer?.velocity).toBe(0.75);
+  repeater.mask.arm(1,0.5,57);
+  expect(repeater.accept({...note,t:1,level:10},false)).toBe(false);
+  repeater.accept({...note,t:2},false); expect(repeater.lastPlayer?.velocity).toBe(0.75);
+  expect(repeater.pending).toBe(0);
+});

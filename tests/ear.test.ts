@@ -3,6 +3,7 @@ import { binCents, normalize, postprocess } from '../src/audio/crepe';
 import { OnsetDetector } from '../src/audio/onset';
 import { FrameBuffer } from '../src/audio/frame-buffer';
 import { Grid } from '../src/audio/grid';
+import type { NoteEnd } from '../src/music/notes';
 
 describe('CREPE official contract', () => {
   it('reconstructs a known bin to within 1%', () => {
@@ -24,6 +25,34 @@ describe('CREPE official contract', () => {
   });
 });
 describe('capture and attacks', () => {
+  it('captures attack strength before CREPE normalization', () => {
+    const detector = new OnsetDetector();
+    const pluck = (t: number, rms: number) => {
+      detector.attack(t);
+      for (const offset of [0,0.02,0.04]) detector.process(t+offset,{hz:220,confidence:0.9},rms);
+      return detector.process(t+0.06,{hz:220,confidence:0.9},rms)!;
+    };
+    const soft = pluck(0,0.01), loud = pluck(0.5,0.08);
+    expect(loud.hz).toBe(soft.hz); expect(loud.level).toBeCloseTo(soft.level!*8);
+  });
+  it('ends notes at the release, tolerates brief pitch dropouts, and emits no sustain attacks', () => {
+    const ends: NoteEnd[] = [], detector = new OnsetDetector(note => ends.push(note));
+    let count = 0;
+    for (let i=0;i<50;i++) {
+      const voiced = i !== 10 && i < 30;
+      if (detector.process(i*0.02,{hz:voiced ? 220 : 0,confidence:voiced ? 0.9 : 0},0.02)) count++;
+    }
+    expect(count).toBe(1); expect(ends).toEqual([{t:0,end:0.6}]);
+  });
+  it('a new settled attack ends the previous note at its original timestamp', () => {
+    const ends: NoteEnd[] = [], detector = new OnsetDetector(note => ends.push(note));
+    for (let i=0;i<40;i++) {
+      if (i === 20) detector.attack(0.4);
+      detector.process(i*0.02,{hz:220,confidence:0.9},0.02);
+    }
+    expect(ends).toEqual([{t:0,end:0.4}]);
+    detector.reset(0.8); expect(ends[1]).toEqual({t:0.4,end:0.8});
+  });
   it.each([44100, 48000])('resamples %i Hz to overlapping 1024-sample frames at 20 ms hops', rate => {
     const capture = new FrameBuffer(rate);
     const input = Float32Array.from({length: rate / 5}, (_, i) => Math.sin(2*Math.PI*220*i/rate));

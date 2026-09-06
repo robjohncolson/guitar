@@ -7,6 +7,12 @@ const note = (t: number, hz = 220) => ({t,hz,midi:Math.round(hzToMidi(hz)),pitch
 function memory(): PhraseMemory { const result = new PhraseMemory(); result.reset(0,0.5); return result; }
 
 describe('phrase memory', () => {
+  it('includes late-settling attacks before the saved downbeat without changing an active loop', () => {
+    const loop = memory(); loop.record(note(0.1)); loop.prune(2.01);
+    loop.record(note(1.99,330)); loop.remember(1,2.1,0);
+    expect(loop.active?.notes.map(n => n.sourceTime)).toEqual([0.1,1.99]);
+    loop.record(note(1.98,440)); expect(loop.active?.notes).toHaveLength(2);
+  });
   it.each([1,2,4] as MemoryBars[])('captures the last %i completed bars, including rests and unquantized offsets', bars => {
     const loop = memory(), end = bars*2;
     loop.record(note(0.13,221.7)); loop.record(note(end-0.4,330)); loop.record(note(end+0.1,440));
@@ -23,11 +29,37 @@ describe('phrase memory', () => {
     loop.remember(2,8.2,0);
     expect(loop.active?.notes.map(n => n.sourceTime)).toEqual([4,6]);
   });
-  it('does not capture a partial or entirely silent phrase', () => {
+  it('does not capture partial listening bars or an entirely silent session', () => {
     const loop = memory(); loop.record(note(0.3));
     expect(loop.remember(2,3.9,0)).toBe(false);
-    expect(loop.remember(1,4.1,0)).toBe(false);
+    expect(memory().remember(1,4.1,0)).toBe(false);
     expect(loop.remember(2,4.1,0)).toBe(true);
+  });
+  it.each([1,2,4] as MemoryBars[])('holds the last useful %i-bar phrase across a long pause and history pruning', bars => {
+    const loop = memory(); loop.record(note(0.2)); loop.record(note(bars*2-0.5,330));
+    loop.finish(0.2,0.4); loop.finish(bars*2-0.5,bars*2-0.2);
+    loop.prune(bars*2+0.1); loop.prune(60);
+    expect(loop.held(bars,60)).toBe(true); expect(loop.noteCount(bars,60)).toBe(2);
+    expect(loop.remember(bars,60.1,0)).toBe(true);
+    expect(loop.active?.notes.map(n => n.sourceTime)).toEqual([0.2,bars*2-0.5]);
+  });
+  it('keeps a complete candidate while new playing is partial, then replaces it when the bar finishes', () => {
+    const loop = memory(); loop.record(note(0.2)); loop.prune(10);
+    loop.record(note(10.3,330)); loop.remember(1,11,0);
+    expect(loop.active?.notes[0].sourceTime).toBe(0.2);
+    loop.clear(); loop.remember(1,12.1,0);
+    expect(loop.active?.notes[0].sourceTime).toBe(10.3);
+  });
+  it('freezes dynamics and lengths, preserving short notes, held notes and boundary rests', () => {
+    const loop = memory();
+    loop.record({...note(0.1),velocity:0.35}); loop.finish(0.1,0.25);
+    loop.record({...note(0.7,330),velocity:0.95}); loop.finish(0.7,1.5);
+    loop.remember(1,2.1,0);
+    loop.finish(0.1,1); // Late input cannot change a frozen loop.
+    const first = loop.takeDue(4.1,0)[0], second = loop.takeDue(4.7,0)[0];
+    expect(first.duration).toBeCloseTo(0.15); expect(first.velocity).toBe(0.35);
+    expect(second.duration).toBeCloseTo(0.8); expect(second.velocity).toBe(0.95);
+    expect(loop.takeDue(6.1,0)[0].duration).toBe(first.duration);
   });
   it('requires full listening bars when the mic starts after the clock', () => {
     const loop = memory(); loop.reset(0,0.5,1); loop.record(note(1.1));

@@ -4,11 +4,23 @@
 
 This contract supersedes the scale-inference and four-role product below. The user asked for a simple repeater with no musical setup wait.
 
+### Expressive memory revision (September 6, 2026)
+
+Preserve touch, retain the last useful phrase through pauses, and add one **Responsive on/off** toggle, on by default and saved. These rules supersede the fixed-length tones and strictly rolling capture described below.
+
+- Capture each attack's unnormalized RMS during the existing pitch-settling window. Compare accepted player attacks with recent playing to retain soft/loud accents without microphone calibration controls. Masked companion attacks must not train this comparison. Softer notes also have a warmer triangle tone.
+- Measure a note's end at the next settled attack or the start of at least 80 ms of unvoiced input. Brief pitch dropouts do not end it. Minimum detected length is 40 ms. In ordinary echo mode, use the length known when scheduling, capped at two beats; a still-held note uses that cap. Keep the original two-beat onset delay. A frozen phrase captures measured lengths, clipped at the next attack and source phrase boundary, including for a still-held final note.
+- Keep one candidate for each memory length alongside bounded rolling history. A completed bar containing new playing updates the candidate; silent bars do not slide or erase it. Initial capture still requires full listening bars and at least one note. Preserve offsets and rests within the selected window. Show **Last phrase saved** during pauses. Late-settling attacks enter the candidate until Remember freezes it. New incomplete playing cannot replace the last completed phrase.
+- Responsive changes the loop's volume as the player improvises: close accepted attacks make it quieter, and pauses bring it back smoothly. Drive activity from accepted attacks, never ringing energy or raw microphone volume. Attacks accumulate to a maximum reduction to 40% of the user's volume; recovery follows the entered pulse. This affects current as well as future loop tones, without changing stored notes, pitch, timing, click, or mutes. Turning it off restores steady playback with the recorded accents intact. Ordinary repeats always use steady volume.
+- Clear retains candidates; tempo/pulse reset discards them. M keeps the frozen loop and phase; Escape silences output and clears the active loop. H retains the loop and resets microphone loudness calibration. Only preferences persist, including Responsive; no note data is stored.
+
+Implementation gates: capture and release tests first; expressive repeater and held-memory tests next; responsive synthesis/UI tests and production build last, followed by real Chrome capture/playback verification. Test dynamics, short/long notes, dropout tolerance, 1/2/4-bar retention through silence, late bar-boundary input, immutable expression, response recovery, preserved mutes/clock, and persistence.
+
 ### Phrase memory addition
 
 Keep the two-beat repeater as the default. Add just a **Memory: 1 / 2 / 4 bars** selector (default 2) and a **Remember / Clear** toggle, also on **L**.
 
-Continuously retain the last four completed bars plus the current bar of accepted player attacks. Remember snapshots the selected number of most recent completed bars, on the existing 4/4 clock, once full listening bars and at least one accepted note are available. Preserve detected pitch, attack timing between beats, and rests. Do not quantize or fill empty beats. Playback uses the same short triangle tones, clipped at the phrase boundary.
+Continuously retain the last four completed bars plus the current bar of accepted player attacks, and the last useful candidate for each length. Remember snapshots the selected candidate on the existing 4/4 clock, once full listening bars and at least one accepted note are available. Preserve detected pitch, touch, attack timing between beats, and rests. Do not quantize or fill empty beats. Playback uses expressive triangle tones, clipped at the phrase boundary.
 
 Start the frozen phrase on the next downbeat with enough lead for output latency; repeat it at exactly the selected bar length. While armed or looping, incoming guitar continues entering rolling memory but cannot alter the frozen snapshot and cannot queue ordinary echoes. Both modes share the existing self-play mask, so companion output never enters memory. Remember stops pending/current ordinary echoes. No overdub or automatic replacement.
 
@@ -20,7 +32,7 @@ Show listening progress until capture is ready, then a next-downbeat start statu
 
 - Enter BPM directly (40–240, default 100, saved). Click Enable audio & mic. Space tap tempo remains optional; the guitar never sets tempo.
 - The **first** accepted note-on queues the same detected pitch, at `onset.t + 120 / bpm`. At 120 BPM this is one second after the original attack, including for off-grid notes. Preserve detected tuning rather than snapping to a scale or octave. CREPE's short onset-settling window does not add to the delay.
-- Each attack produces exactly one synthesized triangle tone, at the same pitch. This is pitch repetition, not recording and replaying the guitar audio. Sustain never queues extra repeats. Playback duration is 55% of a beat, capped at 450 ms.
+- Each attack produces exactly one synthesized triangle tone, at the same pitch. This is pitch repetition, not recording and replaying the guitar audio. Sustain never queues extra repeats. Preserve measured dynamics and duration as described in the expressive memory revision above.
 - No scale inference, confidence-to-key gate, six-note wait, lock, density, hole filling, or role selector. Repeats can overlap a newly played note; do not delay or skip them based on occupancy.
 - Retain real local CREPE tiny, official model I/O, WebGL, AudioWorklet capture, and the explicitly labeled load-failure-only YIN fallback. Retain speakers AEC and the matching-pitch self-play mask for note duration plus 80 ms.
 - Audio target time is `onset.t + 120 / bpm - outputLatency`, falling back to baseLatency. Schedule with Web Audio; skip events more than 15 ms late. Do not move old repeats to the present after a stalled tab.

@@ -2,7 +2,9 @@
 
 Local Vite + TypeScript app. Acoustic guitar in, the same pitch repeated two beats later. Current product contract is at the top of `SPEC.md`; the original multi-role design is historical.
 
-Optional phrase memory captures the last 1/2/4 completed bars (default 2) with Remember/L, loops from the next downbeat, and stays frozen while the player improvises. Clear/L returns to the ordinary repeater.
+Optional phrase memory captures the last useful 1/2/4-bar phrase (default 2) with Remember/L, loops from the next downbeat, and stays frozen while the player improvises. Clear/L returns to the ordinary repeater.
+
+Preserve attack dynamics and measured lengths. Keep the last useful completed phrase through silence. Responsive (default on) smoothly softens only loop playback in response to accepted player attacks, recovering in rests; it never changes the frozen phrase or click.
 
 ## Rules
 

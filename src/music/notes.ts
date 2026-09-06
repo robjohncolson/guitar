@@ -8,4 +8,9 @@ export function noteLabel(hz: number): string {
   const midi = hzToMidi(hz), cents = Math.round(centsOffset(midi));
   return `${noteNames[pitchClass(midi)]}${Math.floor(Math.round(midi) / 12) - 1} ${cents >= 0 ? '+' : '−'}${Math.abs(cents)}¢`;
 }
-export interface NoteOn { t: number; hz: number; midi: number; pitchClass: number; cents: number; confidence: number }
+export interface NoteOn {
+  t: number; hz: number; midi: number; pitchClass: number; cents: number; confidence: number;
+  /** Unnormalized attack RMS; velocity is assigned after the self-play mask. */
+  level?: number; velocity?: number; duration?: number;
+}
+export interface NoteEnd { t: number; end: number }

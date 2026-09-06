@@ -18,7 +18,7 @@ export function shell(): void {
         <div><span class="eyebrow">YOU PLAYED</span><div id="note" class="note">—</div><span id="pitch-detail" class="muted">One note at a time</span></div>
         <div><span id="repeat-label" class="eyebrow">REPEAT</span><div id="echo-note" class="note cool">—</div><span id="queue" class="muted">Ready for your first note</span></div>
       </section>
-      <div class="toggles"><button id="companion-mute">Repeater on · M</button><button id="click-mute">Click on · C</button><button id="output">Speakers · H</button><button id="panic">Silence · Esc</button></div>
+      <div class="toggles"><button id="companion-mute">Repeater on · M</button><button id="click-mute">Click on · C</button><button id="responsive" aria-pressed="true" title="The loop softens while you play and returns in your pauses.">Responsive on</button><button id="output">Speakers · H</button><button id="panic">Silence · Esc</button></div>
       <details><summary>Listening settings</summary><label>Voiced threshold <input id="threshold" type="range" min="0.3" max="0.8" step="0.01" value="0.5"><output id="threshold-value">0.50</output></label><label>Repeat volume <input id="volume" type="range" min="0" max="0.5" step="0.01" value="0.22"><output id="volume-value">44%</output></label><p class="muted">Speakers uses echo cancellation. If the mic picks up the repeats, try headphones and press H.</p></details>
       <footer><span><kbd>Space</kbd> tap tempo</span><span><kbd>L</kbd> remember / clear</span><span><kbd>Shift Space</kbd> restart pulse</span><span><kbd>M / C</kbd> notes / click</span><span><kbd>H</kbd> output mode</span><span><kbd>Esc</kbd> silence & clear</span></footer>
     </main>`;

@@ -15,7 +15,9 @@ for (let i = 0; i < rate * seconds; i++) {
   const t = i / rate - 1;
   if (t < 0) continue;
   const age = t % 3;
-  const envelope = Math.min(1, age / 0.004) * Math.exp(-age * 5);
+  const soft = Math.floor(t/3)%2 === 1;
+  const length = soft ? 0.28 : 0.8;
+  const envelope = Math.min(1, age / 0.004) * Math.exp(-age * 3) * (soft ? 0.4 : 1) * Math.max(0,Math.min(1,(length-age)/0.01));
   const sample = envelope * (Math.sin(2 * Math.PI * 110 * t) + 0.35 * Math.sin(2 * Math.PI * 220 * t) + 0.12 * Math.sin(2 * Math.PI * 330 * t));
   pcm.writeInt16LE(Math.round(sample * 14000), i * 2);
 }
@@ -64,13 +66,16 @@ try {
   const until = async (expression, milliseconds = 30000) => {
     const end = Date.now() + milliseconds;
     while (Date.now() < end) { const result = await evaluate(expression); if (result) return result; await pause(100); }
-    const state = await evaluate("({hint:document.getElementById('hint')?.textContent,queue:document.getElementById('queue')?.textContent,memory:document.getElementById('memory-status')?.textContent,notes:window.__smoke?.notes,attacks:window.__smoke?.attacks})");
+    const state = await evaluate("({hint:document.getElementById('hint')?.textContent,queue:document.getElementById('queue')?.textContent,memory:document.getElementById('memory-status')?.textContent,notes:window.__smoke?.notes,attacks:window.__smoke?.attacks,response:window.__smoke?.responseTargets,samples:window.__smoke?.responseSamples?.slice(-20)})");
     throw new Error(`Timed out: ${expression}\n${JSON.stringify({state,errors})}`);
   };
   await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable');
   if (modelFailure) await send('Fetch.enable', {patterns:[{urlPattern:'*/models/crepe-tiny/model.json'}]});
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.__smoke = { notes: [], contexts: [], constraints: [], attacks: [] };
+    window.__smoke = { notes: [], contexts: [], constraints: [], attacks: [], ramps: [], responseTargets: [], responseSamples: [], tracks: [] };
+    setInterval(() => {
+      if (window.__smoke.responseParam) window.__smoke.responseSamples.push(window.__smoke.responseParam.value);
+    },25);
     const NativeContext = window.AudioContext;
     window.AudioContext = class extends NativeContext {
       constructor(...args) { super(...args); window.__smoke.contexts.push(this); }
@@ -82,13 +87,32 @@ try {
         this.port.addEventListener('message', event => { if (event.data.type === 'attack') window.__smoke.attacks.push(event.data.t); });
       }
     };
-    const start = OscillatorNode.prototype.start;
+    const ramp = AudioParam.prototype.linearRampToValueAtTime;
+    AudioParam.prototype.linearRampToValueAtTime = function(value,time) {
+      if (value>0 && value<0.7) window.__smoke.ramps.push({value,time});
+      return ramp.call(this,value,time);
+    };
+    const target = AudioParam.prototype.setTargetAtTime;
+    AudioParam.prototype.setTargetAtTime = function(value,time,constant) {
+      window.__smoke.responseTargets.push({value,time}); window.__smoke.responseParam = this;
+      return target.call(this,value,time,constant);
+    };
+    const start = OscillatorNode.prototype.start, stop = OscillatorNode.prototype.stop, events = new WeakMap();
     OscillatorNode.prototype.start = function(time) {
-      window.__smoke.notes.push({ time, now:this.context.currentTime, hz:this.frequency.value, type:this.type });
+      const peak = window.__smoke.ramps.findLast(ramp => ramp.time>=time && ramp.time<=time+0.013)?.value;
+      const event = { time, now:this.context.currentTime, hz:this.frequency.value, type:this.type, peak };
+      window.__smoke.notes.push(event); events.set(this,event);
       return start.call(this,time);
     };
+    OscillatorNode.prototype.stop = function(time) {
+      const event = events.get(this); if (event && event.end === undefined) event.end = time;
+      return stop.call(this,time);
+    };
     const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-    navigator.mediaDevices.getUserMedia = function(constraints) { window.__smoke.constraints.push(constraints); return getUserMedia(constraints); };
+    navigator.mediaDevices.getUserMedia = async function(constraints) {
+      window.__smoke.constraints.push(constraints);
+      const stream = await getUserMedia(constraints); window.__smoke.tracks.push(...stream.getAudioTracks()); return stream;
+    };
   ` });
   await send('Page.navigate', { url: origin });
   await until(`document.getElementById('model')?.textContent === '${modelFailure ? 'FALLBACK: YIN' : 'CREPE ready (tiny)'}'`, 60000);
@@ -117,19 +141,37 @@ try {
   const graph = await evaluate("({constraints:window.__smoke.constraints,contexts:window.__smoke.contexts.length,notes:window.__smoke.notes.length,late:window.__smoke.notes.filter(note=>note.time<note.now-0.001).length})");
   assert.equal(graph.contexts,1); assert.equal(graph.constraints[0].audio.echoCancellation,true);
   assert.equal(graph.constraints.at(-1).audio.echoCancellation,false); assert.equal(graph.late,0);
+  const expressionStart = await evaluate('window.__smoke.notes.length');
+  await until(`window.__smoke.notes.slice(${expressionStart}).filter(note=>note.type==='triangle').length>=2`,10000);
+  const expression = await evaluate(`window.__smoke.notes.slice(${expressionStart}).filter(note=>note.type==='triangle').slice(0,2).map(note=>({...note,duration:note.end-note.time-0.005})).sort((a,b)=>b.duration-a.duration)`);
+  assert.ok(expression[0].peak>expression[1].peak*1.2,`Soft attack lost its dynamics: ${JSON.stringify(expression)}`);
+  assert.ok(expression[0].duration>expression[1].duration+0.15,`Short/long note lengths were lost: ${JSON.stringify(expression)}`);
+  await evaluate('window.__smoke.tracks.forEach(track=>track.enabled=false)');
   assert.equal(await evaluate("document.querySelector('[data-memory-bars=\"2\"]').getAttribute('aria-pressed')"),'true');
   await evaluate("document.querySelector('[data-memory-bars=\"1\"]').click()");
+  await until("document.getElementById('memory-status').textContent.startsWith('Last phrase saved')",10000);
   await until("!document.getElementById('remember').disabled",10000);
   const loopEventStart = await evaluate("window.__smoke.notes.length");
   await evaluate("document.getElementById('remember').click()");
   await until("document.getElementById('remember').textContent.startsWith('Clear')");
   await until("document.getElementById('memory-status').textContent.startsWith('Looping')",5000);
+  await evaluate('window.__smoke.tracks.forEach(track=>track.enabled=true)');
   await pause(4300);
   const loopNotes = await evaluate(`window.__smoke.notes.slice(${loopEventStart}).filter(note=>note.type==='triangle')`);
   assert.ok(loopNotes.length>=2,`No repeating phrase: ${JSON.stringify(loopNotes)}`);
   const firstCycle = loopNotes.filter(note=>note.time<loopNotes[0].time+1.98);
-  for (const note of firstCycle) assert.ok(loopNotes.some(next=>Math.abs(next.time-note.time-2)<0.02 && Math.abs(next.hz-note.hz)<0.01),'Frozen phrase did not repeat at its original pitch/rhythm');
+  for (const note of firstCycle) assert.ok(loopNotes.some(next=>Math.abs(next.time-note.time-2)<0.02 && Math.abs(next.hz-note.hz)<0.01 && Math.abs(next.peak-note.peak)<0.001 && Math.abs((next.end-next.time)-(note.end-note.time))<0.001),'Frozen phrase did not repeat its pitch, rhythm and touch');
   for (const note of loopNotes) assert.ok(firstCycle.some(first=>Math.abs(note.hz-first.hz)<0.01 && Math.abs((note.time-first.time)/2-Math.round((note.time-first.time)/2))<0.01),'Live playing overdubbed the frozen phrase');
+  await until('window.__smoke.responseTargets.some(target=>target.value<0.95)',6000);
+  // Chrome may skip gain processing while the phrase is resting; sample across sounding notes.
+  await until('window.__smoke.responseSamples.some(value=>value<0.985)',6000);
+  await evaluate('window.__smoke.tracks.forEach(track=>track.enabled=false)');
+  await until('window.__smoke.responseTargets.at(-1).value>0.98 && window.__smoke.responseParam.value>0.98',8000);
+  const responseTargets = await evaluate('window.__smoke.responseTargets.map(target=>target.value)');
+  assert.ok(Math.min(...responseTargets)<0.93 && Math.max(...responseTargets)>0.98,'Response did not soften and recover');
+  await evaluate("document.getElementById('responsive').click()");
+  assert.equal(await evaluate("document.getElementById('responsive').getAttribute('aria-pressed')"),'false');
+  await evaluate('window.__smoke.tracks.forEach(track=>track.enabled=true)');
   if (process.env.SMOKE_SCREENSHOT) {
     const shot = await send('Page.captureScreenshot', {format:'png'});
     await writeFile(process.env.SMOKE_SCREENSHOT,Buffer.from(shot.data,'base64'));
@@ -153,6 +195,7 @@ try {
   assert.equal(saved.voicedThreshold,0.62); assert.equal(saved.outputMode,'headphones');
   assert.equal(saved.bpm,120); assert.equal(saved.crepeCapacity,'tiny'); assert.ok(!('role' in saved)); assert.ok(!('locked' in saved));
   assert.equal(saved.memoryBars,4); assert.ok(!('phrase' in saved));
+  assert.equal(saved.responsive,false);
   await send('Input.dispatchKeyEvent', {type:'keyDown',code:'Escape',key:'Escape'});
   await until("document.getElementById('hint')?.textContent.includes('Output silenced')");
   assert.equal(await evaluate("document.getElementById('bpm').value"),bpmBefore,'Panic reset the clock');
@@ -168,6 +211,10 @@ try {
   assert.equal(await evaluate("document.getElementById('bpm').value"),'120','Entered BPM was not restored');
   assert.equal(await evaluate("document.querySelector('[data-memory-bars=\"4\"]').getAttribute('aria-pressed')"),'true');
   assert.ok(await evaluate("document.getElementById('remember').textContent.startsWith('Remember')"),'A phrase persisted across reload');
-  console.log(JSON.stringify({ ...state, ...graph, timing, loopNotes, persisted:saved, localModelRequests: requests.filter(url => url.includes('/models/')).length, browserErrors: errors.length }, null, 2));
-  await send('Browser.close');
+  assert.equal(await evaluate("document.getElementById('responsive').getAttribute('aria-pressed')"),'false');
+  await until(`document.getElementById('model')?.textContent === '${modelFailure ? 'FALLBACK: YIN' : 'CREPE ready (tiny)'}'`,60000);
+  assert.equal(errors.length,0,JSON.stringify(errors));
+  console.log(JSON.stringify({ ...state, ...graph, timing, expression, responseRange:[Math.min(...responseTargets),Math.max(...responseTargets)], loopNotes, persisted:saved, localModelRequests: requests.filter(url => url.includes('/models/')).length, browserErrors: errors.length }, null, 2));
+  // Chrome can close the socket before acknowledging Browser.close.
+  await Promise.race([send('Browser.close'),pause(1000)]);
 } finally { socket?.close(); chrome.kill(); }

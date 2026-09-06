@@ -2,6 +2,7 @@ import { SelfMask } from '../audio/self-mask';
 import { fireTime } from '../audio/timing';
 import { hzToMidi } from './notes';
 import type { NoteOn } from './notes';
+import { Touch } from './touch';
 
 export interface RepeatNote {
   sourceTime: number;
@@ -9,12 +10,14 @@ export interface RepeatNote {
   hz: number;
   midi: number;
   duration: number;
+  velocity: number;
 }
 export interface ScheduledRepeat extends RepeatNote { fireAt: number }
 export const validBpm = (value: number) => Number.isFinite(value) && value >= 40 && value <= 240;
 
 export class Repeater {
   readonly mask = new SelfMask();
+  readonly touch = new Touch();
   private queue: RepeatNote[] = [];
   private muted = false;
   bpm = 100;
@@ -37,13 +40,19 @@ export class Repeater {
   }
   accept(note: NoteOn, repeat = true): boolean {
     if (!Number.isFinite(note.t) || !Number.isFinite(note.hz) || note.hz <= 0 || this.mask.drops(note)) return false;
-    this.lastPlayer = note;
+    const velocity = note.velocity ?? this.touch.velocity(note.level);
+    this.lastPlayer = {...note,velocity};
     this.onsetCount++;
     if (this.muted || !repeat) return true;
     this.queue.push({ sourceTime: note.t, at: note.t + this.delay, hz: note.hz,
-      midi: hzToMidi(note.hz), duration: Math.min(0.45, 0.55 * 60 / this.bpm) });
+      midi: hzToMidi(note.hz), velocity, duration: Math.min(this.delay,Math.max(0.04,note.duration ?? this.delay)) });
     this.queue.sort((a,b) => a.at-b.at);
     return true;
+  }
+  finish(t: number, end: number): void {
+    if (!Number.isFinite(end) || end < t) return;
+    const note = this.queue.find(note => note.sourceTime === t);
+    if (note) note.duration = Math.min(this.delay,Math.max(0.04,end-t));
   }
   takeDue(now: number, outputDelay: number, lookahead = 0.075): ScheduledRepeat[] {
     const due: ScheduledRepeat[] = [];

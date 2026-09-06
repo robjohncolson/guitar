@@ -28,11 +28,13 @@ const ear = new Ear(
   pitch => { element('pitch-detail').textContent = `${pitch.hz > 0 ? pitch.hz.toFixed(1) : '—'} Hz · ${Math.round(pitch.confidence*100)}% confidence`; },
   note => {
     if (micRunning && grid && context?.state === 'running' && repeater.accept(note,!memory.active)) {
-      memory.record(note);
+      memory.record(repeater.lastPlayer!);
+      scheduler?.response.attack(note.t,grid.period);
       grid.claimPlayer(note.t);
       element('note').textContent = noteLabel(note.hz);
     }
-  }
+  }, undefined,
+  note => { repeater.finish(note.t,note.end); memory.finish(note.t,note.end); }
 );
 ear.onsets.threshold = settings.voicedThreshold;
 void ear.load();
@@ -49,6 +51,7 @@ function updateMutes(): void {
   saveSettings(settings);
 }
 function restartPulse(): void {
+  ear.resetCapture(context?.currentTime);
   synth?.panic();
   repeater.setTempo(settings.bpm);
   memory.reset(0,60/settings.bpm);
@@ -56,6 +59,7 @@ function restartPulse(): void {
     grid = new Grid(context.currentTime+outputDelay(context)+0.03,60/settings.bpm);
     memory.reset(grid.t0,grid.period);
     scheduler = new Scheduler(grid,synth,repeater,memory);
+    scheduler.responsive = settings.responsive;
   }
   updateMutes();
 }
@@ -85,7 +89,7 @@ enableButton.onclick = async () => {
     microphone ??= new Microphone(context,message => ear.receive(message));
     if (!micRunning) {
       element('mic').textContent = 'Mic requesting permission';
-      await microphone.start(settings.outputMode); ear.resetCapture();
+      await microphone.start(settings.outputMode); ear.resetCapture(context.currentTime);
       if (grid) memory.reset(grid.t0,grid.period,Math.max(grid.t0,context.currentTime));
     }
     micRunning = true;
@@ -99,7 +103,9 @@ async function toggleOutput(): Promise<void> {
   const next = settings.outputMode === 'speakers' ? 'headphones' : 'speakers';
   changingMic = true; audioError = '';
   try {
-    if (microphone && micRunning) { await microphone.start(next); ear.resetCapture(); }
+    if (microphone && micRunning) {
+      await microphone.start(next); ear.resetCapture(context?.currentTime); repeater.touch.reset();
+    }
     settings.outputMode = next; saveSettings(settings);
     if (micRunning) element('mic').textContent = `Mic listening · ${next}`;
   } catch (error) { audioError = micError(error); }
@@ -108,7 +114,7 @@ async function toggleOutput(): Promise<void> {
 function toggleMute(which: 'clickMuted' | 'companionMuted'): void { settings[which] = !settings[which]; panicked = false; updateMutes(); }
 function panic(): void {
   settings.companionMuted = true; settings.clickMuted = true; panicked = true;
-  synth?.panic(); repeater.clear(); memory.clear(); updateMutes();
+  synth?.panic(); repeater.clear(); memory.clear(); scheduler?.response.reset(); updateMutes();
 }
 function toggleRemember(): void {
   if (!context || !micRunning) return;
@@ -118,6 +124,13 @@ function toggleRemember(): void {
   synth?.stopEchoes(); repeater.clear(); panicked = false; updateMutes();
 }
 element('remember').onclick = toggleRemember;
+function updateResponsive(): void {
+  if (scheduler) scheduler.responsive = settings.responsive;
+  element('responsive').textContent = `Responsive ${settings.responsive ? 'on' : 'off'}`;
+  element('responsive').setAttribute('aria-pressed',String(settings.responsive));
+}
+element('responsive').onclick = () => { settings.responsive = !settings.responsive; updateResponsive(); saveSettings(settings); };
+updateResponsive();
 document.querySelectorAll<HTMLButtonElement>('[data-memory-bars]').forEach(button => {
   button.onclick = () => {
     const bars = Number(button.dataset.memoryBars);
@@ -180,10 +193,10 @@ function render(timestamp: number): void {
   if (micRunning) {
     const available = Math.min(settings.memoryBars,memory.availableBars(now));
     memoryStatus = available < settings.memoryBars ? `Listening · ${available}/${settings.memoryBars} completed bars` :
-      memory.canRemember(settings.memoryBars,now) ? `${settings.memoryBars} ${noun} ready · ${memory.noteCount(settings.memoryBars,now)} notes` : 'Play a phrase to remember.';
+      memory.canRemember(settings.memoryBars,now) ? `${memory.held(settings.memoryBars,now) ? 'Last phrase saved' : `${settings.memoryBars} ${noun} ready`} · ${memory.noteCount(settings.memoryBars,now)} ${memory.noteCount(settings.memoryBars,now) === 1 ? 'note' : 'notes'}` : 'Play a phrase to remember.';
   }
   if (loop) memoryStatus = now < loop.startAt ? `Starts on the next downbeat · ${Math.ceil(loop.startAt-now)}s` :
-    `Looping · bar ${Math.floor(((now-loop.startAt)%loop.duration)/(loop.duration/loop.bars))+1}/${loop.bars} · ${loop.notes.length} notes`;
+    `Looping · bar ${Math.floor(((now-loop.startAt)%loop.duration)/(loop.duration/loop.bars))+1}/${loop.bars} · ${loop.notes.length} ${loop.notes.length === 1 ? 'note' : 'notes'}`;
   if (element('memory-status').textContent !== memoryStatus) element('memory-status').textContent = memoryStatus;
   element('repeat-label').textContent = loop ? 'LOOP' : 'REPEAT';
   element('delay-value').firstChild!.textContent = String(loop?.bars ?? 2);
@@ -197,7 +210,7 @@ function render(timestamp: number): void {
   element('queue').textContent = loop ? 'Phrase held · play over it, or Clear to return to repeating' : next ? `In ${Math.max(0,next.at-now).toFixed(1)}s · two beats after your note` :
     repeater.repeatCount > 0 ? `${repeater.repeatCount} repeats · listening for your next note` : 'Ready for your first note';
   let hint = micRunning ? 'Play a note. I’ll repeat it two beats later.' : 'Set your BPM, enable audio, and play a note.';
-  if (loop) hint = 'Your phrase is held. Play something over it.';
+  if (loop) hint = settings.responsive ? 'Play over your phrase. It softens while you play and returns in the pauses.' : 'Your phrase is held. Play something over it.';
   if (tempo.taps.length > 0 && tempo.taps.length < 4) hint = `Tap Space · ${tempo.taps.length}/4 · current tempo continues`;
   if (settings.companionMuted) hint = `${loop ? 'Loop' : 'Repeater'} muted · Press M to bring it back`;
   if (volume === 0) hint = 'Repeat volume is zero · Raise it in Listening settings';
