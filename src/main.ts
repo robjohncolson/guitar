@@ -7,6 +7,8 @@ import { Scheduler } from './audio/scheduler';
 import { Ear } from './audio/ear';
 import { Microphone } from './audio/worklet-grabber';
 import { ListeningCapture } from './audio/listening-capture';
+import { AudioLooper } from './audio/looper';
+import { loopWav } from './audio/loop-wav';
 import { noteLabel, noteNames, pitchClass, hzToMidi } from './music/notes';
 import { Companion } from './music/companion';
 import { shell, element } from './ui/render';
@@ -18,8 +20,21 @@ let context: AudioContext | undefined, synth: Synth | undefined, scheduler: Sche
 let grid: Grid | undefined, microphone: Microphone | undefined;
 let micRunning = false, changingMic = false, stopped = false, pulseAnchored = false, audioError = '', volume = 0.22;
 let microphoneRequest = 0;
+let looper:AudioLooper|undefined, loopUrl='', displayedTake:number|undefined;
+const inLooper=()=>settings.appMode==='looper';
 const bpmInput = element<HTMLInputElement>('bpm'), enableButton = element<HTMLButtonElement>('enable');
 bpmInput.value = String(settings.bpm);
+const appMode=element<HTMLSelectElement>('app-mode'); appMode.value=settings.appMode;
+function showMode():void {
+  document.querySelectorAll<HTMLElement>('.partner-only').forEach(item=>item.hidden=inLooper());
+  element('looper-panel').hidden=!inLooper(); element('loop-soften-label').hidden=!inLooper();
+  element('model').hidden=inLooper();
+  element('volume-label').textContent=inLooper() ? 'Loop volume' : 'Reply volume';
+  document.querySelector('.intro')!.textContent=inLooper() ? 'Four bars of your guitar. Record, loop, replace.' : 'Play a loop. I’ll answer on the offbeat.';
+  element('input-help').textContent=inLooper() ? 'Headphones keep the click and playback out of your recording. Takes stay in this page until downloaded or cleared.' : 'Play individual plucks. Speakers uses echo cancellation. Headphones gives cleaner input.';
+}
+appMode.onchange=()=>{ stop(); settings.appMode=appMode.value==='looper' ? 'looper' : 'partner'; showMode(); updateMutes(); };
+showMode();
 const replyMode = element<HTMLSelectElement>('reply-mode');
 replyMode.value = settings.replyMode; companion.setReplyMode(settings.replyMode);
 replyMode.onchange = () => {
@@ -30,7 +45,7 @@ const ear = new Ear(
   text => { element('model').textContent = text; element('model').classList.toggle('error',/error|FALLBACK/.test(text)); },
   pitch => { element('pitch-detail').textContent = `${pitch.hz > 0 ? pitch.hz.toFixed(1) : '—'} Hz · ${Math.round(pitch.confidence*100)}% confidence`; },
   note => {
-    if (!micRunning || !grid || context?.state !== 'running') return;
+    if (inLooper() || !micRunning || !grid || context?.state !== 'running') return;
     const accepted = companion.accept(note); capture.note(note,accepted);
     if (!accepted) return;
     if (!pulseAnchored) { synth?.panic(); grid = new Grid(note.t,60/settings.bpm); pulseAnchored = true; makeScheduler(); updateMutes(); }
@@ -56,6 +71,14 @@ function stopReplies(): void {
   if (context) companion.mask.release(context.currentTime+outputDelay(context)+0.07);
 }
 function updateMutes(): void {
+  if(inLooper()) {
+    if(looper) { looper.clickMuted=settings.loopClickMuted; looper.setVolume(volume,settings.loopMuted); }
+    element('click-mute').textContent=`Click ${settings.loopClickMuted ? 'off' : 'on'} · C`;
+    element('companion-mute').textContent=`Loop ${settings.loopMuted ? 'muted' : 'on'} · M`;
+    element('click-mute').setAttribute('aria-pressed',String(!settings.loopClickMuted));
+    element('companion-mute').setAttribute('aria-pressed',String(!settings.loopMuted));
+    saveSettings(settings); return;
+  }
   const muted = settings.companionMuted || volume === 0;
   companion.setMuted(muted);
   if (muted) stopReplies();
@@ -80,10 +103,11 @@ function restartPulse(): void {
   updateMutes();
 }
 bpmInput.oninput = () => {
+  if(inLooper() && (looper?.running || looper?.busy || changingMic)) { bpmInput.value=String(settings.bpm); return; }
   tempo.reset(); const value = bpmInput.valueAsNumber;
   if (!validBpm(value)) { bpmInput.setAttribute('aria-invalid','true'); return; }
   bpmInput.removeAttribute('aria-invalid');
-  if (settings.bpm !== value) { settings.bpm = value; restartPulse(); }
+  if (settings.bpm !== value) { settings.bpm = value; if(inLooper()) saveSettings(settings); else restartPulse(); }
 };
 bpmInput.onblur = () => { if (!validBpm(bpmInput.valueAsNumber)) bpmInput.value = String(settings.bpm); bpmInput.removeAttribute('aria-invalid'); };
 function micError(error: unknown): string {
@@ -91,7 +115,24 @@ function micError(error: unknown): string {
   if (error instanceof DOMException && error.name === 'NotFoundError') return 'No microphone found. Connect one, then retry.';
   return `Audio could not start: ${error instanceof Error ? error.message : String(error)}`;
 }
+async function startLoop(play=false):Promise<void> {
+  if(changingMic || looper?.busy) return;
+  if(!play && bpmInput.getAttribute('aria-invalid')==='true') return;
+  changingMic=true; audioError=''; const request=++microphoneRequest;
+  try {
+    const resuming=context?.state==='suspended' && looper?.running;
+    context=await enableContext(context); if(request!==microphoneRequest || !inLooper()) return;
+    if(resuming) return;
+    synth ??=new Synth(context); looper ??=new AudioLooper(context,synth);
+    looper.soften=settings.loopSoften; updateMutes();
+    if(play && looper.take) { settings.bpm=looper.take.bpm; bpmInput.value=String(settings.bpm); saveSettings(settings); await looper.play(settings.outputMode); }
+    else await looper.record(settings.bpm,settings.outputMode);
+    stopped=false;
+  } catch(error) { audioError=micError(error); }
+  finally { changingMic=false; }
+}
 enableButton.onclick = async () => {
+  if(inLooper()) { await startLoop(); return; }
   if (changingMic) return;
   changingMic = true; audioError = ''; const request = ++microphoneRequest;
   try {
@@ -112,6 +153,10 @@ enableButton.onclick = async () => {
 async function toggleOutput(): Promise<void> {
   if (changingMic) return;
   const next = settings.outputMode === 'speakers' ? 'headphones' : 'speakers';
+  if(inLooper()) {
+    if(looper?.recording || looper?.busy) return;
+    settings.outputMode=next; saveSettings(settings); await looper?.configureInput(next,settings.loopSoften); return;
+  }
   changingMic = true; audioError = ''; const request = microphoneRequest;
   try {
     if (microphone && micRunning) { await microphone.start(next); ear.resetCapture(context?.currentTime); companion.touch.reset(); }
@@ -121,9 +166,13 @@ async function toggleOutput(): Promise<void> {
   } catch (error) { audioError = micError(error); }
   finally { changingMic = false; }
 }
-function toggleMute(which: 'clickMuted' | 'companionMuted'): void { settings[which] = !settings[which]; updateMutes(); }
+function toggleMute(which: 'clickMuted' | 'companionMuted'): void {
+  if(inLooper()) { if(which==='clickMuted') settings.loopClickMuted=!settings.loopClickMuted; else settings.loopMuted=!settings.loopMuted; }
+  else settings[which] = !settings[which]; updateMutes();
+}
 function stop(): void {
   microphoneRequest++;
+  looper?.stop();
   const now = context?.currentTime ?? 0;
   capture.stop(now); ear.resetCapture(now); listenAgain(); synth?.panic(); microphone?.stop();
   micRunning = false; stopped = true; element('mic').textContent = 'Mic off';
@@ -133,6 +182,11 @@ element('click-mute').onclick = () => toggleMute('clickMuted');
 element('companion-mute').onclick = () => toggleMute('companionMuted');
 element('output').onclick = () => { void toggleOutput(); };
 element('panic').onclick = stop;
+element('loop-play').onclick=()=>{ void startLoop(true); };
+element('loop-undo').onclick=()=>looper?.undo();
+element('loop-clear').onclick=()=>{ looper?.clear(); URL.revokeObjectURL(loopUrl); loopUrl=''; displayedTake=undefined; };
+const loopSoften=element<HTMLInputElement>('loop-soften'); loopSoften.checked=settings.loopSoften;
+loopSoften.onchange=()=>{ settings.loopSoften=loopSoften.checked; saveSettings(settings); void looper?.configureInput(settings.outputMode,settings.loopSoften); };
 const responsive = element<HTMLInputElement>('responsive'); responsive.checked = settings.responsive;
 responsive.onchange = () => { settings.responsive = responsive.checked; if (scheduler) scheduler.responsive = settings.responsive; saveSettings(settings); };
 const threshold = element<HTMLInputElement>('threshold');
@@ -142,6 +196,13 @@ element<HTMLInputElement>('volume').oninput = event => { volume = Number((event.
 window.addEventListener('keydown', event => {
   if (event.code === 'Space') {
     event.preventDefault(); if (event.repeat) return;
+    if(inLooper()) {
+      if(looper?.running || looper?.busy || changingMic) return;
+      if(event.shiftKey) { tempo.reset(); return; }
+      const bpm=tempo.tap(performance.now()/1000);
+      if(bpm!==null) { settings.bpm=Math.round(bpm); bpmInput.value=String(settings.bpm); saveSettings(settings); }
+      return;
+    }
     if (event.shiftKey) { tempo.reset(); restartPulse(); return; }
     const bpm = tempo.tap(performance.now()/1000);
     if (bpm !== null) { settings.bpm = Math.round(bpm); bpmInput.value = String(settings.bpm); bpmInput.removeAttribute('aria-invalid'); restartPulse(); }
@@ -151,10 +212,13 @@ window.addEventListener('keydown', event => {
   if (event.code === 'KeyC') toggleMute('clickMuted');
   else if (event.code === 'KeyM') toggleMute('companionMuted');
   else if (event.code === 'KeyH') void toggleOutput();
-  else if (event.code === 'KeyL') listenAgain();
+  else if (event.code === 'KeyL' && !inLooper()) listenAgain();
   else if (event.code === 'Escape') stop();
 });
-const schedulerTimer = window.setInterval(() => { if (micRunning && context?.state === 'running') scheduler?.tick(); },10);
+const schedulerTimer = window.setInterval(() => {
+  if(inLooper()) { if(context?.state==='running') looper?.tick(); }
+  else if (micRunning && context?.state === 'running') scheduler?.tick();
+},10);
 window.addEventListener('pagehide', () => { window.clearInterval(schedulerTimer); stop(); });
 
 let audioUrl = '', traceUrl = '', exportedDuration = 0, exportedRevision = -1;
@@ -200,9 +264,58 @@ function renderCapture(): void {
   for (const note of capture.replies) painter.fillRect(note.at/duration*width,145,Math.max(2,note.duration/duration*width),8);
 }
 updateMutes();
+function renderLoop():void {
+  const view=looper?.view(), take=looper?.take, busy=changingMic || Boolean(looper?.busy), recording=Boolean(looper?.recording), running=Boolean(looper?.running);
+  if(take && displayedTake!==take.id) {
+    displayedTake=take.id; settings.bpm=take.bpm; bpmInput.value=String(take.bpm); saveSettings(settings);
+    URL.revokeObjectURL(loopUrl); loopUrl=URL.createObjectURL(new Blob([loopWav(take.samples,context!.sampleRate)],{type:'audio/wav'}));
+    element<HTMLAnchorElement>('loop-download').href=loopUrl;
+    const canvas=element<HTMLCanvasElement>('loop-waveform'), painter=canvas.getContext('2d')!;
+    painter.clearRect(0,0,canvas.width,canvas.height); painter.fillStyle='#c8d8a7';
+    for(let x=0;x<canvas.width;x++) {
+      let peak=0; const to=Math.floor((x+1)*take.samples.length/canvas.width);
+      for(let i=Math.floor(x*take.samples.length/canvas.width);i<to;i++) peak=Math.max(peak,Math.abs(take.samples[i]));
+      painter.fillRect(x,45-peak*43,1,Math.max(1,peak*86));
+    }
+  }
+  if(!take) displayedTake=undefined;
+  element('loop-take').hidden=!take;
+  element('phrase-status').textContent=busy ? 'Preparing audio' : context?.state==='suspended' && running ? 'Audio paused' : view ? `${view.state}${view.state==='Count in' ? ` · ${view.beat}` : view.recording ? ` · ${view.bar+1} of 4` : ''}` : 'Ready to record';
+  const suspended=context?.state==='suspended' && running;
+  enableButton.textContent=suspended ? 'Resume audio' : recording ? view?.recording ? 'Recording…' : 'Armed · 4 bars' : take ? 'Replace · 4 bars' : 'Record · 4 bars';
+  enableButton.disabled=busy || recording && !suspended || Boolean(looper?.pendingUndo) || bpmInput.getAttribute('aria-invalid')==='true';
+  element<HTMLButtonElement>('panic').disabled=!running && !busy;
+  bpmInput.disabled=running || busy;
+  element('tempo-help').textContent=running ? 'Tempo fixed for this take' : 'Enter BPM · or tap Space';
+  element<HTMLButtonElement>('loop-play').disabled=running || busy || !take;
+  element<HTMLButtonElement>('loop-undo').disabled=!looper?.previous || recording || busy || Boolean(looper?.pendingUndo);
+  element<HTMLButtonElement>('loop-clear').disabled=recording || busy;
+  element<HTMLButtonElement>('output').disabled=recording || busy;
+  loopSoften.disabled=recording || busy || settings.outputMode!=='headphones';
+  element('output').textContent=`${settings.outputMode==='speakers' ? 'Speakers' : 'Headphones'} · H`;
+  element('mic').textContent=looper?.micActive ? view?.recording ? 'Mic recording' : 'Mic listening' : 'Mic off';
+  if(context) element('latency').textContent=`${Math.round(outputDelay(context)*1000)} ms output`;
+  const progress=element('loop-progress'); progress.setAttribute('aria-valuenow',String(Math.floor((view?.progress ?? 0)*16)));
+  progress.classList.toggle('recording',Boolean(view?.recording));
+  [...progress.children].forEach((bar,i)=>bar.classList.toggle('active',i===view?.bar));
+  element('loop-playhead').style.left=`${(view?.progress ?? 0)*100}%`; element('loop-playhead').hidden=!running || recording;
+  element('pulse').classList.toggle('active',running && (view?.recording || view?.state==='Looping') && (view.progress*16)%1<.18);
+  element('loop-take-detail').textContent=take ? `4 bars · ${take.bpm} BPM · ${(take.samples.length/context!.sampleRate).toFixed(2)}s · saved in this page` : '';
+  let hint=recording ? view?.recording ? 'Play your four bars. Playback will start automatically.' : view?.state==='Count in' ? 'One bar to count in. Start playing on the next one.' : 'The new recording starts at the loop boundary. The old loop will go quiet.' : running ? 'Play along. Replace records a new four-bar take at the next loop boundary.' : take ? 'Your take is saved. Play it again, or record a replacement.' : 'Set BPM and press Record. One bar to count in, then four bars of your guitar.';
+  if(looper?.pendingUndo) hint='The previous take will return at the next loop boundary.';
+  if(!running && take && take.bpm!==settings.bpm) hint=`Record a new take at ${settings.bpm} BPM. Play restores your saved ${take.bpm} BPM loop.`;
+  if(settings.loopMuted && running) hint='Loop muted · Press M to hear it again. The loop keeps its place.';
+  if(volume===0 && running) hint='Raise loop volume in Listening settings to hear it.';
+  if(bpmInput.getAttribute('aria-invalid')==='true') hint='Enter a BPM between 40 and 240.';
+  if(suspended) hint='Audio paused. Resume to continue the take.';
+  if(looper?.error || audioError) hint=audioError || looper!.error;
+  element('hint').textContent=hint;
+}
 let lastPaint = -Infinity, lastCapturePaint = -Infinity;
 function render(timestamp: number): void {
   requestAnimationFrame(render); if (timestamp-lastPaint < 32) return; lastPaint = timestamp;
+  if(inLooper()) { renderLoop(); return; }
+  bpmInput.disabled=false; element('tempo-help').textContent='Enter BPM · or tap Space';
   const now = context?.currentTime ?? 0, active = companion.active;
   const pass = active ? Math.max(1,Math.min(3,Math.floor((now-active.startAt)/active.duration)+1)) : 0;
   let state = !micRunning ? stopped ? 'Stopped' : 'Ready to listen' : 'Listening';

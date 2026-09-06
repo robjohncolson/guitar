@@ -1,4 +1,28 @@
-# Continuous listening and offbeat replies
+# Four-bar audio Looper and Partner replies
+
+## Looper addition
+
+The user-approved Looper is a separate app mode. It records native-rate mono audio for 16 beats in 4/4, after a four-beat count-in, and plays it continuously. The existing Partner still runs real CREPE and retains its finite Echo/Harmony behavior. No new model, dependency, backend, upload, or alternative pitch detector was added.
+
+`loop-engine.ts` implements sample-boundary recording, continuous playback, replacement, Undo, cancellation, and 3 ms playback edge fades. `looper.worklet.ts` owns the actual audio buffers and output. It anchors its frame counter to the AudioContext sample clock and increments by rendered block length; occasional repeated `currentFrame` readings observed in the Chrome check cannot overwrite a block or leave a hole in a recording. A regression exercises this case. This remains an audio render clock, independent of guitar tempo or main-thread timers.
+
+`AudioLooper` acquires the microphone before arming a future recording boundary. First recording, or recording while stopped, gets one bar of count-in. Replacement while playing starts at the next loop boundary; old playback stops during the four-bar recording. At completion, the worklet immediately starts its new buffer. Native-rate audio reaches the UI in chunks of at most 4096 samples for the waveform and WAV export, avoiding a full-take clone on the audio thread. At 40 BPM a take is 24 seconds, beyond the diagnostic recorder's old 20-second cap.
+
+Completed and previous takes stay in page memory. Stop cancels an incomplete replacement, releases active or late-granted microphone streams, and keeps the last take. A small rollback snapshot reconciles Stop arriving just before the UI receives a completed-take or Undo event, preserving agreement between saved audio and worklet playback. Undo switches on a loop boundary during playback and stays silent when stopped. Clear and reload discard audio; changing app mode stops both transports while retaining the Looper take.
+
+Looper metronome clicks use the existing synth with beat-one accents, independently saved click/mute preferences, and scheduling against AudioContext time minus outputLatency. The worklet's rounded native-frame loop length also determines click spacing to avoid cumulative drift. BPM and processing changes cannot interrupt recording; BPM stays fixed while playing. After Stop, a new BPM applies to Record, while Play restores the old take's recorded BPM. Undo restores its take's tempo.
+
+Optional headphone softening starts off. Live RMS above 0.012 moves output toward 55% over an 80 ms time constant; quiet recovers over 350 ms. It operates on playback gain, not stored samples, and uses no pitch gate. Speakers disables this feature. Without softening, the microphone closes after recording; with it, the mic listens during playback until Stop. WAV export uses the native sample rate, mono 16-bit PCM, and the same tiny edge fades as playback.
+
+The recording and playback boundaries share the compensated audio render clock. Physical input latency is not automatically calibrated; acoustic latency, room decay, and speaker/metronome bleed still require a real guitar/room check. Headphones are recommended for clean raw audio. CREPE pitch masking remains active in Partner but cannot remove sound from raw Looper recordings.
+
+Looper phase gates: 89 tests after the sample engine; 92 after native audio/microphone transport; 94 and a production build after UI/preferences/export. Subsequent Stop-completion and repeated-frame/softening regressions bring the suite to 96 tests. The separate Chrome Looper smoke uses overlapping real guitar plucks and an independent output-probe worklet, checking actual recorded/output sample values and four-bar timing rather than oscillator scheduling alone.
+
+The completed local Chrome check captured 384,000 samples at 48 kHz for four bars at 120 BPM. Two complete playback passes, the restored Undo take, and Stop/Play reproduced the saved waveform within the 0.00001 sample tolerance (maximum observed difference approximately 8.35e-9 after gain and edge fades). Replacement output was silent for exactly the recording window. Count-in accents, BPM locking/restoration, cancellation, mute, mode switching, microphone permission races, native-rate WAV size, page-only persistence, mobile overflow and a single AudioContext passed, with no browser/processor errors or external HTTP runtime requests. Test-only external audio was muted; software WebGL loaded the retained real CREPE model. Physical speaker feedback and microphone latency were not established by this automated check.
+
+The Partner regression after Looper integration also passed with real CREPE and recorded guitar: 29/29 plucks detected (27 accepted, two correctly masked), 18 finite reply notes, fixed Harmony followed by Echo, no overlapping voices or late scheduling, and no browser errors. Its Stop, reset, microphone changes, preferences, recording inspection, and mobile checks passed. No pitch-ear implementation or Partner musical rule was changed for Looper.
+
+## Partner
 
 The latest addition is Echo / Harmony, with Harmony selected by default. Manual BPM and the first accepted pluck establish a stable pulse. Recognition, rests, half-beat entry, finite three-pass timing, concurrent listening, one waiting idea, repeat suppression, and microphone Stop behavior remain intact.
 

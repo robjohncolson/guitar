@@ -1,5 +1,18 @@
 # Guitar Practice Partner — Spec
 
+## Current addition: four-bar audio Looper
+
+The user approved a separate Partner / Looper mode. Partner retains real CREPE and its Echo/Harmony contract below. Looper records actual mono microphone audio at the AudioContext sample rate, including chords, rests, and articulation; pitch detection does not gate recording or replay. No detector substitution, backend, uploads, overdubbing, or automatic recording archive.
+
+- Fixed 4/4, four bars (16 beats), manual BPM 40–240. Record starts after one bar of accented metronome count-in. Preserve playing within those exact boundaries; playback starts automatically at the recording end and repeats until stopped or replaced. A tiny edge fade prevents seam clicks.
+- Replace during playback arms the next four-bar loop boundary. The old loop becomes silent while the new four bars are recorded. Preserve the old take until replacement completes; Stop cancels an incomplete take. One Undo restores the previous completed take, at a loop boundary when playing and without starting sound when stopped.
+- Stop/Escape silences output and releases the microphone, including pending permission requests, while retaining the last completed loop in this page. Play resumes it from its beginning. Mode changes stop transport and retain the loop; no simultaneous Partner and Looper output. Clear explicitly discards loop/undo memory. Reload discards recorded audio.
+- Keep primary controls minimal: Mode, BPM, Record/Replace, Stop, and four-bar progress. Play and Undo appear with a take. Reuse volume, metronome, microphone processing, waveform and local WAV download. Looper click defaults on independently of Partner's preference. Optional softening while playing applies with headphones, using input level independently of pitch recognition; keep it off initially.
+- Tempo and microphone-processing changes are disabled during count-in/recording; tempo stays fixed during playback. When stopped, a new BPM applies to the next recording. Play restores a saved take's BPM; never silently change its speed or pitch. Undo restores the earlier take's BPM as well.
+- Musical scheduling uses the AudioContext clock minus outputLatency. Capture and replay run in an AudioWorklet with bounded memory; no main-thread timers decide individual sample boundaries. Document physical input/output latency and speaker/click bleed limitations. Headphones keep playback out of a new recording; pitch self-masking cannot remove sound from raw audio.
+
+Phases, each followed by tests before continuing: (1) pure loop timing/recording/replacement/undo/edge-fade engine; (2) native-rate worklet, audio transport and microphone lifecycle; (3) minimal mode UI/preferences/export plus full tests/build; (4) Chrome recorded-audio waveform/timing/transport checks, Partner real-CREPE regression, then GitHub/Vercel publishing and live verification under existing authorization.
+
 ## Current addition: a restrained harmony reply
 
 The user approved a single supporting harmony line as an alternative to Echo. This revision supersedes the earlier prohibition on harmonic pitch choice, while retaining real CREPE, manual BPM, continuous loop recognition, rests, half-beat placement, three finite passes, self-masking, and no overlapping app voices.

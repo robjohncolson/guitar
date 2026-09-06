@@ -100,7 +100,9 @@ If the official URL layout has changed, hunt the same tiny tfjs model (ml5 `pitc
 
 ## Current revision phases
 
-The newest user-approved addition is Echo / Harmony. Follow its four phase gates at the top of SPEC.md before the older revision phases below. Harmony changes pitch choice and reply dynamics only; all technical hard constraints above remain in force.
+The latest user-approved addition is the four-bar audio Looper. Follow its phase gates at the top of SPEC.md. The existing Partner retains CREPE and its Echo/Harmony behavior. Looper records native-rate audio directly; no alternative pitch detector is introduced. The manual clock, local-only architecture, committed real CREPE assets, and audio scheduling constraints remain in force.
+
+The preceding Partner addition was Echo / Harmony. Retain its regression coverage while following the newest Looper phases in SPEC.md. Harmony changes pitch choice and reply dynamics only; all technical hard constraints above remain in force.
 
 Stop and run tests at each phase boundary before starting the next.
 

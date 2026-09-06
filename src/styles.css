@@ -27,6 +27,17 @@ h1 { font-size: 38px; letter-spacing: -1.5px; font-weight: 500; margin: 10px 0 0
 .reply-choice label { font-size: 11px; letter-spacing: 2px; color: #a1ad9f; text-transform: uppercase; }
 .reply-choice select { color: #e8e9df; background: #1c241e; border: 1px solid #596550; border-radius: 8px; padding: 12px 8px; font-size: 17px; }
 #reply-mode-help { color: #a4ada1; font-size: 11px; min-height: 14px; }
+.mode-caption { color: #a4ada1; font-size: 11px; min-height: 14px; }
+#loop-progress { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin: 22px 0; }
+#loop-progress span { border: 1px solid #414941; border-radius: 6px; padding: 12px; color: #a4ada1; background: #1c241e; }
+#loop-progress span.active { color: #e8e9df; border-color: #c8d8a7; background: #34432f; }
+#loop-progress.recording span.active { background: #553b2d; border-color: #e5b28b; }
+.loop-wave { position: relative; margin-top: 14px; }
+#loop-waveform { width: 100%; height: 90px; display: block; }
+#loop-playhead { position: absolute; top: 0; height: 100%; width: 1px; background: #c8d8a7; }
+.loop-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+.loop-actions a { color: #c8d8a7; padding: 12px 4px; }
+.loop-actions #loop-clear { margin-left: auto; color: #a4ada1; background: transparent; }
 .session-state { display: flex; align-items: center; gap: 14px; flex: 1; }
 #phrase-status { color: #c8d8a7; font-size: 25px; }
 #pulse { display: block; width: 13px; height: 13px; flex-shrink: 0; border: 1px solid #65755c; border-radius: 50%; background: #263024; transition: background 80ms; }

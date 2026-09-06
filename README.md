@@ -1,10 +1,27 @@
 # Practice Partner
 
-Enter BPM and play a repeating idea. The app listens for the loop, then answers with a quiet harmony half a beat later three times, including its pauses. Choose Echo for the original notes.
+Choose **Partner** for Echo/Harmony replies, or **Looper** to record and replay your actual guitar.
 
 **Live:** [guitar-lac-seven.vercel.app](https://guitar-lac-seven.vercel.app) · **Source:** [robjohncolson/guitar](https://github.com/robjohncolson/guitar) (private)
 
-## Play
+## Four-bar Looper
+
+1. Select **Looper**, enter BPM, and press **Record · 4 bars**. Allow the microphone. The metronome gives one bar of count-in, with an accent on beat one.
+2. Play four bars in 4/4. Recording stops automatically after 16 beats and immediately starts looping. Chords, slides, rests, and your timing are preserved as audio.
+3. Press **Replace** while playing to record at the next loop boundary. The old loop goes quiet for those four bars; the new take then loops continuously. **Undo replace** restores the previous take at a loop boundary.
+4. **Stop / Escape** silences audio and releases the microphone, keeping the completed take. **Play** starts it from the beginning. Stop during an unfinished replacement keeps the previous take; Undo while stopped restores without starting playback.
+
+Tempo stays fixed while recording or looping. After Stop, edit BPM for a new recording; Play restores the saved take's BPM without changing its pitch or speed. Switching modes stops audio and keeps the loop in this page. **Clear** discards it and its Undo history; reloading also discards recorded audio. **Download WAV** keeps a local copy at the audio device's sample rate.
+
+Looper has its own metronome preference, initially on. M mutes the loop without moving its position; C toggles the click. Volume is shared with Partner. The optional **Soften the loop while I play** setting works with Headphones processing and leaves the recording itself untouched. It opens the microphone while playing; with softening off, the microphone closes when recording finishes.
+
+Use headphones for a clean recording: a microphone can record the speaker metronome and playback, and pitch self-masking cannot remove that sound from audio. Recording uses the device's native sample rate, a sample-clock worklet, and a tiny fade at each loop seam. Physical microphone/output latency and room bleed can affect alignment; this is a browser audio looper, not an input-latency-calibrated recording system.
+
+With preview running, `node scripts/looper-smoke.mjs` checks the real Chrome audio path using recorded guitar plucks and chords. An independent worklet probes actual output for waveform fidelity, repeated timing, silent replacement, Undo, Stop/Play, mute, permission races, mode changes, WAV export, persistence and mobile layout. It uses software WebGL for the retained CREPE model and mutes the test browser's external audio output.
+
+## Partner
+
+Enter BPM and play a repeating idea. The app listens for the loop, then answers with a quiet harmony half a beat later three times, including its pauses. Choose Echo for the original notes.
 
 1. Enter BPM (40–240) and press **Start listening**. Allow the microphone; check for **CREPE ready (tiny)**.
 2. Play individual notes in a short idea, including its pauses, at roughly the same pace three times. The first clear pluck anchors the pulse. There is no four-beat listening window or automatic BPM detection.
