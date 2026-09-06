@@ -6,13 +6,15 @@ Play a short phrase three times. The app recognizes the repeating idea, plays th
 
 ## Play
 
-1. Enter a BPM (40–240), or tap Space four times.
-2. Enable audio & mic and wait for **CREPE ready (tiny)**.
+1. Enable audio & mic and wait for **CREPE ready (tiny)**.
+2. Start playing with a steady pulse. Auto tempo listens to your plucks, then fills in the BPM and holds it steady. You can also enter a BPM (40–240) or tap Space four times.
 3. Play individual notes in a short, repeating phrase. Try **A–C–E**, three times in a similar rhythm.
 4. It stays silent during the first two passes. Once it recognizes the third, a reply starts on the next downbeat and plays your phrase exactly three times.
 5. Keep playing. It listens during the reply and lets one newly recognized idea wait its turn. The latest different idea replaces an older waiting idea.
 
 The three indicators show recognition progress. Small timing and tuning differences are fine; phrases can start between beats. The app compares note order and rhythm, not just which notes occur most often. It handles phrases of 3–24 attacks, with cycles of 1–16 entered beats. Repeat at roughly the same pace.
+
+Auto needs at least eight accepted plucks with consistent timing. Phrase recognition happens at the same time, so those notes still count. Irregular playing keeps it listening. Auto can interpret a pulse at half or double the tempo you intended; entering BPM or tapping Space overrides it. **Find tempo** clears the current exchange and learns your pace again. It estimates the initial pulse, then holds it through new playing and pauses.
 
 Replies preserve the captured note spacing, tuning, and phrase cycle instead of stretching it to whole bars. Notes are synthesized warm tones, not recorded guitar audio. This version follows individual notes; it does not transcribe strummed guitar chords or choose a harmony.
 
@@ -23,6 +25,7 @@ Reply notes and phrases do not overlap each other. Your live guitar can continue
 | Control | Action |
 | --- | --- |
 | BPM | Set the pulse; clears recognition and restarts the clock |
+| Find tempo | Clear the current exchange and estimate a fresh pulse from your plucks |
 | Space | Tap tempo |
 | Shift+Space | Restart pulse and recognition |
 | Start fresh / L | Fade the reply, clear active/waiting phrases, and listen again; keep the clock |
@@ -31,7 +34,7 @@ Reply notes and phrases do not overlap each other. Your live guitar can continue
 | H | Switch Speakers/Headphones microphone processing |
 | Escape / Silence | Stop both outputs and clear recognition; keep the pulse |
 
-Click starts off for new users; existing click preferences are respected. Listening settings contains the confidence threshold, reply volume, and optional softening while you play. M restores replies after Silence once an idea has been recognized again. Preferences persist under `guitar.practice.v1`; notes and recognized phrases never persist.
+Click starts off for new users; existing click preferences are respected. Click and replies wait until Auto finds the pulse. Listening settings contains the confidence threshold, reply volume, and optional softening while you play. M restores replies after Silence once an idea has been recognized again. Preferences persist under `guitar.practice.v1`, including Auto/manual choice; notes and recognized phrases never persist. Auto learns again on each new page session.
 
 Speakers uses echo cancellation and masks the pitches being synthesized. Headphones gives cleaner input; H changes microphone processing, while Windows chooses the actual output device. A real guitar attack matching the output can be masked too. Keep the page visible to avoid background-tab throttling.
 
@@ -54,7 +57,7 @@ $env:SMOKE_ORIGIN = 'http://127.0.0.1:4173'
 node scripts/browser-smoke.mjs
 ```
 
-It verifies silence through two passes, third-pass recognition, three replies at the captured pace, continuous listening, a waiting phrase, no overlapping output notes, and silence after the last pass. It also checks mute/resume, Start fresh, output switching, panic, and settings restoration. It does not simulate physical speaker feedback or judge the musical feel of a real guitar session.
+It verifies automatic pulse learning, silence through two passes, third-pass recognition, three replies at the captured pace, continuous listening, a waiting phrase, no overlapping output notes, and silence after the last pass. The second phrase is faster; the detected BPM must stay locked while its reply preserves that new pace. It also checks Find tempo, Space/manual overrides, mute/resume, Start fresh, output switching, panic, and settings restoration. Set `SMOKE_MANUAL_TEMPO=1` to exercise the exchange with entered BPM instead. It does not simulate physical speaker feedback or judge the musical feel of a real guitar session.
 
 ## Local model and deployment
 

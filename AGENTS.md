@@ -10,7 +10,7 @@ Preserve detected pitch, timing, rests, and accepted attack dynamics. Responsive
 
 - CREPE is the pitch ear and must actually run (tfjs Layers model in `public/models/`). Do not substitute YIN as the default.
 - Occupancy is note-on attacks, not ringing energy.
-- Entered BPM is the clock; Spacebar tap tempo is optional. Do not beat-track the guitar.
+- Auto tempo learns an initial pulse from accepted guitar plucks, then holds it steady. Entered BPM and Space tapping override Auto. Do not continuously retime replies. Find tempo explicitly starts new learning.
 - No generative music models. No fretboard/lesson/tab chrome. No backend.
 - Musical timing uses `AudioContext.currentTime` minus `outputLatency`.
 - North-star demo: recognize A–C–E, play A–C–E back three times, then stop; learn a new repeated phrase concurrently and let it follow.

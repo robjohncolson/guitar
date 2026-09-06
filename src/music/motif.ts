@@ -12,7 +12,11 @@ export class MotifListener {
   repetitions = 0;
   get motif(): Motif | undefined { return this.found; }
   constructor(readonly period: number) {}
-  reconsider(): void { this.found = undefined; }
+  withPeriod(period: number): MotifListener {
+    const listener = new MotifListener(period);
+    for (const note of this.history) listener.record(note);
+    return listener;
+  }
   finish(t: number, end: number): void {
     const note = this.history.find(note => note.t === t);
     if (note && Number.isFinite(end) && end > t) note.duration = end-t;

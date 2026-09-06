@@ -4,7 +4,7 @@ export function shell(): void {
       <header><div><span class="eyebrow">GUITAR · LISTEN & REPLY</span><h1>Practice Partner</h1><p class="intro">Play an idea. Hear it back three times.</p></div><button id="enable" class="primary">Enable audio & mic</button></header>
       <div class="status"><span id="mic">Mic off</span><span id="model">CREPE loading</span><span id="latency"></span></div>
       <section class="pulse-panel" aria-label="Tempo and pulse">
-        <div class="tempo"><label for="bpm">BPM</label><input id="bpm" type="number" min="40" max="240" step="1" value="100" inputmode="numeric" aria-describedby="tempo-help"><span id="tempo-help">Enter tempo or tap Space</span></div>
+        <div class="tempo"><label for="bpm">BPM</label><input id="bpm" type="number" min="40" max="240" step="1" placeholder="—" inputmode="numeric" aria-describedby="tempo-help"><span id="tempo-help">Play a steady rhythm · or enter BPM</span><button id="find-tempo">Find tempo</button></div>
         <div class="beats">${[1,2,3,4].map(n => `<div class="beat"><span>${n}</span><small>—</small></div>`).join('')}</div>
       </section>
       <section class="phrase-panel" aria-label="Phrase recognition">
@@ -12,7 +12,7 @@ export function shell(): void {
         <span id="phrase-status" role="status">Listening for a short phrase</span>
         <button id="listen-again" disabled>Start fresh · L</button>
       </section>
-      <p id="hint" class="hint" role="status">Set your BPM, enable audio, and repeat a short phrase.</p>
+      <p id="hint" class="hint" role="status">Enable audio and repeat a short phrase. I’ll find your pace.</p>
       <section class="listening" aria-label="Player and accompaniment">
         <div><span class="eyebrow">YOU PLAYED</span><div id="note" class="note">—</div><span id="pitch-detail" class="muted">One note at a time</span></div>
         <div><span class="eyebrow">REPLY</span><div id="reply" class="note cool">—</div><span id="reply-detail" class="muted">Listening for the next idea</span></div>

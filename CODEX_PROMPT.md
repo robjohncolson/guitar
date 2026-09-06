@@ -1,6 +1,6 @@
 # Codex Implementation Prompt — Guitar Practice Partner
 
-> Product revision: recognize a recurring phrase, replay its notes at the same pace exactly three times, and continue listening for a new phrase to follow without overlap. Follow the current contract at the top of `SPEC.md`. Direct BPM entry replaces the Space-only requirement; held chords, ordinary echoes, manual memory, and four-role product phases are historical. Retain the technical constraints (real CREPE, attack segmentation, self-mask, vanilla Vite/TypeScript, local model assets, Web Audio timing, no backend or generative music).
+> Product revision: recognize a recurring phrase, replay its notes at the same pace exactly three times, and continue listening for a new phrase to follow without overlap. The user now explicitly requests BPM estimation from guitar plucks: Auto learns a stable initial pulse, then holds it; direct BPM entry and Space override it. This supersedes the original Space-only/no-guitar-clock restriction. Follow the current contract at the top of `SPEC.md`. Held chords, ordinary echoes, manual memory, and four-role product phases are historical. Retain the technical constraints (real CREPE, attack segmentation, self-mask, vanilla Vite/TypeScript, local model assets, Web Audio timing, no backend or generative music).
 
 You are implementing a **new** local web app in this directory. The product spec is `SPEC.md`. Read it before writing any code. If this prompt and `SPEC.md` conflict, **`SPEC.md` wins**, except for the hard constraints below (those always win).
 
@@ -19,7 +19,7 @@ This is a greenfield folder. Build the whole v1. Do not ask to shrink scope. Do 
 
 3. **Self-play masking is mandatory.** Speakers + acoustic mic will hear the companion. `SPEC.md` §7.
 
-4. **Clock is the spacebar**, not beat-tracking the guitar. `preventDefault` on Space.
+4. **Clock stays stable during replies.** Per the user's Auto tempo revision, accepted guitar plucks may establish the initial BPM and pulse. Do not continuously retime an active reply. Entered BPM or Space tapping overrides Auto; `preventDefault` on Space.
 
 5. **No generative ML.** No Magenta, Lyria, melody RNN, cloud APIs. CREPE is the only model.
 

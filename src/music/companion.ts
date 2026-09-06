@@ -25,6 +25,14 @@ export class Companion {
     this.listener = new MotifListener(period); this.active = undefined; this.waiting = undefined; this.lastAnswered = undefined; this.lastReply = undefined;
     // The room may still contain a recently stopped reply; retain its shortened masks.
   }
+  alignPulse(origin: number, period: number): void {
+    if (this.active || this.lastAnswered) throw new Error('Set the pulse before replies begin');
+    const waiting = this.waiting && Object.freeze({...this.waiting,beats:this.waiting.beats*this.period/period});
+    this.listener = this.listener.withPeriod(period);
+    this.waiting = this.listener.motif ?? waiting;
+    if (this.listener.motif) this.listener = new MotifListener(period);
+    this.origin = origin; this.period = period;
+  }
   accept(note: NoteOn): boolean {
     if (!Number.isFinite(note.t) || note.t < this.listeningFrom || !Number.isFinite(note.hz) || note.hz <= 0 || this.mask.drops(note)) return false;
     this.lastPlayer = {...note,velocity:note.velocity ?? this.touch.velocity(note.level)};

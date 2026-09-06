@@ -14,6 +14,25 @@ function play(partner: Companion,from: number,to: number): ReplyNote[] {
 }
 
 describe('finite exchanges with continuous listening', () => {
+  it('aligns to a learned pulse without losing the notes already heard or their articulation', () => {
+    const partner = new Companion(); partner.reset(0,0.6);
+    for (let i=0;i<8;i++) partner.accept(note(1+Math.floor(i/3)*2+(i%3)*0.5,[57,60,64][i%3]));
+    expect(partner.listener.repetitions).toBe(2);
+    partner.alignPulse(1,0.5);
+    expect(partner.listener.repetitions).toBe(2);
+    partner.accept(note(6,64));
+    expect(partner.waiting?.beats).toBe(4);
+    const notes = play(partner,6.1,15);
+    expect(notes).toHaveLength(9); expect(notes[0].at).toBe(7); expect(notes[0].duration).toBe(0.2);
+  });
+  it('preserves a waiting phrase in seconds when the initial estimated tempo changes', () => {
+    const partner = companion(); establish(partner,0);
+    partner.alignPulse(0.2,0.75);
+    expect(partner.waiting!.beats*0.75).toBe(2);
+    const notes = play(partner,5.1,15);
+    expect(notes).toHaveLength(9); expect(notes[3].at-notes[0].at).toBeCloseTo(2);
+    expect(() => partner.alignPulse(0,0.5)).toThrow('before replies begin');
+  });
   it('waits for three phrases, replies three times, then stays silent without a manual reset', () => {
     const partner = companion();
     for (let pass=0;pass<2;pass++) [57,60,64].forEach((midi,i) => {

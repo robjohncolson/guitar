@@ -9,4 +9,6 @@ it('recovers from malformed saved state and only restores supported session pref
   expect(parseSettings(JSON.stringify({clickMuted:false})).clickMuted).toBe(false);
   expect(parseSettings('{}').responsive).toBe(true);
   expect(parseSettings(JSON.stringify({responsive:false})).responsive).toBe(false);
+  expect(parseSettings('{}').autoTempo).toBe(true);
+  expect(parseSettings(JSON.stringify({autoTempo:false,bpm:85,pulse:{bpm:120,origin:4},attacks:[1,2,3]}))).toEqual({...defaults,autoTempo:false,bpm:85});
 });

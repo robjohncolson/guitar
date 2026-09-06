@@ -22,6 +22,7 @@ h1 { font-size: 38px; letter-spacing: -1.5px; font-weight: 500; margin: 10px 0 0
 .tempo input { width: 170px; padding: 2px 8px; font-size: 54px; font-weight: 400; color: #e8e9df; border: 1px solid #596550; border-radius: 8px; background: #1c241e; font-variant-numeric: tabular-nums; }
 .tempo input[aria-invalid=true] { border-color: #efac81; }
 .tempo > span { color: #a4ada1; font-size: 11px; }
+#find-tempo { width: 170px; padding: 7px 10px; font-size: 12px; }
 .beats { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; flex: 1; }
 .beat { height: 112px; padding: 14px; background: #202722; border: 1px solid #39443a; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-between; }
 .beat > span { font-size: 30px; }

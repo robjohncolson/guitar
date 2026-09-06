@@ -2,9 +2,24 @@
 
 ## Current product: three phrase replies, then quiet (September 6, 2026)
 
+### Auto tempo revision
+
+The user explicitly requests estimating BPM from string plucks. This replaces the previous prohibition on a guitar-derived clock, including the original Space-only constraint.
+
+- Auto is the default. Estimate one initial pulse from accepted, pitch-confirmed and self-masked guitar attacks. CREPE remains the pitch ear; no new model or backend. Do not use ringing energy or infer tempo from the app's output.
+- Require at least eight attacks and three successive agreeing estimates. Support simple beat/eighth-note patterns and rests in the 40–240 BPM range. Keep a bounded window, ignore invalid/duplicate timestamps, and restart incomplete learning after a gap over three seconds. Irregular or ambiguous input keeps listening. This is a conservative onset-timing heuristic, not general beat/downbeat tracking.
+- Show no numeric BPM or running beat animation until a pulse is established; suppress click and replies while learning. Retain phrase evidence and measured durations during learning, including a phrase already waiting. Align the clock to the fitted first pluck, treating it as beat one rather than claiming to infer meter.
+- Once established, hold the pulse through subsequent rhythms, silence, microphone processing changes, and the finite reply exchange. Preserve each phrase's captured pace even when it differs from the locked BPM. L and Shift+Space retain the learned BPM; if still learning, they clear incomplete evidence.
+- Entering BPM or tapping Space switches to manual mode. **Find tempo** clears active/waiting phrases and starts a new Auto learning pass. Keep this single small control by the BPM field; no extra setup screen. Save the Auto/manual preference, but a new Auto session must learn again rather than silently reusing the previous estimate.
+- Half/double tempo can be ambiguous; favor simple rhythms with a mild comfortable-tempo bias and keep manual correction available.
+
+Phase gates: estimator tests first; phrase-evidence preservation and preference tests second; UI integration tests/build third; real Chrome/CREPE Auto and manual checks before publishing. Cover regular tempos, jitter, rests/subdivisions, irregular input, locked tempo despite new playing, re-learning, manual/Space overrides, self-mask, preserved three-pass recognition, sequential finite replies, and preference restoration.
+
+### Finite reply behavior
+
 The user now wants a finite exchange: listen for recurring notes, place those notes back at the same pace three times, and keep listening for new notes without overlapping the app's phrases or tones. This replaces the indefinitely held chord contract below.
 
-- Keep the existing three-performance phrase recognizer, real local CREPE, accepted-attack segmentation, manually entered/tapped BPM, and output-latency compensation. A recognized phrase may contain any notes; remove chord inference and harmonic gating.
+- Keep the existing three-performance phrase recognizer, real local CREPE, accepted-attack segmentation, Auto or manually entered/tapped BPM, and output-latency compensation. A recognized phrase may contain any notes; remove chord inference and harmonic gating.
 - Replay the recognized notes as a single-note sequence, preserving detected pitch/tuning, relative attack spacing, accents, and rests. The cycle is the measured phrase duration in seconds, without rounding it to whole bars. Start the first pass on the next schedulable downbeat, then play exactly **three** passes and expire automatically.
 - Clip note lengths before the next attack or cycle boundary. Account for the oscillator's stop tail and slightly late starts, so app-generated voices never overlap. Keep a warm, quiet triangle tone with a short attack appropriate for a note sequence. No sustained chord layer.
 - Continue recognizing accepted player input during replies. Keep at most one different recognized phrase waiting; a newer different idea replaces that waiting candidate. Start it only after the current three-pass window, on a schedulable downbeat. Do not interrupt or stack phrases, and do not accumulate a backlog.
