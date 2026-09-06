@@ -72,6 +72,8 @@ export class MotifListener {
   record(note: NoteOn): void {
     if (this.found || !Number.isFinite(note.t) || !Number.isFinite(note.hz) || note.hz <= 0) return;
     if (this.history.length && note.t <= this.history.at(-1)!.t) return;
+    const previous = this.history.at(-1);
+    if (previous?.duration !== undefined) previous.duration = Math.min(previous.duration,note.t-previous.t);
     this.history.push({...note});
     this.history = this.history.filter(previous => note.t-previous.t <= 64*this.period).slice(-96);
     this.repetitions = this.history.length >= 2 ? 1 : 0;
@@ -132,14 +134,25 @@ export class MotifListener {
   }
 }
 
-/** Continuing a phrase from another note is still the same idea. Include articulation when known. */
+/** Be conservative about replaying an answered idea: articulation and one dropout are not a new loop. */
 export function sameMotif(a: Motif, b: Motif, period: number): boolean {
-  if (a.notes.length !== b.notes.length || Math.abs(a.beats-b.beats) > Math.max(0.25,a.beats*0.12)) return false;
+  if (Math.abs(a.notes.length-b.notes.length) > 1 || Math.abs(a.beats-b.beats) > Math.max(0.25,a.beats*0.12)) return false;
+  if (a.notes.length !== b.notes.length) {
+    const longer = a.notes.length > b.notes.length ? a : b, shorter = longer === a ? b : a;
+    const other = shorter.notes.map(note => ({...note,t:note.t-shorter.notes[0].t,duration:undefined}));
+    return longer.notes.some((_,rotation) => {
+      const seed = Array.from({length:longer.notes.length},(_,i) => {
+        const index = (rotation+i)%longer.notes.length, note = longer.notes[index];
+        return {...note,t:note.t-longer.notes[rotation].t+(index<rotation ? longer.beats*period : 0),duration:undefined};
+      });
+      const match = align(seed,other,0,0,period);
+      return match !== undefined && match.notes.every((note,i) => !note || pc(note) === pc(seed[i]));
+    });
+  }
   const gaps = (motif: Motif) => motif.notes.map((note,i) => i+1<motif.notes.length ? motif.notes[i+1].t-note.t : motif.beats*period-(note.t-motif.notes[0].t));
   const aGaps = gaps(a), bGaps = gaps(b);
   return a.notes.some((_,rotation) => b.notes.every((note,i) => {
-    const j = (i+rotation)%a.notes.length, other = a.notes[j];
-    return pc(note) === pc(other) && Math.abs(aGaps[j]-bGaps[i]) <= Math.max(period*0.22,aGaps[j]*0.12) &&
-      (note.duration === undefined || other.duration === undefined || Math.abs(note.duration-other.duration) <= Math.max(0.09,period*0.22,Math.min(note.duration,other.duration)*0.3));
+    const j = (i+rotation)%a.notes.length;
+    return pc(note) === pc(a.notes[j]) && Math.abs(aGaps[j]-bGaps[i]) <= Math.max(period*0.22,aGaps[j]*0.12);
   }));
 }

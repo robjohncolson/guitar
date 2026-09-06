@@ -18,6 +18,8 @@ Phase gates: ear tests; recognition/playback tests; UI/preferences/capture tests
 
 Acceptance at 120 BPM: repeat A–C–E with offsets 0, 0.5, and 1.5 seconds in a 2.5-second cycle, three times, including the closing pause. The reply should begin 7.75 seconds after the first pluck (plus only unavoidable scheduling tolerance), use the same five-beat cycle three times, and stop. A different repeated idea played during that reply may follow afterward; no bar wait, extra voices, or endless retrigger.
 
+Repeat suppression is deliberately conservative: changing damping alone or dropping one note from an answered loop at the same cycle/phase is not sufficient to trigger it again. Compare pitch order and onset spacing for this identity check; retain articulation/rest checks when learning and reproducing the loop. L permits an intentional variation of the same idea to be learned again.
+
 ## Previous product: three phrase replies, then quiet (historical)
 
 ### Auto tempo revision

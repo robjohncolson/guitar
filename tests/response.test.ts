@@ -36,7 +36,7 @@ it('the scheduler stays silent until recognition, then sends one phrase note wit
 });
 it('retains a stopped output mask for delayed pitch results without masking later player notes', () => {
   const companion = new Companion(); companion.reset(0,0.5);
-  const context = {currentTime:1.4,outputLatency:0};
+  const context = {currentTime:1.75,outputLatency:0};
   const synth = {context,setResponse:()=>{},click:()=>{},note:()=>{}} as unknown as Synth;
   companion.mask.arm(1,0.1,57);
   new Scheduler(new Grid(0,0.5),synth,companion).tick();

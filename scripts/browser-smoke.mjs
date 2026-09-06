@@ -189,7 +189,8 @@ try {
   await writeFile(path.join(directory,'listening-trace.json'),JSON.stringify(trace,null,2));
   assert.ok(detection.recall>=0.95 && detection.precision>=0.95,`Missed/duplicate plucks: ${JSON.stringify(detection)}; trace: ${directory}`);
   await pause(6000); // The player keeps repeating B; the app must not reply forever.
-  assert.equal(await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length"),18,'A completed phrase retriggered indefinitely');
+  const finishedNotes = await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle')");
+  assert.equal(finishedNotes.length,18,`A completed phrase retriggered: ${JSON.stringify(finishedNotes.slice(18))}; trace: ${directory}`);
   assert.equal(await evaluate("Number(document.getElementById('bpm').value)"),120,'Playing changed the entered BPM');
   // Reopening Chrome's fake microphone restarts the WAV, so switch after the finite-exchange check.
   await evaluate("document.getElementById('output').click()");

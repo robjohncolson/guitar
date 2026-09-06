@@ -40,7 +40,7 @@ export class Ear {
     this.onsets.observeLevel(message.t,message.rms);
     this.latestFrameAt = message.t;
     // Preserve two attack snapshots; latest-only inference can skip an entire short pluck.
-    if (this.snapshots < 2 && message.t >= this.attackAt+0.02+this.snapshots*0.04 && message.t <= this.attackAt+0.14) {
+    if (this.snapshots < 2 && message.t >= this.attackAt+0.04+this.snapshots*0.04-1e-6 && message.t <= this.attackAt+0.14) {
       this.attackFrames.push(message); this.attackFrames = this.attackFrames.slice(-4); this.snapshots++;
     }
     // Bound the queue. A slow GPU must not accumulate seconds of stale pitch frames.
@@ -55,7 +55,7 @@ export class Ear {
     this.busy = true;
     try {
       while (this.queued || this.attackFrames.length) {
-        this.attackFrames = this.attackFrames.filter(frame => this.latestFrameAt-frame.t <= 0.25);
+        this.attackFrames = this.attackFrames.filter(frame => this.latestFrameAt-frame.t <= 0.5);
         const frame = this.attackFrames.shift() ?? this.queued;
         if (!frame) break;
         if (this.queued && this.queued.t <= frame.t) this.queued = undefined;

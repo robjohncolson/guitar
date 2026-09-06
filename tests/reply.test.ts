@@ -46,4 +46,12 @@ describe('three finite phrase replies', () => {
     listener.advance(6);
     expect(listener.motif?.notes[2].duration).toBeCloseTo(0.12);
   });
+  it('does not replay an answered loop for articulation changes or a one-note detection dropout', () => {
+    const fragment = {...motif,notes:[note(0,57,0.7),note(1,64,0.5)]};
+    expect(sameMotif(motif,fragment,0.5)).toBe(true);
+    expect(sameMotif(fragment,motif,0.5)).toBe(true);
+    expect(sameMotif(motif,{...motif,notes:motif.notes.map(n=>({...n,duration:0.6}))},0.5)).toBe(true);
+    expect(sameMotif(motif,{...fragment,notes:[note(0,57),note(1,65)]},0.5)).toBe(false);
+    expect(sameMotif(motif,{...fragment,notes:[note(0,57),note(0.7,64)]},0.5)).toBe(false);
+  });
 });

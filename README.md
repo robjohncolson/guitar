@@ -15,7 +15,7 @@ Try 120 BPM: play A, C, E at 0, 0.5, and 1.5 seconds, then start again at 2.5 se
 
 Recognition compares pitch order, rhythm, and measured note lengths. It supports 2–24 notes with at least two different pitch classes and cycles of 1–16 entered beats. Small timing/tuning differences and an occasional extra or missed pluck in longer phrases are tolerated. Ringing notes and uncertain pitch frames do not count as repeated plucks. A rest means the sound has quieted; a string still ringing between attacks is a sustain.
 
-Replies use synthesized individual tones, preserving detected tuning and timing. They do not transcribe strummed chords or generate harmony. App notes do not overlap each other; you can play during the reply. “Offbeat” shifts the whole loop by half a beat; it does not force every note onto a grid or play only in your gaps.
+Replies use synthesized individual tones, preserving detected tuning and timing. They do not transcribe strummed chords or generate harmony. App notes do not overlap each other; you can play during the reply. “Offbeat” shifts the whole loop by half a beat; it does not force every note onto a grid or play only in your gaps. Small articulation changes or a one-note fragment of the answered rhythm do not trigger another reply; use L to hear that idea again with different damping.
 
 ## Controls
 

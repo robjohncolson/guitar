@@ -26,7 +26,7 @@ export class Scheduler {
     }
     for (const i of this.clicked) if (i<first-16) this.clicked.delete(i);
     // Keep recent windows for pitch results arriving after the voice has stopped.
-    this.companion.mask.prune(now-0.5);
+    this.companion.mask.prune(now-1);
     const notes = this.companion.takeDue(now,delay);
     for (const note of notes) {
       this.synth.note(note.midi,note.fireAt,note.duration,note.velocity);
