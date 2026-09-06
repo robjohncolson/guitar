@@ -1,5 +1,7 @@
 # Codex Implementation Prompt — Guitar Practice Partner
 
+> Product revision: the user subsequently requested a simple two-beat repeater. Follow the current contract at the top of `SPEC.md`. Direct BPM entry replaces the Space-only requirement; scale gating and four-role implementation phases below are historical. Retain the technical constraints (real CREPE, attack segmentation, self-mask, vanilla Vite/TypeScript, local model assets, Web Audio timing, no backend or generative music).
+
 You are implementing a **new** local web app in this directory. The product spec is `SPEC.md`. Read it before writing any code. If this prompt and `SPEC.md` conflict, **`SPEC.md` wins**, except for the hard constraints below (those always win).
 
 This is a greenfield folder. Build the whole v1. Do not ask to shrink scope. Do not replace CREPE with a tuner FFT.

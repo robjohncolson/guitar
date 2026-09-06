@@ -1,5 +1,26 @@
 # Guitar Practice Partner — Spec
 
+## Current product: two-beat repeater (user revision, September 5, 2026)
+
+This contract supersedes the scale-inference and four-role product below. The user asked for a simple repeater with no musical setup wait.
+
+- Enter BPM directly (40–240, default 100, saved). Click Enable audio & mic. Space tap tempo remains optional; the guitar never sets tempo.
+- The **first** accepted note-on queues the same detected pitch, at `onset.t + 120 / bpm`. At 120 BPM this is one second after the original attack, including for off-grid notes. Preserve detected tuning rather than snapping to a scale or octave. CREPE's short onset-settling window does not add to the delay.
+- Each attack produces exactly one synthesized triangle tone, at the same pitch. This is pitch repetition, not recording and replaying the guitar audio. Sustain never queues extra repeats. Playback duration is 55% of a beat, capped at 450 ms.
+- No scale inference, confidence-to-key gate, six-note wait, lock, density, hole filling, or role selector. Repeats can overlap a newly played note; do not delay or skip them based on occupancy.
+- Retain real local CREPE tiny, official model I/O, WebGL, AudioWorklet capture, and the explicitly labeled load-failure-only YIN fallback. Retain speakers AEC and the matching-pitch self-play mask for note duration plus 80 ms.
+- Audio target time is `onset.t + 120 / bpm - outputLatency`, falling back to baseLatency. Schedule with Web Audio; skip events more than 15 ms late. Do not move old repeats to the present after a stalled tab.
+- Changing BPM or Shift+Space clears queued/current repeats and restarts the click phase. M mutes and clears repeats without muting click; C mutes click; H reopens mic processing without changing tempo; Escape cancels pending/current repeats and click while preserving BPM/pulse.
+- UI: editable BPM, two-beat delay in seconds, four beat indicators, last accepted player note, upcoming/last repeat, mic/model state, repeater/click mutes, output mode, and collapsed threshold/volume controls.
+- Persist BPM, mutes, output mode, tiny capacity, and voiced threshold under `guitar.practice.v1`. Discard former role/density fields on save. Pending repeats never persist.
+- Tests cover first-note eligibility, multiple/off-grid attacks, same detected Hz, two-beat timing at 40–240 BPM, output-latency compensation, sustain segmentation, self-mask, mute/panic clearing, tempo changes, stale-event skipping, settings migration, and official CREPE postprocess.
+
+Acceptance: enter 120 BPM and play any one guitar note. Hear the same pitch one second later without tapping, locking, or training a scale. Play a few different notes and hear each once at the same delay. Stop playing and ensure repeats end rather than feeding back. Change BPM and verify the delay follows. Confirm mute/panic clears pending repeats and CREPE loads on the deployed site.
+
+---
+
+## Original v1 design (historical; overridden above)
+
 Local browser app. Afternoon practice. Acoustic guitar into the laptop mic. Companion out of the laptop speakers. You tap a pulse, it listens, it infers the scale, it plays tones in the beats you leave empty.
 
 This file is the source of truth. `CODEX_PROMPT.md` is the implementation order.

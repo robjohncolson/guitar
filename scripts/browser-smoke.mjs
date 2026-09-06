@@ -9,9 +9,9 @@ const origin = process.env.SMOKE_ORIGIN || 'http://127.0.0.1:5173';
 const modelFailure = process.env.SMOKE_MODEL_FAILURE === '1';
 const directory = await mkdtemp(path.join(tmpdir(), 'guitar-chrome-'));
 const wav = path.join(directory, 'guitar.wav');
-const rate = 48000, seconds = 4, pcm = Buffer.alloc(rate * seconds * 2);
+const rate = 48000, seconds = 6, pcm = Buffer.alloc(rate * seconds * 2);
 for (let i = 0; i < rate * seconds; i++) {
-  const t = i / rate, age = t % 1;
+  const t = i / rate, age = t % 3;
   const envelope = Math.min(1, age / 0.004) * Math.exp(-age * 5);
   const sample = envelope * (Math.sin(2 * Math.PI * 110 * t) + 0.35 * Math.sin(2 * Math.PI * 220 * t) + 0.12 * Math.sin(2 * Math.PI * 330 * t));
   pcm.writeInt16LE(Math.round(sample * 14000), i * 2);
@@ -66,10 +66,17 @@ try {
   await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable');
   if (modelFailure) await send('Fetch.enable', {patterns:[{urlPattern:'*/models/crepe-tiny/model.json'}]});
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.__smoke = { notes: [], contexts: [], constraints: [] };
+    window.__smoke = { notes: [], contexts: [], constraints: [], attacks: [] };
     const NativeContext = window.AudioContext;
     window.AudioContext = class extends NativeContext {
       constructor(...args) { super(...args); window.__smoke.contexts.push(this); }
+    };
+    const NativeWorklet = window.AudioWorkletNode;
+    window.AudioWorkletNode = class extends NativeWorklet {
+      constructor(...args) {
+        super(...args);
+        this.port.addEventListener('message', event => { if (event.data.type === 'attack') window.__smoke.attacks.push(event.data.t); });
+      }
     };
     const start = OscillatorNode.prototype.start;
     OscillatorNode.prototype.start = function(time) {
@@ -81,41 +88,42 @@ try {
   ` });
   await send('Page.navigate', { url: origin });
   await until(`document.getElementById('model')?.textContent === '${modelFailure ? 'FALLBACK: YIN' : 'CREPE ready (tiny)'}'`, 60000);
+  await evaluate("document.getElementById('bpm').value='120'; document.getElementById('bpm').dispatchEvent(new Event('input'))");
+  assert.equal(await evaluate("document.querySelectorAll('#scale, #lock, #roles, #density').length"),0,'Old setup controls remain');
   await evaluate("document.getElementById('enable').click()");
   await until("document.getElementById('mic')?.textContent.includes('Mic listening')");
   await until("document.getElementById('note')?.textContent.startsWith('A2')", 30000);
-  for (let i=0; i<4; i++) {
-    await send('Input.dispatchKeyEvent', { type: 'keyDown', code: 'Space', key: ' ' });
-    await send('Input.dispatchKeyEvent', { type: 'keyUp', code: 'Space', key: ' ' });
-    if (i<3) await pause(500);
-  }
-  await until("Number(document.getElementById('bpm')?.textContent) > 0");
-  await until("parseInt(document.getElementById('onsets')?.textContent) >= 6");
-  await evaluate("document.getElementById('lock').click()");
-  await until("document.getElementById('lock')?.textContent.startsWith('Unlock')");
-  await evaluate("document.getElementById('density').click()");
-  await until("window.__smoke.notes.some(note => note.type === 'triangle')", 15000);
-  const bpmBefore = await evaluate("document.getElementById('bpm').textContent");
-  for (const role of [1,2,3,0]) {
-    await evaluate(`document.querySelector('[data-role="${role}"]').click()`);
-    await until(`document.querySelector('[data-role="${role}"]').getAttribute('aria-pressed') === 'true'`);
-    if (role === 1) await until("window.__smoke.notes.some(note => note.type === 'sine' && note.hz < 170)", 10000);
-  }
+  await until("window.__smoke.notes.some(note => note.type === 'triangle')",5000);
+  const timing = await evaluate(`(() => {
+    const echo=window.__smoke.notes.find(note=>note.type==='triangle');
+    const audio=window.__smoke.contexts[0];
+    const delay=audio.outputLatency || audio.baseLatency || 0;
+    return {hz:echo.hz,echoAt:echo.time+delay,attacks:window.__smoke.attacks,delay,heard:document.getElementById('note').textContent};
+  })()`);
+  assert.ok(Math.abs(timing.hz-110)<3.3,JSON.stringify(timing));
+  const heardCents = timing.heard.match(/([+−])(\d+)¢/);
+  assert.ok(heardCents,JSON.stringify(timing));
+  assert.ok(Math.abs(Math.round(1200*Math.log2(timing.hz/110))-Number(heardCents[2])*(heardCents[1]==='−'?-1:1))<=1,'Repeat changed the detected pitch');
+  assert.ok(timing.attacks.some(t=>Math.abs(timing.echoAt-t-1)<0.025),`Repeat is not two beats after the original attack: ${JSON.stringify(timing)}`);
+  assert.ok(timing.echoAt-timing.attacks[0]<1.15,'First attack was not immediately queued');
+  const bpmBefore = await evaluate("document.getElementById('bpm').value");
   await evaluate("document.getElementById('output').click()");
   await until("document.getElementById('mic')?.textContent.includes('headphones')");
-  assert.equal(await evaluate("document.getElementById('bpm').textContent"), bpmBefore, 'Output/role switch reset the clock');
+  assert.equal(await evaluate("document.getElementById('bpm').value"), bpmBefore, 'Output switch reset the clock');
   const graph = await evaluate("({constraints:window.__smoke.constraints,contexts:window.__smoke.contexts.length,notes:window.__smoke.notes.length,late:window.__smoke.notes.filter(note=>note.time<note.now-0.001).length})");
   assert.equal(graph.contexts,1); assert.equal(graph.constraints[0].audio.echoCancellation,true);
   assert.equal(graph.constraints.at(-1).audio.echoCancellation,false); assert.equal(graph.late,0);
   await evaluate("document.getElementById('threshold').value='0.62'; document.getElementById('threshold').dispatchEvent(new Event('input'))");
   const saved = await evaluate("JSON.parse(localStorage.getItem('guitar.practice.v1'))");
   assert.equal(saved.voicedThreshold,0.62); assert.equal(saved.outputMode,'headphones');
-  assert.equal(saved.density,'busy'); assert.equal(saved.crepeCapacity,'tiny'); assert.ok(!('bpm' in saved)); assert.ok(!('locked' in saved));
+  assert.equal(saved.bpm,120); assert.equal(saved.crepeCapacity,'tiny'); assert.ok(!('role' in saved)); assert.ok(!('locked' in saved));
   await send('Input.dispatchKeyEvent', {type:'keyDown',code:'Escape',key:'Escape'});
   await until("document.getElementById('hint')?.textContent.includes('Output silenced')");
-  assert.equal(await evaluate("document.getElementById('bpm').textContent"),bpmBefore,'Panic reset the clock');
-  const state = await evaluate("({model:document.getElementById('model').textContent,mic:document.getElementById('mic').textContent,note:document.getElementById('note').textContent,pitch:document.getElementById('pitch-detail').textContent,onsets:document.getElementById('onsets').textContent,bpm:document.getElementById('bpm').textContent})");
-  assert.ok(Number(state.bpm) >= 110 && Number(state.bpm) <= 125, JSON.stringify(state));
+  assert.equal(await evaluate("document.getElementById('bpm').value"),bpmBefore,'Panic reset the clock');
+  const echoedBeforePanic = await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length");
+  await pause(1300);
+  assert.equal(await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length"),echoedBeforePanic,'An echo survived panic');
+  const state = await evaluate("({model:document.getElementById('model').textContent,mic:document.getElementById('mic').textContent,note:document.getElementById('note').textContent,bpm:document.getElementById('bpm').value})");
   assert.equal(errors.length, 0, JSON.stringify(errors));
   assert.ok(requests.some(url => url === `${origin}/models/crepe-tiny/model.json`));
   assert.ok(requests.filter(url => /^https?:/.test(url)).every(url => url.startsWith(origin)), 'Unexpected nonlocal runtime request');
@@ -125,7 +133,7 @@ try {
   }
   await send('Page.reload');
   await until("document.getElementById('threshold')?.value === '0.62'");
-  assert.equal(await evaluate("document.getElementById('bpm').textContent"),'—','BPM was incorrectly persisted');
-  console.log(JSON.stringify({ ...state, ...graph, persisted:saved, localModelRequests: requests.filter(url => url.includes('/models/')).length, browserErrors: errors.length }, null, 2));
+  assert.equal(await evaluate("document.getElementById('bpm').value"),'120','Entered BPM was not restored');
+  console.log(JSON.stringify({ ...state, ...graph, timing, persisted:saved, localModelRequests: requests.filter(url => url.includes('/models/')).length, browserErrors: errors.length }, null, 2));
   await send('Browser.close');
 } finally { socket?.close(); chrome.kill(); }
