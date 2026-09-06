@@ -1,0 +1,10 @@
+CREPE — A Convolutional Representation for Pitch Estimation
+Jong Wook Kim, Justin Salamon, Peter Li, Juan Pablo Bello. ICASSP 2018.
+Source: https://github.com/marl/crepe
+Browser model: https://marl.github.io/crepe/model/model.json
+License: MIT. See CREPE-LICENSE for the preserved upstream license.
+The official browser model is shipped as crepe-tiny, without conversion.
+
+TensorFlow.js — Copyright Google LLC and contributors.
+License: Apache License 2.0; https://www.apache.org/licenses/LICENSE-2.0
+Bundled locally via @tensorflow/tfjs. See TENSORFLOWJS-LICENSE.

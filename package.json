@@ -1,0 +1,16 @@
+{
+  "name": "guitar",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "22.x" },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "preview": "vite preview",
+    "vendor:crepe": "node scripts/vendor-crepe.mjs"
+  },
+  "dependencies": { "@tensorflow/tfjs": "4.22.0" },
+  "devDependencies": { "vite": "8.2.2", "typescript": "7.0.2", "vitest": "5.0.0" }
+}
