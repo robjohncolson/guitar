@@ -43,6 +43,7 @@ describe('three finite phrase replies', () => {
       listener.record({...source,duration:undefined});
       listener.finish(source.t,source.t+0.12);
     }
+    listener.advance(6);
     expect(listener.motif?.notes[2].duration).toBeCloseTo(0.12);
   });
 });

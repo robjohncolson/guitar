@@ -1,8 +1,8 @@
 # Codex Implementation Prompt — Guitar Practice Partner
 
-> Product revision: recognize a recurring phrase, replay its notes at the same pace exactly three times, and continue listening for a new phrase to follow without overlap. The user now explicitly requests BPM estimation from guitar plucks: Auto learns a stable initial pulse, then holds it; direct BPM entry and Space override it. This supersedes the original Space-only/no-guitar-clock restriction. Follow the current contract at the top of `SPEC.md`. Held chords, ordinary echoes, manual memory, and four-role product phases are historical. Retain the technical constraints (real CREPE, attack segmentation, self-mask, vanilla Vite/TypeScript, local model assets, Web Audio timing, no backend or generative music).
+> Current user revision (September 6, 2026): remove unreliable Auto BPM and four-beat listening. Enter BPM manually, listen continuously for three matching whole cycles including rests, and replay the phrase half a beat later exactly three times. Keep listening with one waiting phrase and no overlapping app voices. The first accepted pluck anchors phase but never estimates or changes BPM. Follow the current contract at the top of `SPEC.md`. Auto tempo, held chords, ordinary echoes, manual memory, and four-role product phases are historical. Retain the technical constraints: real CREPE, attack segmentation, self-mask, vanilla Vite/TypeScript, local model assets, Web Audio timing, no backend or generative music.
 
-You are implementing a **new** local web app in this directory. The product spec is `SPEC.md`. Read it before writing any code. If this prompt and `SPEC.md` conflict, **`SPEC.md` wins**, except for the hard constraints below (those always win).
+The product spec is `SPEC.md`. Read it before writing any code. If this prompt and `SPEC.md` conflict, **`SPEC.md` wins**, except for the hard constraints below (those always win). The original greenfield instructions and product phases below are retained as history; current revision phases appear first.
 
 This is a greenfield folder. Build the whole v1. Do not ask to shrink scope. Do not replace CREPE with a tuner FFT.
 
@@ -19,7 +19,7 @@ This is a greenfield folder. Build the whole v1. Do not ask to shrink scope. Do 
 
 3. **Self-play masking is mandatory.** Speakers + acoustic mic will hear the companion. `SPEC.md` §7.
 
-4. **Clock stays stable during replies.** Per the user's Auto tempo revision, accepted guitar plucks may establish the initial BPM and pulse. Do not continuously retime an active reply. Entered BPM or Space tapping overrides Auto; `preventDefault` on Space.
+4. **Manual clock, stable during replies.** Per the user's latest revision, remove guitar BPM estimation. Entered BPM or Space tapping sets tempo; `preventDefault` on Space. The first accepted pluck may anchor phase at that fixed tempo. Guitar input must not estimate or continuously retime the clock. Preserve the captured phrase's timing and use the entered BPM for the half-beat reply offset.
 
 5. **No generative ML.** No Magenta, Lyria, melody RNN, cloud APIs. CREPE is the only model.
 
@@ -98,7 +98,16 @@ If the official URL layout has changed, hunt the same tiny tfjs model (ml5 `pitc
 
 ---
 
-## Phase 1 — Scaffold, tap tempo, grid, click, UI shell
+## Current revision phases
+
+Stop and run tests at each phase boundary before starting the next.
+
+1. Ear reliability: one note per pluck, stable pitch evidence, actual quiet for note ends. Confidence dropouts and ringing must not invent attacks or rests. Run ear and regression tests.
+2. Continuous loop recognition: three complete cycles, tolerant alignment, internal/closing rests, finite half-beat replies, one waiting idea, no overlap or indefinite retrigger. Run recognition, playback, and regression tests.
+3. Minimal manual UI: BPM, one pulse dot, listening/reply state, Stop. Remove Auto and four-beat displays; keep optional settings and an explicit local listening check. Run all tests and production build.
+4. Verify real CREPE in Chrome using recorded guitar plucks and known note/rest timings, then review and publish under the user's existing GitHub/Vercel authorization. Report physical-room limits honestly.
+
+## Historical Phase 1 — Scaffold, tap tempo, grid, click, UI shell
 
 No mic yet.
 

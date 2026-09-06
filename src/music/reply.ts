@@ -22,7 +22,7 @@ export class PhraseReply {
       const next = i+1 < motif.notes.length ? Math.min(this.duration,motif.notes[i+1].t-first) : this.duration;
       const space = Math.max(0,next-offset-0.006);
       return Object.freeze({offset,hz:note.hz,midi:hzToMidi(note.hz),velocity:note.velocity ?? 0.75,
-        duration:Math.min(space,note.duration ?? Math.min(0.45,space*0.7))});
+        duration:Math.min(space,note.duration ?? space)});
     }));
   }
   takeDue(now: number, outputDelay: number, lookahead = 0.075): ReplyNote[] {

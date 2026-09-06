@@ -1,6 +1,24 @@
 # Guitar Practice Partner — Spec
 
-## Current product: three phrase replies, then quiet (September 6, 2026)
+## Current product: continuous listening, manual BPM, offbeat replies (September 6, 2026)
+
+This is the latest user-approved contract. It supersedes Auto tempo and the bar-aligned finite replies below, while retaining the technical hard constraints in `CODEX_PROMPT.md`.
+
+- Enter BPM manually (40–240, default 100, saved). Space remains optional tap tempo. Remove Auto BPM, Find tempo, four beat cells, four-beat listening windows, and bar-entry waits. The first clear, accepted pluck anchors pulse phase at the entered tempo; playing never changes BPM.
+- Listen continuously with bounded rolling evidence. Recognize three complete performances of a repeating phrase, including the final pause. There is no four-beat deadline or fixed bar size. Support 2–24 notes, at least two distinct pitch classes, and cycles of 1–16 entered beats. Compare order, timing, and measured articulation. For phrases of at least three notes, tolerate one missed or inserted pluck per compared performance; for five or more, one wrong pitch can consume that same allowance. Require two agreeing observations for each retained note. Noise, sustains, and a repeated single pitch must not establish a loop.
+- Keep real CREPE as the pitch ear. Segment actual attacks, merge double transients within 90 ms, and require agreeing pitch observations. A confidence dropout or octave blip in a ringing string is neither a pluck nor a rest. Confirm a note end with at least 80 ms of quiet audio, timestamped at the beginning of that quiet interval, or end it at the next accepted attack. Self-masked notes must not end a player's sustain.
+- Preserve known note lengths, internal rests, and the closing rest as part of the measured cycle. Unknown note ends remain uncertain; they do not invent a short note or a rest. Playback remains monophonic and clips note tails before the next note or cycle boundary.
+- Here **offbeat** means shift the entire captured loop by **half one entered beat**, preserving its captured spacing and duration. It does not mean generate notes only in empty slots or quantize every note to an eighth-note grid. Start at the first schedulable occurrence of that loop phase, without rounding to a bar. Play exactly three passes, including their closing rests, then go quiet.
+- Keep listening during playback. Hold at most one different waiting loop; the newest replaces the previous waiting idea. It follows only after the current full three-pass window, using its own half-beat-shifted phase. App notes and phrases must not overlap. Continuing the current or last answered idea cannot requeue it forever; cyclic rotations count as the same idea. Start fresh / L clears this memory and all phrases while keeping the pulse.
+- Stop / Escape silences audio, clears recognition and active/waiting loops, and releases the microphone, including a pending permission request. Start listening begins a fresh session. BPM changes and Shift+Space clear recognition and restart phase; H preserves the clock and exchange while switching microphone processing. M suppresses output while active passes expire; a waiting loop waits for unmute. Skip stale events without catch-up bursts.
+- Keep the primary UI to BPM, one pulse dot, state (Listening / Found a loop / Replying / Stopped), and Stop, with Start listening for microphone permission. Settings remain collapsed. Click is optional and initially off; no four-beat accents. Save preferences only; discard obsolete Auto preferences and never persist learned notes or replies.
+- Provide an optional **Check what I heard** section. Recording starts only on an explicit button press, captures at most 20 seconds locally, and shows audio waveform, accepted/masked note lengths, and scheduled replies. Allow local playback and WAV/JSON download; stop the microphone before playing the recording. No upload, background recording archive, or backend.
+
+Phase gates: ear tests; recognition/playback tests; UI/preferences/capture tests and build; then real Chrome with actual local CREPE, annotated recorded-guitar plucks, and a synthetic regression fixture. Verify note detection against known source timings, preserved rests, half-beat entry, three finite passes, concurrent learning, queue handoff, no overlap, mutes/reset/Stop, microphone shutdown races, preference restoration, and no external runtime requests. Automated edited recordings do not establish physical-room reliability; document that limit and provide a short human check.
+
+Acceptance at 120 BPM: repeat A–C–E with offsets 0, 0.5, and 1.5 seconds in a 2.5-second cycle, three times, including the closing pause. The reply should begin 7.75 seconds after the first pluck (plus only unavoidable scheduling tolerance), use the same five-beat cycle three times, and stop. A different repeated idea played during that reply may follow afterward; no bar wait, extra voices, or endless retrigger.
+
+## Previous product: three phrase replies, then quiet (historical)
 
 ### Auto tempo revision
 

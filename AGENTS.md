@@ -1,31 +1,34 @@
 # Guitar Practice Partner
 
-Local Vite + TypeScript app. Acoustic guitar in, three finite replies of a recognized phrase at its original pace. Current product contract is at the top of `SPEC.md`; held chords, ordinary echoes, and four-role designs are historical.
+Local Vite + TypeScript app. Enter BPM, play a repeating idea, and hear three finite replies half a beat later. The latest product contract is at the top of `SPEC.md`; implementation constraints and phase order are in `CODEX_PROMPT.md`.
 
-Listen until note order and rhythm establish three matching performances. Replay the actual notes exactly three times, then stop. Keep listening during playback and hold at most one new phrase to follow. App-generated notes and phrases must not overlap. Start fresh/L clears active/waiting recognition without resetting the clock.
-
-Preserve detected pitch, timing, rests, and accepted attack dynamics. Responsive (default on, collapsed preference) smoothly softens replies in response to player attacks, recovering in rests; it never changes the notes or click.
+Listen continuously for three complete matching cycles, including internal and closing rests. Use tolerant note/time alignment, not a four-beat window, note-count gate, or pitch histogram. Preserve detected pitch, timing, rests, and accepted attack dynamics. Keep listening during playback with one waiting loop; app voices and phrases must not overlap. Continuing the same idea cannot requeue it forever. Start fresh / L clears evidence and replies while keeping the clock.
 
 ## Rules
 
-- CREPE is the pitch ear and must actually run (tfjs Layers model in `public/models/`). Do not substitute YIN as the default.
-- Occupancy is note-on attacks, not ringing energy.
-- Auto tempo learns an initial pulse from accepted guitar plucks, then holds it steady. Entered BPM and Space tapping override Auto. Do not continuously retime replies. Find tempo explicitly starts new learning.
-- No generative music models. No fretboard/lesson/tab chrome. No backend.
-- Musical timing uses `AudioContext.currentTime` minus `outputLatency`.
-- North-star demo: recognize A–C–E, play A–C–E back three times, then stop; learn a new repeated phrase concurrently and let it follow.
-- No ordinary echoes, chord inference, or manual phrase recording. Match repeating sequences, not merely common pitch classes or a note-count gate.
-- Mask reply notes and octave detections. Continuing the same idea must not requeue it forever. L permits learning it again.
+- CREPE is the pitch ear and must actually run as a tfjs Layers model from committed `public/models/` assets. Never substitute YIN as the default.
+- Occupancy is note-on attacks, not ringing energy. Confidence dropouts and octave blips must not invent attacks or rests. Masked app notes must not cut up player sustains.
+- Manual BPM or Space tapping sets the clock. No guitar BPM estimation. The first accepted pluck anchors phase at the entered tempo; subsequent playing never retimes the pulse.
+- Offbeat means the whole loop shifted by half an entered beat, preserving its captured pace. No bar rounding or downbeat entry wait.
+- Schedule musical events with `AudioContext.currentTime` minus `outputLatency`.
+- No generative models, backend, fretboard, lessons, tabs, or chord inference. One note at a time.
+- Stop releases the microphone and silences audio, including a pending microphone request. Start begins a fresh session.
+- Minimal primary controls: BPM, one pulse dot, state, and Stop. Keep optional settings and the explicit local 20-second listening check collapsed. Never store or upload captured audio/notes automatically.
+- North-star demo: repeat a five-beat A-C-E idea three times with pauses; hear three copies a half beat later, then quiet. Learn a different loop during playback and let it follow without overlap.
+- Complete each phase and run its tests before the next. Verify Chrome with actual CREPE and annotated recorded guitar input before publishing. Do not claim that automated fixtures establish physical-room reliability.
 
 ## Commands
 
 ```bash
 npm install
-npm run dev      # Chrome, allow mic
+npm run dev
 npm test
 npm run build
+npm run preview
 ```
+
+With preview running, `node scripts/browser-smoke.mjs` uses recorded guitar plucks; set `SMOKE_ORIGIN` to the preview URL. See README for options.
 
 ## Layout
 
-`src/music/motif.ts` recognizes and compares phrases; `reply.ts` schedules three finite passes; `companion.ts` owns continuous input, masking, and one waiting phrase; `src/audio/scheduler.ts` schedules reply notes and click. Models live in `public/models/` and are committed.
+`src/audio/attack.ts` and `onset.ts` segment plucks; `src/music/motif.ts` recognizes loops and rests; `reply.ts` schedules three passes; `companion.ts` owns continuous input, masking, and one waiting loop; `src/audio/scheduler.ts` schedules output. `listening-capture.ts` supports the opt-in local check. Models are committed under `public/models/`; test recording provenance is under `tests/fixtures/`.

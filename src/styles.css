@@ -1,5 +1,6 @@
 :root { font-family: "Segoe UI", sans-serif; color: #e8e9df; background: #131715; font-synthesis: none; color-scheme: dark; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; }
 button, input { font: inherit; }
 button { border: 1px solid #414941; background: #212823; color: #e8e9df; padding: 12px 18px; border-radius: 8px; cursor: pointer; }
@@ -8,7 +9,7 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 button:disabled { opacity: .5; cursor: default; }
 button.primary { background: #c8d8a7; color: #182218; border: 0; font-weight: 600; }
 button[aria-pressed=true] { border-color: #bfd39d; background: #34432f; }
-main { max-width: 1080px; margin: 0 auto; padding: 40px 40px 24px; }
+main { max-width: 980px; margin: 0 auto; padding: 40px 40px 24px; }
 header { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
 h1 { font-size: 38px; letter-spacing: -1.5px; font-weight: 500; margin: 10px 0 0; }
 .intro { color: #b8c3af; font-size: 18px; margin: 12px 0 0; }
@@ -22,28 +23,21 @@ h1 { font-size: 38px; letter-spacing: -1.5px; font-weight: 500; margin: 10px 0 0
 .tempo input { width: 170px; padding: 2px 8px; font-size: 54px; font-weight: 400; color: #e8e9df; border: 1px solid #596550; border-radius: 8px; background: #1c241e; font-variant-numeric: tabular-nums; }
 .tempo input[aria-invalid=true] { border-color: #efac81; }
 .tempo > span { color: #a4ada1; font-size: 11px; }
-#find-tempo { width: 170px; padding: 7px 10px; font-size: 12px; }
-.beats { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; flex: 1; }
-.beat { height: 112px; padding: 14px; background: #202722; border: 1px solid #39443a; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-between; }
-.beat > span { font-size: 30px; }
-.beat small { font-size: 10px; color: #abb4a8; }
-.beat.active { border-color: #d0dfb4; box-shadow: inset 0 3px #d0dfb4; }
-.beat.player { background: #4d3829; }
-.beat.companion { background: #24423e; }
-.phrase-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 20px; padding-top: 22px; }
-#passes { display: flex; gap: 8px; }
-.pass { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid #414941; border-radius: 50%; color: #a4ada1; font-size: 12px; }
-.pass.heard { background: #34432f; border-color: #bfd39d; color: #e8e9df; }
-#phrase-status { flex: 1; min-width: 180px; color: #b8c3af; font-size: 13px; }
-#listen-again { padding: 9px 13px; font-size: 13px; }
+.session-state { display: flex; align-items: center; gap: 14px; flex: 1; }
+#phrase-status { color: #c8d8a7; font-size: 25px; }
+#pulse { display: block; width: 13px; height: 13px; flex-shrink: 0; border: 1px solid #65755c; border-radius: 50%; background: #263024; transition: background 80ms; }
+#pulse.active { background: #c8d8a7; box-shadow: 0 0 16px #c8d8a744; }
 .hint { font-size: 20px; color: #c6d3b3; margin: 24px 0 30px; min-height: 28px; }
-.listening { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; padding-bottom: 30px; border-bottom: 1px solid #353d35; }
-.note { font-size: 40px; margin: 12px 0 4px; font-variant-numeric: tabular-nums; }
-.cool { color: #add6cf; }
+.last-notes { display: flex; flex-wrap: wrap; gap: 30px; margin-top: 24px; }
+.last-notes strong { font-weight: 400; color: #c8d8a7; margin-left: 8px; }
 .muted { color: #a4ada1; font-size: 12px; }
 .toggles { display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
 .toggles button { font-size: 13px; padding: 10px 14px; }
 details { margin-top: 24px; color: #a5b19e; font-size: 12px; }
+#capture-plot { display: block; width: 100%; height: 165px; background: #1b211c; border-radius: 8px; margin-top: 20px; }
+#capture-downloads { display: flex; gap: 24px; margin-top: 16px; }
+audio { width: 100%; margin-top: 14px; }
+a { color: #c8d8a7; }
 summary { cursor: pointer; }
 details label { display: flex; align-items: center; gap: 16px; margin-top: 20px; }
 input { accent-color: #c0d49d; }
@@ -54,8 +48,7 @@ kbd { font-family: inherit; color: #d2d7cc; margin-right: 4px; }
   h1 { font-size: 28px; }
   header { align-items: flex-start; }
   .pulse-panel { flex-wrap: wrap; gap: 18px; }
-  .beats { flex-basis: 100%; }
-  .listening { gap: 20px; }
-  .note { font-size: 30px; }
+  .session-state { min-width: 170px; }
+  #phrase-status { font-size: 21px; }
   .hint { font-size: 17px; }
 }

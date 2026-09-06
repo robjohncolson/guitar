@@ -27,9 +27,20 @@ it('the scheduler stays silent until recognition, then sends one phrase note wit
   scheduler.tick(); expect(gains.at(-1)).toBe(1); expect(played).toEqual([]);
   for (let pass=0;pass<3;pass++) [57,60,64].forEach((midi,i) => companion.accept({t:pass*2+i*0.5,hz:midiToHz(midi),midi,pitchClass:0,cents:0,confidence:0.9}));
   context.currentTime = 5.1; scheduler.tick();
-  context.currentTime = 6; scheduler.response.attack(6,0.5); scheduler.tick();
-  expect(gains.at(-1)).toBeLessThan(1); expect(played).toHaveLength(1); expect(played[0][1]).toBe(6);
+  context.currentTime = 6; scheduler.tick();
+  context.currentTime = 6.2; scheduler.response.attack(6.2,0.5); scheduler.tick();
+  expect(gains.at(-1)).toBeLessThan(1); expect(played).toHaveLength(1); expect(played[0][1]).toBe(6.25);
   expect(played[0][2]).toBeLessThan(0.5);
   scheduler.responsive = false; scheduler.tick(); expect(gains.at(-1)).toBe(1);
   scheduler.responsive = true; companion.reset(0,0.5); scheduler.tick(); expect(gains.at(-1)).toBe(1);
+});
+it('retains a stopped output mask for delayed pitch results without masking later player notes', () => {
+  const companion = new Companion(); companion.reset(0,0.5);
+  const context = {currentTime:1.4,outputLatency:0};
+  const synth = {context,setResponse:()=>{},click:()=>{},note:()=>{}} as unknown as Synth;
+  companion.mask.arm(1,0.1,57);
+  new Scheduler(new Grid(0,0.5),synth,companion).tick();
+  const note = {t:1.05,hz:220,midi:57,pitchClass:9,cents:0,confidence:0.9};
+  expect(companion.accept(note)).toBe(false);
+  expect(companion.accept({...note,t:1.4})).toBe(true);
 });

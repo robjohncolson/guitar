@@ -1,42 +1,44 @@
 # Practice Partner
 
-Play a short phrase three times. The app recognizes the repeating idea, plays those notes back at the same pace three times, then goes quiet.
+Enter BPM and play a repeating idea. The app listens for the loop, then plays it back half a beat later three times, including its pauses.
 
-**Live app:** [guitar-lac-seven.vercel.app](https://guitar-lac-seven.vercel.app) · **Source:** [robjohncolson/guitar](https://github.com/robjohncolson/guitar) (private)
+**Live:** [guitar-lac-seven.vercel.app](https://guitar-lac-seven.vercel.app) · **Source:** [robjohncolson/guitar](https://github.com/robjohncolson/guitar) (private)
 
 ## Play
 
-1. Enable audio & mic and wait for **CREPE ready (tiny)**.
-2. Start playing with a steady pulse. Auto tempo listens to your plucks, then fills in the BPM and holds it steady. You can also enter a BPM (40–240) or tap Space four times.
-3. Play individual notes in a short, repeating phrase. Try **A–C–E**, three times in a similar rhythm.
-4. It stays silent during the first two passes. Once it recognizes the third, a reply starts on the next downbeat and plays your phrase exactly three times.
-5. Keep playing. It listens during the reply and lets one newly recognized idea wait its turn. The latest different idea replaces an older waiting idea.
+1. Enter BPM (40–240) and press **Start listening**. Allow the microphone; check for **CREPE ready (tiny)**.
+2. Play individual notes in a short idea, including its pauses, at roughly the same pace three times. The first clear pluck anchors the pulse. There is no four-beat listening window or automatic BPM detection.
+3. After recognizing three whole cycles, the app replies with the same note spacing and cycle length, shifted by half an entered beat. It plays three times, then goes quiet.
+4. Keep playing. One newly recognized idea can wait and follow the current reply. Continuing the same idea does not make it repeat forever; use **Start fresh / L** to learn it again.
 
-The three indicators show recognition progress. Small timing and tuning differences are fine; phrases can start between beats. The app compares note order and rhythm, not just which notes occur most often. It handles phrases of 3–24 attacks, with cycles of 1–16 entered beats. Repeat at roughly the same pace.
+Try 120 BPM: play A, C, E at 0, 0.5, and 1.5 seconds, then start again at 2.5 seconds. Include the closing pause each time. After three performances, the reply starts about 7.75 seconds after your first pluck. This five-beat example deliberately does not fit a four-beat bar.
 
-Auto needs at least eight accepted plucks with consistent timing. Phrase recognition happens at the same time, so those notes still count. Irregular playing keeps it listening. Auto can interpret a pulse at half or double the tempo you intended; entering BPM or tapping Space overrides it. **Find tempo** clears the current exchange and learns your pace again. It estimates the initial pulse, then holds it through new playing and pauses.
+Recognition compares pitch order, rhythm, and measured note lengths. It supports 2–24 notes with at least two different pitch classes and cycles of 1–16 entered beats. Small timing/tuning differences and an occasional extra or missed pluck in longer phrases are tolerated. Ringing notes and uncertain pitch frames do not count as repeated plucks. A rest means the sound has quieted; a string still ringing between attacks is a sustain.
 
-Replies preserve the captured note spacing, tuning, and phrase cycle instead of stretching it to whole bars. Notes are synthesized warm tones, not recorded guitar audio. This version follows individual notes; it does not transcribe strummed guitar chords or choose a harmony.
-
-Reply notes and phrases do not overlap each other. Your live guitar can continue during playback. Continuing the same idea will not restart it forever: play a different idea, or use **Start fresh / L** to let the app recognize the same one again. No notes sound just because one attack was detected.
+Replies use synthesized individual tones, preserving detected tuning and timing. They do not transcribe strummed chords or generate harmony. App notes do not overlap each other; you can play during the reply. “Offbeat” shifts the whole loop by half a beat; it does not force every note onto a grid or play only in your gaps.
 
 ## Controls
 
 | Control | Action |
 | --- | --- |
-| BPM | Set the pulse; clears recognition and restarts the clock |
-| Find tempo | Clear the current exchange and estimate a fresh pulse from your plucks |
-| Space | Tap tempo |
-| Shift+Space | Restart pulse and recognition |
-| Start fresh / L | Fade the reply, clear active/waiting phrases, and listen again; keep the clock |
-| M | Mute/unmute replies; an active three-pass window still expires while muted |
-| C | Mute/unmute click independently |
+| BPM / Space | Enter or tap tempo; restart phase and loop recognition |
+| Shift+Space | Restart phase and recognition at the current BPM |
+| Start fresh / L | Clear active/waiting loops and learn again; keep the pulse |
+| M | Mute/unmute replies; an active three-pass window still expires |
+| C | Toggle the optional click, initially off |
 | H | Switch Speakers/Headphones microphone processing |
-| Escape / Silence | Stop both outputs and clear recognition; keep the pulse |
+| Stop / Escape | Silence output, clear loops, and release the microphone |
+| Start listening | Begin a fresh session after Stop |
 
-Click starts off for new users; existing click preferences are respected. Click and replies wait until Auto finds the pulse. Listening settings contains the confidence threshold, reply volume, and optional softening while you play. M restores replies after Silence once an idea has been recognized again. Preferences persist under `guitar.practice.v1`, including Auto/manual choice; notes and recognized phrases never persist. Auto learns again on each new page session.
+Listening settings contains output processing, reply volume, pitch confidence threshold, and optional softening while you play. BPM, mutes, output processing, threshold, and softening preferences persist under `guitar.practice.v1`; captured notes and loops do not. Old Auto preferences are ignored. Reply volume starts at its default each page session.
 
-Speakers uses echo cancellation and masks the pitches being synthesized. Headphones gives cleaner input; H changes microphone processing, while Windows chooses the actual output device. A real guitar attack matching the output can be masked too. Keep the page visible to avoid background-tab throttling.
+Speakers uses echo cancellation and masks synthesized pitches and their octaves. A matching guitar note can be masked too. Headphones gives cleaner input; H changes microphone processing, while Windows selects the actual output device. Keep the page visible while playing.
+
+## Check what it heard
+
+Open **Check what I heard** and press **Record a listening check** while listening. It captures up to 20 seconds locally and shows the waveform, detected note lengths, masked notes, and replies. Gaps between completed note bars show pauses. Play the clip or download its WAV and note-timing JSON to compare the detection with your playing. Playing the clip stops the microphone to avoid feeding it back in.
+
+Recording starts only on that button. Nothing is uploaded or saved automatically; leaving or reloading clears the clip. This check is useful when a room, string, or playing style produces missing or extra notes.
 
 ## Run and verify
 
@@ -50,25 +52,21 @@ npm run build
 npm run preview
 ```
 
-The optional Chrome smoke check uses synthetic A–C–E and D–F–B microphone phrases and real local CREPE:
+With preview running, exercise Chrome's microphone pipeline and actual local CREPE using annotated recorded guitar plucks:
 
 ```powershell
 $env:SMOKE_ORIGIN = 'http://127.0.0.1:4173'
 node scripts/browser-smoke.mjs
 ```
 
-It verifies automatic pulse learning, silence through two passes, third-pass recognition, three replies at the captured pace, continuous listening, a waiting phrase, no overlapping output notes, and silence after the last pass. The second phrase is faster; the detected BPM must stay locked while its reply preserves that new pace. It also checks Find tempo, Space/manual overrides, mute/resume, Start fresh, output switching, panic, and settings restoration. Set `SMOKE_MANUAL_TEMPO=1` to exercise the exchange with entered BPM instead. It does not simulate physical speaker feedback or judge the musical feel of a real guitar session.
+Set `SMOKE_SYNTHETIC=1` for the synthetic regression fixture, or `SMOKE_MODEL_FAILURE=1` to deliberately fail the model request and check the labeled fallback. `CHROME_PATH` can override Chrome's location. The smoke test checks pluck detection and note endings against source timings, non-bar cycles and rests, half-beat entry, three finite replies, continuous learning, queue handoff, no overlapping voices, no indefinite retrigger, settings, Stop and microphone races, local recording playback, and mobile overflow.
+
+The recorded plucks come from the [University of Iowa guitar collection](https://theremin.music.uiowa.edu/MISguitar.html). See [fixture provenance and edits](tests/fixtures/NOTICE.md). These are edited recorded notes assembled into test phrases, not a physical speaker-feedback test or a recording of your playing. Regenerate with `node scripts/vendor-guitar-fixture.mjs`.
 
 ## Local model and deployment
 
-Real CREPE tiny runs on bundled TensorFlow.js/WebGL. Its manifest and all 13 shards are committed in `public/models/crepe-tiny/` and served from the app's origin. Microphone audio stays in the browser. No backend, external inference API, or runtime model CDN.
+Real CREPE tiny runs on bundled TensorFlow.js/WebGL. Its manifest and 13 shards are committed in `public/models/crepe-tiny/` and served locally. No backend, inference API, or runtime model CDN. Only a model-load failure enables the explicitly labeled **FALLBACK: YIN** path.
 
-```bash
-npm run vendor:crepe
-```
+`npm run vendor:crepe` reproduces the official [CREPE browser model](https://marl.github.io/crepe/) download and records SHA-256 hashes; builds verify them. CREPE: Kim, Salamon, Li, Bello, *A Convolutional Representation for Pitch Estimation*, ICASSP 2018 (MIT). TensorFlow.js: Apache 2.0. See `public/models/NOTICE` and licenses.
 
-This maintenance command reproduces the official [CREPE browser model](https://marl.github.io/crepe/) download, records SHA-256 hashes, and preserves licenses. Production builds verify those hashes. Only a model-load failure enables the explicitly labeled **FALLBACK: YIN** path.
-
-CREPE: Kim, Salamon, Li, Bello, *A Convolutional Representation for Pitch Estimation*, ICASSP 2018 (MIT). TensorFlow.js: Apache 2.0. See `public/models/NOTICE` and the license files.
-
-Pushes to `main` deploy through the connected Vercel project after tests and the production build. The current contract is at the top of [SPEC.md](SPEC.md); older designs below it are historical. Technical details and verification are in [IMPLEMENTATION_NOTES.md](IMPLEMENTATION_NOTES.md).
+Pushes to `main` deploy through the connected Vercel project after tests and the production build. The current contract is at the top of [SPEC.md](SPEC.md); earlier designs below it are historical. See [implementation and verification notes](IMPLEMENTATION_NOTES.md).

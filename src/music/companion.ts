@@ -15,47 +15,45 @@ export class Companion {
   lastPlayer?: NoteOn;
   lastReply?: ReplyNote;
   private lastAnswered?: Motif;
-  private origin = 0;
   private period = 0.6;
   private listeningFrom = 0;
   private muted = false;
   get hasReplied(): boolean { return Boolean(this.lastAnswered); }
   reset(origin: number, period: number, listeningFrom = origin): void {
-    this.origin = origin; this.period = period; this.listeningFrom = listeningFrom;
+    this.period = period; this.listeningFrom = listeningFrom;
     this.listener = new MotifListener(period); this.active = undefined; this.waiting = undefined; this.lastAnswered = undefined; this.lastReply = undefined;
     // The room may still contain a recently stopped reply; retain its shortened masks.
-  }
-  alignPulse(origin: number, period: number): void {
-    if (this.active || this.lastAnswered) throw new Error('Set the pulse before replies begin');
-    const waiting = this.waiting && Object.freeze({...this.waiting,beats:this.waiting.beats*this.period/period});
-    this.listener = this.listener.withPeriod(period);
-    this.waiting = this.listener.motif ?? waiting;
-    if (this.listener.motif) this.listener = new MotifListener(period);
-    this.origin = origin; this.period = period;
   }
   accept(note: NoteOn): boolean {
     if (!Number.isFinite(note.t) || note.t < this.listeningFrom || !Number.isFinite(note.hz) || note.hz <= 0 || this.mask.drops(note)) return false;
     this.lastPlayer = {...note,velocity:note.velocity ?? this.touch.velocity(note.level)};
     this.listener.record(this.lastPlayer);
+    this.recognized();
+    return true;
+  }
+  private recognized(): void {
     const found = this.listener.motif;
     if (found) {
       const same = (other?: Motif) => other && sameMotif(found,other,this.period);
       if (!same(this.active?.motif) && !same(this.lastAnswered) && !same(this.waiting)) this.waiting = found;
       // Keep listening during playback, without letting old evidence trigger another reply.
+      const remainder = this.listener.remainder;
       this.listener = new MotifListener(this.period);
+      for (const note of remainder) this.listener.record(note);
     }
-    return true;
   }
   finish(t: number, end: number): void { this.listener.finish(t,end); }
   setMuted(muted: boolean): void { this.muted = muted; }
   private startWaiting(now: number, outputDelay: number, earliest: number): void {
     if (!this.waiting) return;
-    const bar = this.period*4;
-    const startAt = this.origin+Math.ceil((Math.max(earliest,now+outputDelay+0.01)-this.origin)/bar-1e-9)*bar;
+    const duration = this.waiting.beats*this.period;
+    const phase = this.waiting.notes[0].t+this.period/2;
+    const startAt = phase+Math.ceil((Math.max(earliest,now+outputDelay+0.01)-phase)/duration-1e-9)*duration;
     this.active = new PhraseReply(this.waiting,startAt,this.period);
     this.lastAnswered = this.waiting; this.waiting = undefined;
   }
   takeDue(now: number, outputDelay: number, lookahead = 0.075): ReplyNote[] {
+    this.listener.advance(now); this.recognized();
     if (this.active && now >= this.active.endAt) this.active = undefined;
     if (!this.muted && this.waiting) {
       if (!this.active) this.startWaiting(now,outputDelay,now);

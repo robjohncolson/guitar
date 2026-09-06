@@ -1,0 +1,37 @@
+{
+  "rate": 48000,
+  "secondsPerPluck": 0.55,
+  "midis": [
+    55,
+    57,
+    59,
+    60,
+    62,
+    64
+  ],
+  "sha256": "cad3f3723da7794570253de2e482caa7133052f808d18db65d13f5e880c1e80a",
+  "provenance": [
+    {
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/guitar/Guitar.mf.sulG.G3B3.mono.aif",
+      "sha256": "6e9bcd0b29470ba131aa43d08e51f94b9daaf00a16fff07f52be95196d48bece",
+      "starts": [
+        0.005000000000000001,
+        11.264999999999999,
+        18.955,
+        27.655,
+        35.865
+      ]
+    },
+    {
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/guitar/Guitar.mf.sulA.C4E4.mono.aif",
+      "sha256": "251cd9af1c391f886a3beadef9177d38f8ff46e14027deb15eed81318bfdb2f4",
+      "starts": [
+        0.035,
+        9.764999999999999,
+        17.265,
+        24.145,
+        32.955
+      ]
+    }
+  ]
+}

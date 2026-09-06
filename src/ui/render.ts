@@ -1,25 +1,31 @@
 export function shell(): void {
   document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <main>
-      <header><div><span class="eyebrow">GUITAR · LISTEN & REPLY</span><h1>Practice Partner</h1><p class="intro">Play an idea. Hear it back three times.</p></div><button id="enable" class="primary">Enable audio & mic</button></header>
+      <header><div><span class="eyebrow">GUITAR · LISTEN & REPLY</span><h1>Practice Partner</h1><p class="intro">Play a loop. I’ll answer on the offbeat.</p></div><button id="enable" class="primary">Start listening</button></header>
       <div class="status"><span id="mic">Mic off</span><span id="model">CREPE loading</span><span id="latency"></span></div>
-      <section class="pulse-panel" aria-label="Tempo and pulse">
-        <div class="tempo"><label for="bpm">BPM</label><input id="bpm" type="number" min="40" max="240" step="1" placeholder="—" inputmode="numeric" aria-describedby="tempo-help"><span id="tempo-help">Play a steady rhythm · or enter BPM</span><button id="find-tempo">Find tempo</button></div>
-        <div class="beats">${[1,2,3,4].map(n => `<div class="beat"><span>${n}</span><small>—</small></div>`).join('')}</div>
+      <section class="pulse-panel" aria-label="Tempo and listening">
+        <div class="tempo"><label for="bpm">BPM</label><input id="bpm" type="number" min="40" max="240" step="1" value="100" inputmode="numeric" aria-describedby="tempo-help"><span id="tempo-help">Enter BPM · or tap Space</span></div>
+        <div class="session-state"><span id="pulse" aria-hidden="true"></span><span id="phrase-status" role="status">Ready to listen</span></div>
+        <button id="panic" disabled>Stop · Esc</button>
       </section>
-      <section class="phrase-panel" aria-label="Phrase recognition">
-        <div id="passes" aria-label="0 of 3 phrase repetitions">${[1,2,3].map(n => `<span class="pass" aria-hidden="true">${n}</span>`).join('')}</div>
-        <span id="phrase-status" role="status">Listening for a short phrase</span>
-        <button id="listen-again" disabled>Start fresh · L</button>
-      </section>
-      <p id="hint" class="hint" role="status">Enable audio and repeat a short phrase. I’ll find your pace.</p>
-      <section class="listening" aria-label="Player and accompaniment">
-        <div><span class="eyebrow">YOU PLAYED</span><div id="note" class="note">—</div><span id="pitch-detail" class="muted">One note at a time</span></div>
-        <div><span class="eyebrow">REPLY</span><div id="reply" class="note cool">—</div><span id="reply-detail" class="muted">Listening for the next idea</span></div>
-      </section>
-      <div class="toggles"><button id="companion-mute">Replies on · M</button><button id="click-mute">Click off · C</button><button id="output">Speakers · H</button><button id="panic">Silence · Esc</button></div>
-      <details><summary>Listening settings</summary><label>Voiced threshold <input id="threshold" type="range" min="0.3" max="0.8" step="0.01" value="0.5"><output id="threshold-value">0.50</output></label><label>Reply volume <input id="volume" type="range" min="0" max="0.5" step="0.01" value="0.22"><output id="volume-value">44%</output></label><label><input id="responsive" type="checkbox" checked> Soften replies while I play</label><p class="muted">Play individual notes. Speakers uses echo cancellation. For cleaner listening, use headphones and press H.</p></details>
-      <footer><span><kbd>Space</kbd> tap tempo</span><span><kbd>L</kbd> start fresh</span><span><kbd>Shift Space</kbd> restart pulse</span><span><kbd>M / C</kbd> replies / click</span><span><kbd>H</kbd> output mode</span><span><kbd>Esc</kbd> silence</span></footer>
+      <p id="hint" class="hint" role="status">Enter BPM, start listening, and play a repeating idea.</p>
+      <p id="reply-detail" class="muted">Notes and rests belong to the loop.</p>
+      <details id="settings"><summary>Listening settings</summary>
+        <div class="toggles"><button id="listen-again" disabled>Start fresh · L</button><button id="companion-mute">Replies on · M</button><button id="click-mute">Click off · C</button><button id="output">Speakers · H</button></div>
+        <label>Reply volume <input id="volume" type="range" min="0" max="0.5" step="0.01" value="0.22"><output id="volume-value">44%</output></label>
+        <label><input id="responsive" type="checkbox" checked> Soften replies while I play</label>
+        <label>Voiced threshold <input id="threshold" type="range" min="0.3" max="0.8" step="0.01" value="0.5"><output id="threshold-value">0.50</output></label>
+        <p class="muted">Play individual plucks. Speakers uses echo cancellation. Headphones gives cleaner input.</p>
+        <div class="last-notes"><span>You played <strong id="note">—</strong></span><span>Reply <strong id="reply">—</strong></span></div><p id="pitch-detail" class="muted">One note at a time</p>
+      </details>
+      <details id="listening-check"><summary>Check what I heard</summary>
+        <p id="capture-status">Record up to 20 seconds to compare your playing with what I heard.</p><button id="capture" disabled>Record a listening check</button>
+        <canvas id="capture-plot" width="900" height="165" role="img" aria-label="Recorded waveform with detected note lengths and reply notes"></canvas>
+        <p class="muted">Waveform above · green notes heard · brown notes masked · blue replies. Spaces between note bars show pauses; unfinished lengths remain uncertain.</p>
+        <audio id="capture-audio" controls hidden></audio><div id="capture-downloads" hidden><a id="download-audio" download="guitar-listening.wav">Download audio</a><a id="download-trace" download="guitar-listening.json">Download note timings</a></div>
+        <p class="muted">Recording starts only when you press the button. The clip stays in this page until you download it or leave.</p>
+      </details>
+      <footer><span><kbd>Space</kbd> tap tempo</span><span><kbd>L</kbd> start fresh</span><span><kbd>M / C</kbd> replies / click</span><span><kbd>H</kbd> output mode</span><span><kbd>Esc</kbd> stop</span></footer>
     </main>`;
 }
 export const element = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
