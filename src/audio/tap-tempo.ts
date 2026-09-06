@@ -1,3 +1,4 @@
+export const validBpm = (value: number) => Number.isFinite(value) && value >= 40 && value <= 240;
 export function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);

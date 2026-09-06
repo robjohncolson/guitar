@@ -12,5 +12,9 @@ export class SelfMask {
   }
   active(t: number): boolean { return this.windows.some(window => t >= window.start && t <= window.end); }
   prune(now: number): void { this.windows = this.windows.filter(window => window.end >= now); }
+  release(audibleEnd: number): void {
+    this.windows = this.windows.filter(window => window.start <= audibleEnd && window.end >= audibleEnd-0.08)
+      .map(window => ({...window,end:Math.min(window.end,audibleEnd+0.08)}));
+  }
   clear(): void { this.windows = []; }
 }

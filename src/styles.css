@@ -21,10 +21,7 @@ h1 { font-size: 38px; letter-spacing: -1.5px; font-weight: 500; margin: 10px 0 0
 .tempo label { font-size: 11px; letter-spacing: 2px; color: #a1ad9f; }
 .tempo input { width: 170px; padding: 2px 8px; font-size: 54px; font-weight: 400; color: #e8e9df; border: 1px solid #596550; border-radius: 8px; background: #1c241e; font-variant-numeric: tabular-nums; }
 .tempo input[aria-invalid=true] { border-color: #efac81; }
-.tempo > span, .delay > span { color: #a4ada1; font-size: 11px; }
-.delay { width: 125px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
-.delay strong { font-size: 48px; font-weight: 400; }
-.delay strong span { font-size: 18px; margin-left: 8px; }
+.tempo > span { color: #a4ada1; font-size: 11px; }
 .beats { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; flex: 1; }
 .beat { height: 112px; padding: 14px; background: #202722; border: 1px solid #39443a; border-radius: 10px; display: flex; flex-direction: column; justify-content: space-between; }
 .beat > span { font-size: 30px; }
@@ -32,13 +29,12 @@ h1 { font-size: 38px; letter-spacing: -1.5px; font-weight: 500; margin: 10px 0 0
 .beat.active { border-color: #d0dfb4; box-shadow: inset 0 3px #d0dfb4; }
 .beat.player { background: #4d3829; }
 .beat.companion { background: #24423e; }
-.memory-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 20px; padding-top: 22px; }
-.memory-length { display: flex; align-items: center; gap: 8px; }
-.memory-length .eyebrow { margin-right: 8px; }
-.memory-panel button { padding: 9px 13px; font-size: 13px; }
-#remember { min-width: 122px; border-color: #8da775; }
-#remember[aria-pressed=true] { background: #24423e; border-color: #add6cf; }
-#memory-status { flex: 1; min-width: 190px; }
+.phrase-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 20px; padding-top: 22px; }
+#passes { display: flex; gap: 8px; }
+.pass { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid #414941; border-radius: 50%; color: #a4ada1; font-size: 12px; }
+.pass.heard { background: #34432f; border-color: #bfd39d; color: #e8e9df; }
+#phrase-status { flex: 1; min-width: 180px; color: #b8c3af; font-size: 13px; }
+#listen-again { padding: 9px 13px; font-size: 13px; }
 .hint { font-size: 20px; color: #c6d3b3; margin: 24px 0 30px; min-height: 28px; }
 .listening { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; padding-bottom: 30px; border-bottom: 1px solid #353d35; }
 .note { font-size: 40px; margin: 12px 0 4px; font-variant-numeric: tabular-nums; }

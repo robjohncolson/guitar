@@ -3,8 +3,8 @@ import { Response } from '../src/music/response';
 import { Scheduler } from '../src/audio/scheduler';
 import type { Synth } from '../src/audio/synth';
 import { Grid } from '../src/audio/grid';
-import { Repeater } from '../src/music/repeater';
-import { PhraseMemory } from '../src/music/phrase-memory';
+import { Companion } from '../src/music/companion';
+import { midiToHz } from '../src/music/notes';
 
 it('busy attacks soften the loop further, then a pause restores it at the same beat-relative pace', () => {
   for (const period of [0.25,0.5,1.5]) {
@@ -18,17 +18,17 @@ it('busy attacks soften the loop further, then a pause restores it at the same b
     response.reset(); expect(response.gain(0,period)).toBe(1);
   }
 });
-it('the scheduler applies response only to a loop and sends the captured expression to the synth', () => {
-  const memory = new PhraseMemory(); memory.reset(0,0.5);
-  const repeater = new Repeater();
-  const note = {t:0,hz:220,midi:57,pitchClass:9,cents:0,confidence:0.9,velocity:0.4,duration:0.15};
-  memory.record(note);
+it('the scheduler stays silent until recognition, then sends a quiet chord with optional response', () => {
+  const companion = new Companion(); companion.reset(0,0.5);
   const played: number[][] = [], gains: number[] = [];
-  const synth = {context:{currentTime:4,outputLatency:0},setResponse:(gain:number) => gains.push(gain),click:() => {},note:(...args:number[]) => played.push(args)} as unknown as Synth;
-  const scheduler = new Scheduler(new Grid(0,0.5),synth,repeater,memory);
-  scheduler.response.attack(4,0.5); scheduler.tick(); expect(gains.at(-1)).toBe(1);
-  memory.remember(1,2.1,0); scheduler.tick();
-  expect(gains.at(-1)).toBeLessThan(1); expect(played[0]).toEqual([57,4,0.15,0.4]);
+  const context = {currentTime:0,outputLatency:0};
+  const synth = {context,setResponse:(gain:number) => gains.push(gain),click:() => {},pad:(...args:number[]) => played.push(args)} as unknown as Synth;
+  const scheduler = new Scheduler(new Grid(0,0.5),synth,companion);
+  scheduler.tick(); expect(gains.at(-1)).toBe(1); expect(played).toEqual([]);
+  for (let pass=0;pass<3;pass++) [57,60,64].forEach((midi,i) => companion.accept({t:pass*2+i*0.5,hz:midiToHz(midi),midi,pitchClass:0,cents:0,confidence:0.9}));
+  context.currentTime = 5.1; scheduler.tick();
+  context.currentTime = 6; scheduler.response.attack(6,0.5); scheduler.tick();
+  expect(gains.at(-1)).toBeLessThan(1); expect(played).toHaveLength(3); expect(played.every(n => n[1] === 6 && n[2] === 1.85 && n[3] < 0.5)).toBe(true);
   scheduler.responsive = false; scheduler.tick(); expect(gains.at(-1)).toBe(1);
-  scheduler.responsive = true; memory.clear(); scheduler.tick(); expect(gains.at(-1)).toBe(1);
+  scheduler.responsive = true; companion.reset(0,0.5); scheduler.tick(); expect(gains.at(-1)).toBe(1);
 });

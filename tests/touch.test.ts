@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { Touch } from '../src/music/touch';
-import { Repeater } from '../src/music/repeater';
+import { Companion } from '../src/music/companion';
 
 it('keeps soft/loud differences at different microphone levels with bounded output', () => {
   const near = new Touch(), far = new Touch();
@@ -12,12 +12,12 @@ it('keeps soft/loud differences at different microphone levels with bounded outp
   expect(near.velocity(NaN)).toBe(0.75);
   near.reset(); expect(near.velocity(0.001)).toBe(0.75);
 });
-it('only learns dynamics from accepted player attacks, including while looping', () => {
-  const repeater = new Repeater();
+it('only learns dynamics from accepted player attacks', () => {
+  const companion = new Companion();
   const note = {t:0,hz:220,midi:57,pitchClass:9,cents:0,confidence:0.9,level:0.04};
-  repeater.accept(note,false); expect(repeater.lastPlayer?.velocity).toBe(0.75);
-  repeater.mask.arm(1,0.5,57);
-  expect(repeater.accept({...note,t:1,level:10},false)).toBe(false);
-  repeater.accept({...note,t:2},false); expect(repeater.lastPlayer?.velocity).toBe(0.75);
-  expect(repeater.pending).toBe(0);
+  companion.accept(note); expect(companion.lastPlayer?.velocity).toBe(0.75);
+  companion.mask.arm(1,0.5,57);
+  expect(companion.accept({...note,t:1,level:10})).toBe(false);
+  companion.accept({...note,t:2}); expect(companion.lastPlayer?.velocity).toBe(0.75);
+  expect(companion.takeDue(3,0)).toEqual([]);
 });

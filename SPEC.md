@@ -1,6 +1,22 @@
 # Guitar Practice Partner — Spec
 
-## Current product: two-beat repeater with phrase memory (user revision, September 5, 2026)
+## Current product: listen for an idea, then accompany it (September 6, 2026)
+
+The user found the attack repeater too noisy and reactive. This contract supersedes all repeater, manual memory, and original four-role behavior below. The app must exercise musical judgment before making any companion sound.
+
+1. Enter BPM (40–240, default 100, saved), enable mic/audio, and play individual notes. Space still sets tap tempo; guitar input never sets the clock. Click is optional, off for new users. Honor a previously saved click preference.
+2. Listen silently for three consecutive performances of roughly the same short phrase. Compare note order and beat-relative timing, not just a histogram or total attack count. A phrase may start between beats and need not begin on a downbeat. Support 3–24 attacks and cycles of 1–16 beats. Ignore octave/tuning differences within a pitch class; tolerate modest timing differences and one wrong pitch in phrases of at least five notes. Sustains, a single repeated pitch, unrelated sequences, and widely separated phrases cannot establish a motif. Keep history bounded.
+3. Use agreement across those three performances to choose one supporting harmony. Start with a quiet sustained chord. Every chord pitch class must occur in the recognized phrase; do not invent an absent third or fifth. Consider major, minor, common seventh/sixth, and suspended shapes, weighted by accepted attacks. Require adequate coverage and a clear winner; root position and the phrase's first/lowest notes help resolve alternatives. A repeated but harmonically unclear phrase remains silent and can be reconsidered as new playing arrives.
+4. Once established, enter on the next downbeat that can be scheduled after output latency. Use a warm, softly attacked chord in an open voicing; normalize level for the number of voices. Repeat the chord every 1–4 bars, nearest the observed phrase cycle. Hold the chosen harmony stable while the player improvises. No automatic reharmonization or simultaneous echo queue.
+5. **Listen again / L** fades the chord and clears recognition, requiring a new three-pass idea. It preserves BPM and the click phase. **M** mutes harmony while retaining its phrase and phase. Unmute joins a future playable chord without a stale burst. **C** controls click independently. **Escape** stops both outputs, clears recognition, and preserves BPM/pulse. BPM changes and Shift+Space clear recognition and restart the pulse. **H** changes mic processing while retaining the recognized harmony and clock.
+6. Keep responsive softening as a collapsed listening preference. Only accepted player attacks drive it; gain recovery never changes the click or undoes a mute. Preserve real local CREPE tiny, attack segmentation, load-failure-only labeled YIN fallback, AEC in Speakers mode, and output masking. Mask each chord voice and its neighboring octaves through its audible end plus 80 ms. When stopping a chord, shorten masks to the fade/output tail so fresh listening is not blocked for the original sustain duration.
+7. Minimal UI: BPM and four beats, three recognition indicators, current player note, established chord, Listen again, harmony/click mutes, output mode, Silence, and collapsed threshold/volume/responsive preferences. Remove the two-beat delay display, Remember, and memory-length selector. Never persist notes or recognition state. Discard old memory/role fields when saving preferences.
+
+Phase gates: motif matching tests first; harmony judgment and audio-clock scheduling tests second; UI/synth integration tests and production build third; real Chrome/CREPE synthetic-microphone verification before publishing. Cover silence through two passes, third-pass entrance, order/rhythm mismatch, tuning/timing tolerance, harmonic ambiguity, stable accompaniment, latency/stale events, all-voice masking, mutes, resets, and settings migration.
+
+Acceptance: at 120 BPM, play A–C–E as individual notes in the same short rhythm three times. No companion sound during the first two passes. After the third, hear a quiet Am chord on a downbeat. Improvise while that chord stays stable. L returns to silent listening. Unrelated noodling must not trigger arbitrary notes. This is a conservative rule-based accompanist, not general harmonic understanding or polyphonic guitar transcription.
+
+## Previous product: two-beat repeater with phrase memory (historical)
 
 This contract supersedes the scale-inference and four-role product below. The user asked for a simple repeater with no musical setup wait.
 

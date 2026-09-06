@@ -1,6 +1,6 @@
 # Codex Implementation Prompt — Guitar Practice Partner
 
-> Product revision: the user subsequently requested a simple two-beat repeater. Follow the current contract at the top of `SPEC.md`. Direct BPM entry replaces the Space-only requirement; scale gating and four-role implementation phases below are historical. Retain the technical constraints (real CREPE, attack segmentation, self-mask, vanilla Vite/TypeScript, local model assets, Web Audio timing, no backend or generative music).
+> Product revision: the user now requests silent listening until a phrase is repeated three times, followed by a quiet supporting harmony. Follow the current contract at the top of `SPEC.md`. Direct BPM entry replaces the Space-only requirement; repeater, manual memory, and four-role product phases are historical. Retain the technical constraints (real CREPE, attack segmentation, self-mask, vanilla Vite/TypeScript, local model assets, Web Audio timing, no backend or generative music).
 
 You are implementing a **new** local web app in this directory. The product spec is `SPEC.md`. Read it before writing any code. If this prompt and `SPEC.md` conflict, **`SPEC.md` wins**, except for the hard constraints below (those always win).
 
