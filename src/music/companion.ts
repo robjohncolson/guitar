@@ -5,6 +5,7 @@ import { Touch } from './touch';
 import type { NoteOn } from './notes';
 import { PhraseReply } from './reply';
 import type { ReplyNote } from './reply';
+import type { ReplyMode } from './harmony';
 
 export class Companion {
   readonly mask = new SelfMask();
@@ -18,6 +19,7 @@ export class Companion {
   private period = 0.6;
   private listeningFrom = 0;
   private muted = false;
+  private replyMode: ReplyMode = 'harmony';
   get hasReplied(): boolean { return Boolean(this.lastAnswered); }
   reset(origin: number, period: number, listeningFrom = origin): void {
     this.period = period; this.listeningFrom = listeningFrom;
@@ -44,12 +46,13 @@ export class Companion {
   }
   finish(t: number, end: number): void { this.listener.finish(t,end); }
   setMuted(muted: boolean): void { this.muted = muted; }
+  setReplyMode(mode: ReplyMode): void { this.replyMode = mode; }
   private startWaiting(now: number, outputDelay: number, earliest: number): void {
     if (!this.waiting) return;
     const duration = this.waiting.beats*this.period;
     const phase = this.waiting.notes[0].t+this.period/2;
     const startAt = phase+Math.ceil((Math.max(earliest,now+outputDelay+0.01)-phase)/duration-1e-9)*duration;
-    this.active = new PhraseReply(this.waiting,startAt,this.period);
+    this.active = new PhraseReply(this.waiting,startAt,this.period,this.replyMode);
     this.lastAnswered = this.waiting; this.waiting = undefined;
   }
   takeDue(now: number, outputDelay: number, lookahead = 0.075): ReplyNote[] {

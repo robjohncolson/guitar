@@ -6,7 +6,7 @@ import type { ReplyNote } from '../src/music/reply';
 const note = (t: number,midi: number): NoteOn => ({t,hz:midiToHz(midi),midi,pitchClass:midi%12,cents:0,confidence:0.9,velocity:0.6,duration:0.2});
 const phrase = (start: number,pitches = [57,60,64],cycle = 2,passes = 3) =>
   Array.from({length:passes},(_,pass) => pitches.map((midi,i) => note(start+pass*cycle+i*cycle/4,midi))).flat();
-const companion = () => { const partner = new Companion(); partner.reset(0,0.5); return partner; };
+const companion = () => { const partner = new Companion(); partner.setReplyMode('echo'); partner.reset(0,0.5); return partner; };
 function run(partner: Companion,from: number,to: number,input: NoteOn[] = []): ReplyNote[] {
   const played: ReplyNote[] = []; let cursor = 0;
   for (let now=from;now<to;now+=0.01) {
@@ -73,5 +73,27 @@ describe('offbeat finite exchanges with continuous listening', () => {
   it('replays chromatic loops too, without a chord gate', () => {
     const notes = run(companion(),0,14,phrase(0,[57,58,59]));
     expect(notes.map(n => n.midi)).toEqual([57,58,59,57,58,59,57,58,59]);
+  });
+  it('locks a harmony for three passes and applies a mode change only to the waiting exchange', () => {
+    const partner = new Companion(); partner.reset(0,0.5);
+    const notes = run(partner,0,6.3,phrase(0));
+    expect(partner.active?.kind).toBe('harmony'); expect(notes[0].midi).toBe(60);
+    partner.setReplyMode('echo');
+    notes.push(...run(partner,6.3,22,phrase(6.5,[62,65,69],1.5)));
+    expect(notes).toHaveLength(18);
+    expect(notes.slice(0,9).map(n=>n.midi)).toEqual([60,64,67,60,64,67,60,64,67]);
+    expect(notes.slice(9).map(n=>n.midi)).toEqual([62,65,69,62,65,69,62,65,69]);
+    expect(notes[6].velocity).toBeCloseTo(notes[0].velocity*0.8);
+    expect(notes[9].at).toBeGreaterThanOrEqual(12.25);
+    notes.slice(1).forEach((next,i)=>expect(notes[i].fireAt+notes[i].duration+0.005).toBeLessThanOrEqual(next.fireAt));
+  });
+  it('masks actual harmony pitches, while original-loop identity prevents endless re-answering', () => {
+    const partner = new Companion(); partner.reset(0,0.5);
+    run(partner,0,6.22,phrase(0));
+    expect(partner.accept(note(6.3,60))).toBe(false);
+    expect(partner.accept(note(6.3,72))).toBe(false);
+    expect(partner.accept(note(6.3,57))).toBe(true);
+    const repeating = new Companion(); repeating.reset(0,0.5);
+    expect(run(repeating,0,35,phrase(0,[57,60,64],2,15))).toHaveLength(9);
   });
 });

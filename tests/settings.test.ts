@@ -11,3 +11,10 @@ it('recovers from malformed saved state and only restores supported session pref
   expect(parseSettings(JSON.stringify({responsive:false})).responsive).toBe(false);
   expect(parseSettings(JSON.stringify({autoTempo:true,bpm:85,pulse:{bpm:120,origin:4},attacks:[1,2,3]}))).toEqual({...defaults,bpm:85});
 });
+it('defaults to Harmony, restores an explicit Echo choice, and rejects obsolete reply modes', () => {
+  expect(parseSettings(null).replyMode).toBe('harmony');
+  expect(parseSettings(JSON.stringify({bpm:120})).replyMode).toBe('harmony');
+  expect(parseSettings(JSON.stringify({replyMode:'echo'})).replyMode).toBe('echo');
+  expect(parseSettings(JSON.stringify({replyMode:'harmony'})).replyMode).toBe('harmony');
+  expect(parseSettings(JSON.stringify({replyMode:'chords'})).replyMode).toBe('harmony');
+});

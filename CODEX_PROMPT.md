@@ -100,6 +100,8 @@ If the official URL layout has changed, hunt the same tiny tfjs model (ml5 `pitc
 
 ## Current revision phases
 
+The newest user-approved addition is Echo / Harmony. Follow its four phase gates at the top of SPEC.md before the older revision phases below. Harmony changes pitch choice and reply dynamics only; all technical hard constraints above remain in force.
+
 Stop and run tests at each phase boundary before starting the next.
 
 1. Ear reliability: one note per pluck, stable pitch evidence, actual quiet for note ends. Confidence dropouts and ringing must not invent attacks or rests. Run ear and regression tests.

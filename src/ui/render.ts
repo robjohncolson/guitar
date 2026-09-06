@@ -5,6 +5,7 @@ export function shell(): void {
       <div class="status"><span id="mic">Mic off</span><span id="model">CREPE loading</span><span id="latency"></span></div>
       <section class="pulse-panel" aria-label="Tempo and listening">
         <div class="tempo"><label for="bpm">BPM</label><input id="bpm" type="number" min="40" max="240" step="1" value="100" inputmode="numeric" aria-describedby="tempo-help"><span id="tempo-help">Enter BPM · or tap Space</span></div>
+        <div class="reply-choice"><label for="reply-mode">Reply</label><select id="reply-mode" aria-describedby="reply-mode-help"><option value="echo">Echo</option><option value="harmony" selected>Harmony</option></select><span id="reply-mode-help"></span></div>
         <div class="session-state"><span id="pulse" aria-hidden="true"></span><span id="phrase-status" role="status">Ready to listen</span></div>
         <button id="panic" disabled>Stop · Esc</button>
       </section>

@@ -20,6 +20,12 @@ let micRunning = false, changingMic = false, stopped = false, pulseAnchored = fa
 let microphoneRequest = 0;
 const bpmInput = element<HTMLInputElement>('bpm'), enableButton = element<HTMLButtonElement>('enable');
 bpmInput.value = String(settings.bpm);
+const replyMode = element<HTMLSelectElement>('reply-mode');
+replyMode.value = settings.replyMode; companion.setReplyMode(settings.replyMode);
+replyMode.onchange = () => {
+  settings.replyMode = replyMode.value === 'echo' ? 'echo' : 'harmony';
+  companion.setReplyMode(settings.replyMode); saveSettings(settings);
+};
 const ear = new Ear(
   text => { element('model').textContent = text; element('model').classList.toggle('error',/error|FALLBACK/.test(text)); },
   pitch => { element('pitch-detail').textContent = `${pitch.hz > 0 ? pitch.hz.toFixed(1) : '—'} Hz · ${Math.round(pitch.confidence*100)}% confidence`; },
@@ -176,7 +182,7 @@ function renderCapture(): void {
   }
   if (!capture.recording && exportedRevision !== capture.revision) {
     URL.revokeObjectURL(traceUrl);
-    traceUrl = URL.createObjectURL(new Blob([JSON.stringify(capture.snapshot({bpm:settings.bpm,outputMode:settings.outputMode,outputLatency:context ? outputDelay(context) : 0}),null,2)],{type:'application/json'}));
+    traceUrl = URL.createObjectURL(new Blob([JSON.stringify(capture.snapshot({bpm:settings.bpm,replyMode:settings.replyMode,outputMode:settings.outputMode,outputLatency:context ? outputDelay(context) : 0}),null,2)],{type:'application/json'}));
     element<HTMLAnchorElement>('download-trace').href = traceUrl; exportedRevision = capture.revision;
   }
   if (!element<HTMLDetailsElement>('listening-check').open) return;
@@ -203,10 +209,14 @@ function render(timestamp: number): void {
   if (micRunning && (companion.waiting || active && now < active.startAt)) state = 'Found a loop';
   if (micRunning && active && now >= active.startAt) state = `Replying · ${pass} of 3`;
   element('phrase-status').textContent = state;
-  element('reply-detail').textContent = active ? `${active.notes.length} notes · ${active.motif.beats.toFixed(1)} beats · half a beat later` : 'Notes and rests belong to the loop.';
+  const replyName = active?.kind === 'octave' ? 'Soft octave reply' : active?.kind === 'harmony' ? 'Harmony' : 'Echo';
+  element('reply-detail').textContent = active ? `${replyName} · ${active.notes.length} notes · ${active.motif.beats.toFixed(1)} beats · half a beat later` : 'Notes and rests belong to the loop.';
+  const modePending = active && active.mode !== settings.replyMode;
+  element('reply-mode-help').textContent = modePending ? 'For the next loop' : '';
   element('reply').textContent = active && companion.lastReply ? noteLabel(companion.lastReply.hz) : '—';
   let hint = micRunning ? 'Keep repeating your idea, including the pauses. I’m listening for the loop.' : 'Enter BPM, start listening, and play a repeating idea.';
   if (active) hint = companion.waiting ? 'The next loop is ready. It will follow this one.' : 'Three offbeat replies. I’m still listening as you play.';
+  if (modePending) hint = companion.waiting ? `The next loop is ready in ${settings.replyMode === 'harmony' ? 'Harmony' : 'Echo'}. This reply will finish first.` : `${settings.replyMode === 'harmony' ? 'Harmony' : 'Echo'} is set for the next loop. This reply will finish first.`;
   if (!active && companion.hasReplied) hint = 'That loop is finished. Play a different idea, or press L to start fresh.';
   if (settings.companionMuted && micRunning) hint = 'Replies muted · Press M to bring them back.';
   if (volume === 0) hint = 'Raise reply volume in Listening settings to hear the loop.';

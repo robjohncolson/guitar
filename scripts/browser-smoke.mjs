@@ -9,6 +9,9 @@ import { createHash } from 'node:crypto';
 const origin = process.env.SMOKE_ORIGIN || 'http://127.0.0.1:5173';
 const modelFailure = process.env.SMOKE_MODEL_FAILURE === '1';
 const realGuitar = process.env.SMOKE_SYNTHETIC !== '1';
+const firstMode = process.env.SMOKE_REPLY_MODE === 'echo' ? 'echo' : 'harmony';
+const nextMode = firstMode === 'harmony' ? 'echo' : 'harmony';
+const inputMode = process.env.SMOKE_INPUT_MODE === 'headphones' ? 'headphones' : 'speakers';
 const directory = await mkdtemp(path.join(tmpdir(), 'guitar-chrome-'));
 const wav = path.join(directory, 'guitar.wav');
 const rate = 48000, seconds = 48, pcm = Buffer.alloc(rate * seconds * 2), inputEvents = [];
@@ -35,9 +38,12 @@ header.write('data', 36); header.writeUInt32LE(pcm.length, 40);
 await writeFile(wav, Buffer.concat([header, pcm]));
 const chrome = spawn(process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', [
   '--headless=new', '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=0',
+  '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
   `--user-data-dir=${directory}`, '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream',
   `--use-file-for-fake-audio-capture=${wav}`, '--autoplay-policy=no-user-gesture-required',
-  '--enable-unsafe-swiftshader', '--window-size=1280,1000', 'about:blank'
+  '--enable-unsafe-swiftshader',
+  ...(process.env.SMOKE_ANGLE ? [`--use-angle=${process.env.SMOKE_ANGLE}`] : []),
+  '--window-size=1280,1000', 'about:blank'
 ], { windowsHide: true, stdio: 'ignore' });
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 let socket;
@@ -72,9 +78,9 @@ try {
   const until = async (expression, milliseconds = 30000) => {
     const end = Date.now() + milliseconds;
     while (Date.now() < end) { const result = await evaluate(expression); if (result) return result; await pause(100); }
-    const state = await evaluate("({hint:document.getElementById('hint')?.textContent,phrase:document.getElementById('phrase-status')?.textContent,reply:document.getElementById('reply')?.textContent,heard:document.getElementById('note')?.textContent,notes:window.__smoke?.notes,attacks:window.__smoke?.attacks})");
+    const state = await evaluate("({hint:document.getElementById('hint')?.textContent,model:document.getElementById('model')?.textContent,capture:document.getElementById('capture-status')?.textContent,phrase:document.getElementById('phrase-status')?.textContent,reply:document.getElementById('reply')?.textContent,heard:document.getElementById('note')?.textContent,notes:window.__smoke?.notes,attacks:window.__smoke?.attacks})");
     await evaluate("if (document.getElementById('capture')?.textContent.includes('Finish')) document.getElementById('capture').click()");
-    await pause(300);
+    await pause(1000);
     const trace = await evaluate("document.getElementById('download-trace')?.href.startsWith('blob:') ? fetch(document.getElementById('download-trace').href).then(r=>r.json()) : null");
     if (trace) await writeFile(path.join(directory,'failed-trace.json'),JSON.stringify(trace,null,2));
     throw new Error(`Timed out: ${expression}\n${JSON.stringify({state,detected:trace?.notes,traceFile:path.join(directory,'failed-trace.json'),errors})}`);
@@ -129,7 +135,12 @@ try {
   await send('Page.navigate', {url:origin});
   const modelState = modelFailure ? 'FALLBACK: YIN' : 'CREPE ready (tiny)';
   await until(`document.getElementById('model')?.textContent === '${modelState}'`,60000);
+  const renderer = await evaluate("(() => { const gl=document.createElement('canvas').getContext('webgl'); const debug=gl?.getExtension('WEBGL_debug_renderer_info'); return debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : 'unavailable'; })()");
+  console.log(JSON.stringify({renderer}));
+  assert.equal(await evaluate("document.getElementById('reply-mode').value"),'harmony','New sessions must offer Harmony by default');
+  await evaluate(`document.getElementById('reply-mode').value='${firstMode}'; document.getElementById('reply-mode').dispatchEvent(new Event('change'))`);
   await evaluate("document.getElementById('bpm').value='120'; document.getElementById('bpm').dispatchEvent(new Event('input'))");
+  if (inputMode === 'headphones') await evaluate("document.getElementById('output').click()");
   assert.equal(await evaluate("document.querySelectorAll('#find-tempo, .beat, .pass, #remember, #harmony, [data-memory-bars], #roles').length"),0);
   await evaluate("document.getElementById('enable').click()");
   await until("document.getElementById('mic').textContent.includes('Mic listening')");
@@ -138,6 +149,8 @@ try {
   await until("window.__smoke.attacks.length && window.__smoke.contexts[0].currentTime>=window.__smoke.attacks[0]+5",10000);
   assert.equal(await evaluate('window.__smoke.notes.length'),0,'Sound started before three matching phrases');
   await until("window.__smoke.notes.filter(note=>note.type==='triangle').length>=3",10000);
+  await evaluate(`document.getElementById('reply-mode').value='${nextMode}'; document.getElementById('reply-mode').dispatchEvent(new Event('change'))`);
+  await until("document.getElementById('reply-mode-help').textContent === 'For the next loop'");
   const input = await evaluate('({firstAttack:window.__smoke.attacks[0],delay:window.__smoke.contexts[0].outputLatency || window.__smoke.contexts[0].baseLatency || 0})');
   await until("document.getElementById('hint').textContent.includes('next loop is ready')",8000);
   const queueTime = await evaluate('window.__smoke.contexts[0].currentTime');
@@ -148,44 +161,80 @@ try {
   await until("window.__smoke.notes.filter(note=>note.type==='triangle').length>=18",15000);
   await until("document.getElementById('reply').textContent === '—'",5000);
   const replies = await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle')");
+  const attacks = await evaluate('window.__smoke.attacks');
+  const median = values => [...values].sort((a,b)=>a-b)[Math.floor(values.length/2)];
+  const aCycle = median(attacks.slice(3,9).map((t,i)=>t-attacks[i]));
+  const bCycle = median(attacks.slice(12,18).map((t,i)=>t-attacks[9+i]));
+  assert.ok(Math.abs(aCycle-2.5)<0.085 && Math.abs(bCycle-1.75)<0.085,'The fake microphone changed the fixture pace');
   assert.equal(replies.length,18,'Expected two phrases, each played three times');
-  assert.ok(Math.abs(replies[0].time+input.delay-input.firstAttack-7.75)<0.085,'Reply did not enter half a beat after three full five-beat cycles');
+  assert.ok(Math.abs(replies[0].time+input.delay-input.firstAttack-(3*aCycle+0.25))<0.085,`Reply did not enter half a beat after three captured cycles: ${JSON.stringify({firstReply:replies[0],input,aCycle})}`);
   const pcs = replies.map(note=>(Math.round(69+12*Math.log2(note.hz/440))%12));
-  assert.deepEqual(pcs.slice(0,9),[9,0,4,9,0,4,9,0,4]);
-  const bPcs = [7,11,2], rotation = bPcs.indexOf(pcs[9]);
+  const aPcs = firstMode === 'harmony' ? [0,4,7] : [9,0,4];
+  assert.deepEqual(pcs.slice(0,9),Array.from({length:9},(_,i)=>aPcs[i%3]),'Changing mode altered the current line');
+  const bPcs = nextMode === 'harmony' ? [11,2,6] : [7,11,2], rotation = bPcs.indexOf(pcs[9]);
   assert.ok(rotation>=0);
   assert.deepEqual(pcs.slice(9),Array.from({length:9},(_,i)=>bPcs[(rotation+i)%3]));
-  const bPhase = input.firstAttack+7.5+[0,0.375,1][rotation]+0.25;
-  const bCycles = (replies[9].time+input.delay-bPhase)/1.75;
-  assert.ok(Math.abs(bCycles-Math.round(bCycles))*1.75<0.085,'Queued loop lost its half-beat phase');
+  const bPhase = attacks[9+rotation]+0.25;
+  const bCycles = (replies[9].time+input.delay-bPhase)/bCycle;
+  assert.ok(Math.abs(bCycles-Math.round(bCycles))*bCycle<0.085,'Queued loop lost its half-beat phase');
   for (const start of [0,9]) for (let i=0;i<9;i++) {
     assert.ok(replies[start+i].time>=replies[start+i].now,'A note was scheduled late');
     if (i%3) assert.ok(Math.abs(replies[start+i].time-replies[start+i-1].time-(start === 0 ? [0,0.5,1][i%3] : [0.375,0.625,0.75][(rotation+i-1)%3]))<0.085,'Within-phrase pace/rest changed');
     if (i>=3) {
-      assert.ok(Math.abs(replies[start+i].time-replies[start+i-3].time-(start === 0 ? 2.5 : 1.75))<0.085,'Cycle pace or closing rest changed');
+      assert.ok(Math.abs(replies[start+i].time-replies[start+i-3].time-(start === 0 ? aCycle : bCycle))<0.085,'Cycle pace or closing rest changed');
       assert.equal(replies[start+i].hz,replies[start+i-3].hz,'Pitch changed between replies');
+      const mode = start === 0 ? firstMode : nextMode;
+      assert.ok(Math.abs(replies[start+i].peak/replies[start+i%3].peak-(mode === 'harmony' && i>=6 ? 0.8 : 1))<0.01,'The third-pass dynamics changed unexpectedly');
     }
   }
-  assert.ok(queueTime<replies[0].time+7.5,'The new phrase was not learned during playback');
-  assert.ok(replies[9].time>=replies[0].time+7.5-0.06,'A new phrase interrupted the third pass');
+  assert.ok(queueTime<replies[0].time+3*aCycle,'The new phrase was not learned during playback');
+  assert.ok(replies[9].time>=replies[0].time+3*aCycle-0.06,'A new phrase interrupted the third pass');
   replies.slice(1).forEach((next,i)=>assert.ok(replies[i].end<=next.time+0.001,'Synthesized notes overlapped'));
   assert.ok(replies[3].time-replies[2].end>0.6,'The closing rest disappeared');
   await until("document.getElementById('download-trace').href.startsWith('blob:')");
   const trace = await evaluate("fetch(document.getElementById('download-trace').href).then(r=>r.json())");
-  const base = trace.attacks[0]-1, expected = inputEvents.filter(event=>event.t+base<trace.duration-0.2);
-  const detected = trace.notes.filter(note=>note.accepted && note.t<trace.duration-0.2), used = new Set();
-  let matched = 0;
+  // Chrome's fake microphone can drift against AudioContext time. Locate the isolated
+  // source plucks in the captured WAV, independently of the app's attack/pitch detector.
+  const sourceOnsets = await evaluate(`(async () => {
+    const data=await fetch(document.getElementById('download-audio').href).then(r=>r.arrayBuffer());
+    const rate=new DataView(data).getUint32(24,true), samples=new Int16Array(data,44);
+    const hop=Math.round(rate*0.005), onsets=[]; let armed=true, quietSince;
+    for (let i=0;i+hop<=samples.length;i+=hop) {
+      let power=0; for (let j=0;j<hop;j++) power+=(samples[i+j]/32768)**2;
+      const t=i/rate;
+      if (Math.sqrt(power/hop)<0.015) { quietSince ??=t; if (t-quietSince>=0.08) armed=true; }
+      else { quietSince=undefined; if (armed) { onsets.push(t); armed=false; } }
+    }
+    return onsets;
+  })()`);
+  const base = sourceOnsets[0]-1;
+  assert.ok(sourceOnsets.length>=inputEvents.filter(event=>event.t+base<trace.duration-0.3).length,'The captured fixture lost source plucks');
+  sourceOnsets.forEach((t,i)=>assert.ok(Math.abs(t-inputEvents[i].t-base)<0.2,'The captured fixture changed its source rhythm'));
+  const expected = sourceOnsets.map((t,i)=>({...inputEvents[i],t})).filter(event=>event.t<trace.duration-0.2);
+  const detected = trace.notes.filter(note=>note.t<trace.duration-0.2), used = new Set();
+  let matched = 0, matchedAccepted = 0;
   const durationErrors = [];
   for (const event of expected) {
-    const index = detected.findIndex((note,i)=>!used.has(i) && note.midi%12===event.midi%12 && Math.abs(note.t-event.t-base)<0.09);
+    const index = detected.findIndex((note,i)=>!used.has(i) && note.midi%12===event.midi%12 && Math.abs(note.t-event.t)<0.09);
     if (index>=0) {
       matched++; used.add(index);
-      if (detected[index].duration !== undefined) durationErrors.push(Math.abs(detected[index].duration-event.duration));
+      if (detected[index].accepted) {
+        matchedAccepted++;
+        if (detected[index].duration !== undefined) durationErrors.push(Math.abs(detected[index].duration-event.duration));
+      }
     }
   }
-  const detection = {matched,expected:expected.length,detected:detected.length,recall:matched/expected.length,precision:matched/detected.length};
+  const masked = detected.filter(note=>!note.accepted);
+  const detection = {matched,expected:expected.length,detected:detected.length,accepted:detected.length-masked.length,masked:masked.length,recall:matched/expected.length,precision:matched/detected.length};
   detection.meanDurationError = durationErrors.reduce((a,b)=>a+b,0)/durationErrors.length;
-  assert.ok(durationErrors.length>=matched-1 && detection.meanDurationError<0.09,'Detected note ends lost the recorded rests');
+  assert.ok(durationErrors.length>=matchedAccepted-1 && detection.meanDurationError<0.09,'Detected note ends lost the recorded rests');
+  for (const note of masked) assert.ok(trace.replies.some(reply => {
+    const interval = 69+12*Math.log2(note.hz/440)-reply.midi;
+    return note.t>=reply.fireAt+input.delay-0.005 && note.t<=reply.fireAt+input.delay+reply.duration+0.08 &&
+      [-12,0,12].some(octave=>Math.abs(interval-octave)<=0.5);
+  }),'A player pluck was rejected outside an actual output mask');
+  assert.equal(trace.replies[0].kind,firstMode);
+  assert.ok(trace.replies.some(note=>note.kind===nextMode),'Trace lost the actual mode of a queued reply');
   await writeFile(path.join(directory,'listening-trace.json'),JSON.stringify(trace,null,2));
   assert.ok(detection.recall>=0.95 && detection.precision>=0.95,`Missed/duplicate plucks: ${JSON.stringify(detection)}; trace: ${directory}`);
   await pause(6000); // The player keeps repeating B; the app must not reply forever.
@@ -194,10 +243,10 @@ try {
   assert.equal(await evaluate("Number(document.getElementById('bpm').value)"),120,'Playing changed the entered BPM');
   // Reopening Chrome's fake microphone restarts the WAV, so switch after the finite-exchange check.
   await evaluate("document.getElementById('output').click()");
-  await until("document.getElementById('mic').textContent.includes('headphones')");
+  await until(`document.getElementById('mic').textContent.includes('${inputMode === 'speakers' ? 'headphones' : 'speakers'}')`);
   const graph = await evaluate('({contexts:window.__smoke.contexts.length,constraints:window.__smoke.constraints,late:window.__smoke.notes.filter(note=>note.time<note.now-0.001).length})');
   assert.equal(graph.contexts,1); assert.equal(graph.late,0);
-  assert.equal(graph.constraints[0].audio.echoCancellation,true); assert.equal(graph.constraints.at(-1).audio.echoCancellation,false);
+  assert.equal(graph.constraints[0].audio.echoCancellation,inputMode === 'speakers'); assert.equal(graph.constraints.at(-1).audio.echoCancellation,inputMode === 'headphones');
   await evaluate("document.getElementById('companion-mute').click(); document.getElementById('listen-again').click()");
   await until("document.getElementById('phrase-status').textContent.includes('Found a loop')",15000);
   assert.equal(await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length"),18,'Muted replies were scheduled');
@@ -220,6 +269,7 @@ try {
   await until("window.__smoke.notes.some(note=>note.type==='sine')",3000);
   const saved = await evaluate("JSON.parse(localStorage.getItem('guitar.practice.v1'))");
   assert.equal(saved.bpm,80); assert.ok(!('autoTempo' in saved)); assert.equal(saved.responsive,false); assert.equal(saved.voicedThreshold,0.62);
+  assert.equal(saved.replyMode,nextMode);
   assert.ok(!('phrase' in saved) && !('memoryBars' in saved));
   await evaluate("document.getElementById('capture-audio').play()");
   await until("document.getElementById('phrase-status').textContent === 'Stopped'");
@@ -245,9 +295,10 @@ try {
   await until(`document.getElementById('model')?.textContent === '${modelState}'`,60000);
   assert.equal(await evaluate("document.getElementById('bpm').value"),'80');
   assert.equal(await evaluate("document.getElementById('responsive').checked"),false);
+  assert.equal(await evaluate("document.getElementById('reply-mode').value"),nextMode);
   assert.equal(await evaluate("document.getElementById('reply').textContent"),'—');
   assert.equal(await evaluate("document.getElementById('capture-downloads').hidden"),true,'A clip persisted across reload');
   assert.equal(errors.length,0,JSON.stringify(errors));
-  console.log(JSON.stringify({model:modelState,realGuitar,...graph,input,queueTime,replies,detection,traceFile:path.join(directory,'listening-trace.json'),persisted:saved,browserErrors:errors.length},null,2));
+  console.log(JSON.stringify({model:modelState,renderer,realGuitar,inputMode,firstMode,nextMode,...graph,input,queueTime,replies,detection,traceFile:path.join(directory,'listening-trace.json'),persisted:saved,browserErrors:errors.length},null,2));
   await Promise.race([send('Browser.close'),pause(1000)]);
 } finally { socket?.close(); chrome.kill(); }

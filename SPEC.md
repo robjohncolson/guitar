@@ -1,5 +1,20 @@
 # Guitar Practice Partner — Spec
 
+## Current addition: a restrained harmony reply
+
+The user approved a single supporting harmony line as an alternative to Echo. This revision supersedes the earlier prohibition on harmonic pitch choice, while retaining real CREPE, manual BPM, continuous loop recognition, rests, half-beat placement, three finite passes, self-masking, and no overlapping app voices.
+
+- Provide one **Reply: Echo / Harmony** control, defaulting to Harmony when no valid preference exists. Persist the selection; no key picker, chord menu, or additional musical setup.
+- Echo preserves the existing detected pitches, tuning, rhythm, durations, and dynamics. Harmony uses one note per captured attack, with exactly the same rhythm, rests, cycle length, and entry phase.
+- Use the whole recognized phrase to choose a diatonic pitch collection. Prefer evidence for a complete major/minor triad or an unambiguous collection; do not claim that a few notes identify a unique key. Favor thirds with nearby consonant alternatives and a comfortable register. Preserve the instrument's overall tuning.
+- Score each candidate against guitar notes expected during the actual half-beat-delayed reply, including note tails and the cycle boundary. Respect known rests. Choose smooth motion within the phrase and back into its next pass.
+- If the phrase does not support a convincing harmony, give a softer octave reply. Short/ambiguous or chromatic evidence must not force a major/minor guess.
+- Choose the entire reply line once before playback. Keep that choice across all three passes while continuing to listen for a new loop. Harmony is quieter than Echo; its third pass is slightly softer again. Do not add a chord layer or overlapping notes.
+- Changing Echo/Harmony during a reply affects the next exchange, without retuning or resetting the current one. Show that a change is pending. A waiting source loop uses the selected mode when it starts. Reset/Stop/BPM/H/mutes retain their existing behavior and the preference.
+- Recognition and repeat suppression compare the original player loop. Self-masking uses the actual output harmony notes and their octaves, including delayed pitch results. Recording inspection records the actual reply kind per note, even if the control changes mid-exchange.
+
+Phase gates: (1) harmony selection tests, including transposition, ambiguity, tuning, register, smooth motion, delayed landings and rests; (2) playback/queue/masking tests with unchanged Echo behavior and three fixed harmony passes; (3) UI/preferences plus full tests/build; (4) real Chrome/CREPE recorded-guitar Harmony and Echo checks, then GitHub/Vercel publishing and live verification. Document the heuristic's limits and the remaining physical guitar/room listening check.
+
 ## Current product: continuous listening, manual BPM, offbeat replies (September 6, 2026)
 
 This is the latest user-approved contract. It supersedes Auto tempo and the bar-aligned finite replies below, while retaining the technical hard constraints in `CODEX_PROMPT.md`.

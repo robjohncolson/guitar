@@ -54,4 +54,18 @@ describe('three finite phrase replies', () => {
     expect(sameMotif(motif,{...fragment,notes:[note(0,57),note(1,65)]},0.5)).toBe(false);
     expect(sameMotif(motif,{...fragment,notes:[note(0,57),note(0.7,64)]},0.5)).toBe(false);
   });
+  it.each(['harmony','octave'])('preserves every Echo time and rest in %s replies, with a softer third pass', kind => {
+    const source = kind === 'harmony' ? motif : {...motif,notes:motif.notes.slice(0,2)};
+    const echo = new PhraseReply(source,20,0.5,'echo'), harmony = new PhraseReply(source,20,0.5,'harmony');
+    const echoed: ReplyNote[] = [], harmonized: ReplyNote[] = [];
+    for (let t=19.9;t<30;t+=0.01) { echoed.push(...echo.takeDue(t,0.04)); harmonized.push(...harmony.takeDue(t,0.04)); }
+    expect(harmony.kind).toBe(kind); expect(harmony.endAt).toBe(echo.endAt);
+    expect(harmonized).toHaveLength(echoed.length);
+    harmonized.forEach((note,i) => {
+      expect([note.at,note.fireAt,note.duration]).toEqual([echoed[i].at,echoed[i].fireAt,echoed[i].duration]);
+      expect(note.velocity).toBeLessThan(echoed[i].velocity);
+      expect(note.midi).toBe(harmonized[i%source.notes.length].midi);
+      if (i>=2*source.notes.length) expect(note.velocity).toBeCloseTo(harmonized[i%source.notes.length].velocity*0.8);
+    });
+  });
 });
