@@ -26,28 +26,28 @@ const ear = new Ear(
       scheduler?.response.attack(note.t,grid.period);
       grid.claimPlayer(note.t); element('note').textContent = noteLabel(note.hz);
     }
-  }
+  }, undefined, note => companion.finish(note.t,note.end)
 );
 ear.onsets.threshold = settings.voicedThreshold;
 void ear.load();
 
-function stopHarmony(): void {
+function stopReplies(): void {
   synth?.stopNotes();
   if (context) companion.mask.release(context.currentTime+outputDelay(context)+0.07);
 }
 function updateMutes(): void {
   const muted = settings.companionMuted || volume === 0;
   companion.setMuted(muted);
-  if (muted) stopHarmony();
+  if (muted) stopReplies();
   if (synth) { synth.volume = volume; synth.setMutes(muted,settings.clickMuted); }
   element('click-mute').textContent = `Click ${settings.clickMuted ? 'off' : 'on'} · C`;
-  element('companion-mute').textContent = `Harmony ${settings.companionMuted ? 'off' : 'on'} · M`;
+  element('companion-mute').textContent = `Replies ${settings.companionMuted ? 'off' : 'on'} · M`;
   element('click-mute').setAttribute('aria-pressed',String(settings.clickMuted));
   element('companion-mute').setAttribute('aria-pressed',String(settings.companionMuted));
   saveSettings(settings);
 }
 function listenAgain(): void {
-  stopHarmony();
+  stopReplies();
   companion.reset(grid?.t0 ?? 0,60/settings.bpm,context?.currentTime ?? 0);
   scheduler?.response.reset(); panicked = false;
 }
@@ -155,27 +155,28 @@ function render(timestamp: number): void {
   if (timestamp-lastPaint < 32) return;
   lastPaint = timestamp;
   const now = context?.currentTime ?? 0, active = companion.active;
-  const passes = companion.listener.repetitions;
+  const passes = active ? Math.max(0,Math.min(3,Math.floor((now-active.startAt)/active.duration)+1)) : companion.waiting ? 3 : companion.listener.repetitions;
   let progress = passes === 0 ? 'Listening for a short phrase' : `Phrase heard · ${passes} of 3`;
-  if (companion.unclear) progress = 'Pattern heard · harmony is not clear yet';
-  if (active) progress = now < active.startAt ? 'Recognized · joining on the next downbeat' : 'Playing · your harmony is held';
+  if (active) progress = now < active.startAt ? 'Recognized · replying on the next downbeat' : `Playing back · ${passes} of 3 · listening`;
+  if (companion.waiting) progress += ' · next phrase ready';
   element('phrase-status').textContent = progress;
   document.querySelectorAll<HTMLElement>('.pass').forEach((dot,i) => dot.classList.toggle('heard',i < passes));
-  element('passes').setAttribute('aria-label',`${passes} of 3 phrase repetitions`);
+  element('passes').setAttribute('aria-label',`${passes} of 3 ${active ? 'reply passes' : 'phrase repetitions'}`);
   element<HTMLButtonElement>('listen-again').disabled = !micRunning;
-  element('harmony').textContent = active?.harmony.label ?? '—';
-  element('harmony-detail').textContent = active ? `${active.bars === 1 ? 'One bar' : `${active.bars} bars`} · a quiet chord to play over` : 'Waiting for a musical idea';
+  element('reply').textContent = active && companion.lastReply ? noteLabel(companion.lastReply.hz) : '—';
+  element('reply-detail').textContent = active ? `${active.notes.length} notes · ${active.duration.toFixed(2)}s per pass · three passes, then quiet` : 'Listening for the next idea';
   element('output').textContent = `${settings.outputMode === 'speakers' ? 'Speakers' : 'Headphones'} · H`;
   element<HTMLButtonElement>('output').disabled = changingMic;
   let hint = micRunning ? 'Play a short phrase three times. I’ll listen for what stays the same.' : 'Set your BPM, enable audio, and repeat a short phrase.';
   if (passes === 2) hint = 'I’m hearing the idea. Play it once more.';
-  if (companion.unclear) hint = 'I hear the repetition. A few clearer chord tones will help me find the harmony.';
-  if (active) hint = `Your ${active.harmony.label} is held. Improvise over it, or Listen again for a new idea.`;
+  if (!active && companion.hasReplied) hint = 'That phrase is finished. Play a new idea, or Start fresh to hear it again.';
+  if (active) hint = 'I’m playing your phrase back three times, and listening for the next one.';
+  if (active && companion.waiting) hint = 'Your next phrase is ready. It will follow this one.';
   if (tempo.taps.length > 0 && tempo.taps.length < 4) hint = `Tap Space · ${tempo.taps.length}/4 · current tempo continues`;
-  if (settings.companionMuted) hint = 'Harmony muted · Press M to bring it back';
-  if (volume === 0) hint = 'Harmony volume is zero · Raise it in Listening settings';
+  if (settings.companionMuted) hint = 'Replies muted · Press M to bring them back';
+  if (volume === 0) hint = 'Reply volume is zero · Raise it in Listening settings';
   if (context?.state === 'suspended') hint = 'Audio paused · Click Enable audio to resume';
-  if (panicked) hint = 'Output silenced · M restores harmony after a phrase is recognized';
+  if (panicked) hint = 'Output silenced · M restores replies after a phrase is recognized';
   if (bpmInput.getAttribute('aria-invalid') === 'true') hint = 'Enter a BPM between 40 and 240.';
   if (audioError) hint = audioError;
   element('hint').textContent = hint;
@@ -184,7 +185,7 @@ function render(timestamp: number): void {
   document.querySelectorAll<HTMLElement>('.beat').forEach((cell,beat) => {
     const slot = index >= 0 ? grid?.slot(index-mod(index,4)+beat) : undefined;
     cell.className = `beat ${slot?.occupancy ?? ''} ${index >= 0 && mod(index,4) === beat ? 'active' : ''}`;
-    const label = slot?.occupancy === 'player' ? 'you' : slot?.occupancy === 'companion' ? 'harmony' : '—';
+    const label = slot?.occupancy === 'player' ? 'you' : slot?.occupancy === 'companion' ? 'reply' : '—';
     cell.querySelector('small')!.textContent = label; cell.setAttribute('aria-label',`Beat ${beat+1}: ${label}`);
   });
 }

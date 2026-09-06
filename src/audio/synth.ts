@@ -5,7 +5,7 @@ export class Synth {
   readonly companionGain: GainNode;
   readonly responseGain: GainNode;
   private responseTarget = 1;
-  private oscillators = new Map<OscillatorNode, {channel:'click' | 'harmony';gain:GainNode}>();
+  private oscillators = new Map<OscillatorNode, {channel:'click' | 'reply';gain:GainNode;end:number}>();
   volume = 0.22;
   constructor(readonly context: AudioContext) {
     this.clickGain = context.createGain();
@@ -37,31 +37,32 @@ export class Synth {
     oscillator.connect(gain).connect(this.clickGain);
     this.track(oscillator,t,t+0.012,'click',gain,() => gain.disconnect());
   }
-  pad(midi: number, t: number, duration: number, velocity: number): void {
-    velocity = Math.max(0.1,Math.min(0.6,velocity));
+  note(midi: number, t: number, duration: number, velocity: number): void {
+    velocity = Math.max(0.1,Math.min(0.85,velocity));
     const gain = this.context.createGain(), filter = this.context.createBiquadFilter();
     filter.type = 'lowpass'; filter.frequency.value = 800+1000*velocity;
     gain.gain.setValueAtTime(0,t);
-    gain.gain.linearRampToValueAtTime(0.38*velocity,t+Math.min(0.18,duration*0.15));
-    gain.gain.exponentialRampToValueAtTime(0.3*velocity,t+duration-Math.min(0.3,duration*0.25));
+    gain.gain.linearRampToValueAtTime(0.42*velocity,t+Math.min(0.018,duration*0.15));
+    gain.gain.exponentialRampToValueAtTime(0.22*velocity,t+duration*0.65);
     gain.gain.linearRampToValueAtTime(0,t+duration);
     filter.connect(gain).connect(this.companionGain);
     const oscillator = this.context.createOscillator();
     oscillator.type = 'triangle'; oscillator.frequency.value = midiToHz(midi);
     oscillator.connect(filter);
-    this.track(oscillator,t,t+duration+0.005,'harmony',gain,() => { gain.disconnect(); filter.disconnect(); });
+    this.track(oscillator,t,t+duration+0.005,'reply',gain,() => { gain.disconnect(); filter.disconnect(); });
   }
-  private track(oscillator: OscillatorNode, start: number, end: number, channel: 'click' | 'harmony', gain: GainNode, cleanup: () => void): void {
-    this.oscillators.set(oscillator,{channel,gain});
+  private track(oscillator: OscillatorNode, start: number, end: number, channel: 'click' | 'reply', gain: GainNode, cleanup: () => void): void {
+    this.oscillators.set(oscillator,{channel,gain,end});
     oscillator.onended = () => { this.oscillators.delete(oscillator); oscillator.disconnect(); cleanup(); };
     oscillator.start(start); oscillator.stop(end);
   }
   stopNotes(): void {
     const now = this.context.currentTime;
-    for (const [oscillator,voice] of this.oscillators) if (voice.channel === 'harmony') {
+    for (const [oscillator,voice] of this.oscillators) if (voice.channel === 'reply' && voice.end > now) {
+      voice.end = Math.min(voice.end,now+0.07);
       voice.gain.gain.cancelAndHoldAtTime(now);
-      voice.gain.gain.linearRampToValueAtTime(0,now+0.06);
-      try { oscillator.stop(now+0.07); } catch { /* already stopped */ }
+      voice.gain.gain.linearRampToValueAtTime(0,Math.max(now,voice.end-0.005));
+      try { oscillator.stop(voice.end); } catch { /* already stopped */ }
     }
   }
   panic(): void {

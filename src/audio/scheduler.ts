@@ -27,7 +27,7 @@ export class Scheduler {
     this.companion.mask.prune(now);
     const notes = this.companion.takeDue(now,delay);
     for (const note of notes) {
-      this.synth.pad(note.midi,note.fireAt,note.duration,note.velocity);
+      this.synth.note(note.midi,note.fireAt,note.duration,note.velocity);
       this.companion.scheduled(note,delay);
       const slot = this.grid.slot(this.grid.onsetIndex(note.at));
       if (slot.occupancy === 'empty') slot.occupancy = 'companion';

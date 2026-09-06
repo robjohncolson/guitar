@@ -13,6 +13,10 @@ export class MotifListener {
   get motif(): Motif | undefined { return this.found; }
   constructor(readonly period: number) {}
   reconsider(): void { this.found = undefined; }
+  finish(t: number, end: number): void {
+    const note = this.history.find(note => note.t === t);
+    if (note && Number.isFinite(end) && end > t) note.duration = end-t;
+  }
   record(note: NoteOn): void {
     if (this.found || !Number.isFinite(note.t) || !Number.isFinite(note.hz) || note.hz <= 0) return;
     if (this.history.length && note.t <= this.history[this.history.length-1].t) return;
@@ -47,12 +51,28 @@ export class MotifListener {
           const winner = column.map(pc).sort((a,b) => column.filter(n => pc(n) === b).length-column.filter(n => pc(n) === a).length)[0];
           const agreed = column.filter(n => pc(n) === winner);
           const hz = median(agreed.map(n => n.hz)), midi = hzToMidi(hz);
+          const durations = agreed.flatMap(n => n.duration === undefined ? [] : [n.duration]);
           return Object.freeze({...note,hz,midi:Math.round(midi),cents:centsOffset(midi),pitchClass:winner,
-            velocity:median(agreed.map(n => n.velocity ?? 0.75))});
+            velocity:median(agreed.map(n => n.velocity ?? 0.75)),duration:durations.length ? median(durations) : undefined});
         });
         this.found = Object.freeze({notes:Object.freeze(consensus),beats});
         return;
       }
     }
   }
+}
+
+/** Continuing a phrase from its second note is still the same idea, not a fresh reply. */
+export function sameMotif(a: Motif, b: Motif, period: number): boolean {
+  if (a.notes.length !== b.notes.length || Math.abs(a.beats-b.beats) > Math.max(0.25,a.beats*0.12)) return false;
+  // Rhythm identity uses normalized cyclic onset gaps; absolute start time is irrelevant.
+  const gaps = (motif: Motif) => {
+    const offsets = motif.notes.map(note => note.t-motif.notes[0].t);
+    return offsets.map((offset,i) => i+1 < offsets.length ? offsets[i+1]-offset : motif.beats*period-offset);
+  };
+  const aGaps = gaps(a), bGaps = gaps(b);
+  return a.notes.some((_,rotation) => b.notes.every((note,i) => {
+    const j = (i+rotation)%a.notes.length;
+    return pc(note) === pc(a.notes[j]) && Math.abs(aGaps[j]-bGaps[i]) <= Math.max(period*0.22,aGaps[j]*0.12);
+  }));
 }

@@ -1,10 +1,10 @@
 # Guitar Practice Partner
 
-Local Vite + TypeScript app. Acoustic guitar in, a quiet supporting chord after a phrase is repeated three times. Current product contract is at the top of `SPEC.md`; repeater and four-role designs are historical.
+Local Vite + TypeScript app. Acoustic guitar in, three finite replies of a recognized phrase at its original pace. Current product contract is at the top of `SPEC.md`; held chords, ordinary echoes, and four-role designs are historical.
 
-Listen silently until note order and rhythm establish three matching performances. Choose a chord grounded in those notes; ambiguous material stays silent. Enter on a schedulable downbeat and hold the harmony stable. Listen again/L clears recognition without resetting the clock.
+Listen until note order and rhythm establish three matching performances. Replay the actual notes exactly three times, then stop. Keep listening during playback and hold at most one new phrase to follow. App-generated notes and phrases must not overlap. Start fresh/L clears active/waiting recognition without resetting the clock.
 
-Preserve accepted attack dynamics. Responsive (default on, collapsed preference) smoothly softens accompaniment in response to player attacks, recovering in rests; it never changes the harmony or click.
+Preserve detected pitch, timing, rests, and accepted attack dynamics. Responsive (default on, collapsed preference) smoothly softens replies in response to player attacks, recovering in rests; it never changes the notes or click.
 
 ## Rules
 
@@ -13,9 +13,9 @@ Preserve accepted attack dynamics. Responsive (default on, collapsed preference)
 - Entered BPM is the clock; Spacebar tap tempo is optional. Do not beat-track the guitar.
 - No generative music models. No fretboard/lesson/tab chrome. No backend.
 - Musical timing uses `AudioContext.currentTime` minus `outputLatency`.
-- North-star demo: at 120 BPM, play A–C–E three times in a similar rhythm; only then hear a quiet Am chord on the next downbeat.
-- No ordinary echoes or manual phrase recording. Match repeating sequences, not merely common pitch classes or a note-count gate.
-- Mask all chord voices and octave detections. Stable harmony never chases newly played notes; L requests fresh listening.
+- North-star demo: recognize A–C–E, play A–C–E back three times, then stop; learn a new repeated phrase concurrently and let it follow.
+- No ordinary echoes, chord inference, or manual phrase recording. Match repeating sequences, not merely common pitch classes or a note-count gate.
+- Mask reply notes and octave detections. Continuing the same idea must not requeue it forever. L permits learning it again.
 
 ## Commands
 
@@ -28,4 +28,4 @@ npm run build
 
 ## Layout
 
-`src/music/motif.ts` recognizes repeated phrases; `harmony.ts` chooses supported chords; `companion.ts` owns input masking and stable accompaniment; `src/audio/scheduler.ts` schedules harmony and click. Models live in `public/models/` and are committed.
+`src/music/motif.ts` recognizes and compares phrases; `reply.ts` schedules three finite passes; `companion.ts` owns continuous input, masking, and one waiting phrase; `src/audio/scheduler.ts` schedules reply notes and click. Models live in `public/models/` and are committed.

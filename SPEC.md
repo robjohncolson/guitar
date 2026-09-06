@@ -1,6 +1,23 @@
 # Guitar Practice Partner — Spec
 
-## Current product: listen for an idea, then accompany it (September 6, 2026)
+## Current product: three phrase replies, then quiet (September 6, 2026)
+
+The user now wants a finite exchange: listen for recurring notes, place those notes back at the same pace three times, and keep listening for new notes without overlapping the app's phrases or tones. This replaces the indefinitely held chord contract below.
+
+- Keep the existing three-performance phrase recognizer, real local CREPE, accepted-attack segmentation, manually entered/tapped BPM, and output-latency compensation. A recognized phrase may contain any notes; remove chord inference and harmonic gating.
+- Replay the recognized notes as a single-note sequence, preserving detected pitch/tuning, relative attack spacing, accents, and rests. The cycle is the measured phrase duration in seconds, without rounding it to whole bars. Start the first pass on the next schedulable downbeat, then play exactly **three** passes and expire automatically.
+- Clip note lengths before the next attack or cycle boundary. Account for the oscillator's stop tail and slightly late starts, so app-generated voices never overlap. Keep a warm, quiet triangle tone with a short attack appropriate for a note sequence. No sustained chord layer.
+- Continue recognizing accepted player input during replies. Keep at most one different recognized phrase waiting; a newer different idea replaces that waiting candidate. Start it only after the current three-pass window, on a schedulable downbeat. Do not interrupt or stack phrases, and do not accumulate a backlog.
+- Do not requeue the current or last-answered idea from continuing input. Treat cyclic rotations of the same notes/rhythm as the same phrase. **Start fresh / L** clears this memory as well as active/waiting replies, allowing the same idea to be learned again. Preserve the pulse. Freshly recognized different phrases can produce another finite exchange.
+- M suppresses reply output while the current finite window continues to elapse; a waiting new phrase waits for unmute. Do not restart expired passes or emit a catch-up burst after a stalled tab. Escape clears active/waiting recognition and silences both outputs. BPM/Shift+Space reset recognition and pulse. H preserves active/waiting phrases and the clock.
+- Continue self-masking output notes and their octave detections. Player notes matching a sounding output may be masked; headphones/AEC remain the available input controls. This version prevents overlap between app-generated notes and phrases; live guitar can continue while the app replies. Responsive softening remains optional.
+- Show **Playing back · 1 / 2 / 3 of 3**, continued listening, and whether a next phrase is ready. Return automatically to listening after the last pass. Keep controls minimal and persist preferences only, never captured notes or pending replies.
+
+Phase gates: finite sequence/timing tests; continuous-listening, deduplication and waiting-phrase tests; synth/UI integration tests plus build; real Chrome/CREPE microphone check before publishing. Verify nine output notes for a three-note phrase, identical repeated timing, preserved non-bar cycle duration, measured articulation, no voice/phrase overlap, exactly three passes, continued input recognition, single waiting candidate, no indefinite retrigger, mute/reset/panic, latency, and stale-event skipping.
+
+Acceptance: play A–C–E three times, then hear A–C–E three times at the original pace. While that plays, repeat D–F–B three times. It should be recognized during the first reply and played only when the first three passes finish. Continuing D–F–B must not make the app replay it forever. L allows starting over.
+
+## Previous product: a held supporting chord (historical)
 
 The user found the attack repeater too noisy and reactive. This contract supersedes all repeater, manual memory, and original four-role behavior below. The app must exercise musical judgment before making any companion sound.
 

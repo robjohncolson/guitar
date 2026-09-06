@@ -9,14 +9,14 @@ const origin = process.env.SMOKE_ORIGIN || 'http://127.0.0.1:5173';
 const modelFailure = process.env.SMOKE_MODEL_FAILURE === '1';
 const directory = await mkdtemp(path.join(tmpdir(), 'guitar-chrome-'));
 const wav = path.join(directory, 'guitar.wav');
-const rate = 48000, seconds = 16, pcm = Buffer.alloc(rate * seconds * 2);
+const rate = 48000, seconds = 40, pcm = Buffer.alloc(rate * seconds * 2);
 for (let i = 0; i < rate * seconds; i++) {
   // Let fake-microphone startup/AEC settle before the first deliberate pluck.
   const t = i / rate - 1;
   if (t < 0) continue;
   const phase = t%2, index = Math.floor(phase/0.5), age = phase%0.5;
   if (index === 3 || age > 0.22) continue;
-  const hz = [220,261.625565,329.627557][index];
+  const hz = (t < 6 ? [220,261.625565,329.627557] : [293.664768,349.228231,493.883301])[index];
   const envelope = Math.min(1,age/0.004)*Math.exp(-age*5)*Math.max(0,Math.min(1,(0.22-age)/0.01));
   const sample = envelope*(Math.sin(2*Math.PI*hz*t)+0.35*Math.sin(4*Math.PI*hz*t)+0.12*Math.sin(6*Math.PI*hz*t));
   pcm.writeInt16LE(Math.round(sample * 14000), i * 2);
@@ -66,7 +66,7 @@ try {
   const until = async (expression, milliseconds = 30000) => {
     const end = Date.now() + milliseconds;
     while (Date.now() < end) { const result = await evaluate(expression); if (result) return result; await pause(100); }
-    const state = await evaluate("({hint:document.getElementById('hint')?.textContent,phrase:document.getElementById('phrase-status')?.textContent,harmony:document.getElementById('harmony')?.textContent,heard:document.getElementById('note')?.textContent,notes:window.__smoke?.notes,attacks:window.__smoke?.attacks})");
+    const state = await evaluate("({hint:document.getElementById('hint')?.textContent,phrase:document.getElementById('phrase-status')?.textContent,reply:document.getElementById('reply')?.textContent,heard:document.getElementById('note')?.textContent,notes:window.__smoke?.notes,attacks:window.__smoke?.attacks})");
     throw new Error(`Timed out: ${expression}\n${JSON.stringify({state,errors})}`);
   };
   await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable');
@@ -118,53 +118,60 @@ try {
   const modelState = modelFailure ? 'FALLBACK: YIN' : 'CREPE ready (tiny)';
   await until(`document.getElementById('model')?.textContent === '${modelState}'`,60000);
   await evaluate("document.getElementById('bpm').value='120'; document.getElementById('bpm').dispatchEvent(new Event('input'))");
-  assert.equal(await evaluate("document.querySelectorAll('#remember, #delay-value, [data-memory-bars], #roles').length"),0);
-  assert.equal(await evaluate("document.getElementById('click-mute').getAttribute('aria-pressed')"),'true');
+  assert.equal(await evaluate("document.querySelectorAll('#remember, #harmony, #delay-value, [data-memory-bars], #roles').length"),0);
   await evaluate("document.getElementById('enable').click()");
   await until("document.getElementById('mic').textContent.includes('Mic listening')");
   await until("document.querySelectorAll('.pass.heard').length === 2",15000);
   assert.equal(await evaluate('window.__smoke.notes.length'),0,'Sound started before three matching phrases');
-  await until("document.getElementById('harmony').textContent === 'Am'",15000);
-  await until("window.__smoke.notes.filter(note=>note.type==='triangle').length>=3",5000);
-  const first = await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').slice(0,3)");
+  await until("window.__smoke.notes.filter(note=>note.type==='triangle').length>=3",10000);
   const input = await evaluate('({firstAttack:window.__smoke.attacks[0],delay:window.__smoke.contexts[0].outputLatency || window.__smoke.contexts[0].baseLatency || 0})');
-  assert.ok(first[0].time+input.delay>=input.firstAttack+5,'The third phrase was not complete');
-  assert.ok(first.every(note=>Math.abs(note.time-first[0].time)<0.001 && note.time>=note.now),'Chord voices were late or staggered');
-  assert.deepEqual(first.map(note=>(Math.round(69+12*Math.log2(note.hz/440))%12)).sort((a,b)=>a-b),[0,4,9]);
-  assert.ok(first.every(note=>note.peak<0.2 && note.end-note.time>1.8),'Chord should have a quiet, sustained envelope');
-  await until("window.__smoke.notes.filter(note=>note.type==='triangle').length>=6",5000);
-  const second = await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').slice(3,6)");
-  second.forEach((note,i)=>{ assert.ok(Math.abs(note.time-first[i].time-2)<0.01); assert.equal(note.hz,first[i].hz); });
-  await evaluate("document.getElementById('output').click()");
-  await until("document.getElementById('mic').textContent.includes('headphones')");
-  assert.equal(await evaluate("document.getElementById('harmony').textContent"),'Am');
-  const graph = await evaluate('({contexts:window.__smoke.contexts.length,constraints:window.__smoke.constraints,late:window.__smoke.notes.filter(note=>note.time<note.now-0.001).length})');
-  assert.equal(graph.contexts,1); assert.equal(graph.late,0);
-  assert.equal(graph.constraints[0].audio.echoCancellation,true); assert.equal(graph.constraints.at(-1).audio.echoCancellation,false);
-  await evaluate("document.getElementById('click-mute').click()");
-  await until("window.__smoke.notes.some(note=>note.type==='sine' && note.hz===1300)",3000);
-  const downbeat = await evaluate("window.__smoke.notes.find(note=>note.type==='sine' && note.hz===1300).time");
-  assert.ok(Math.abs((downbeat-first[0].time)/2-Math.round((downbeat-first[0].time)/2))<0.01,'Harmony was not on a downbeat');
+  await until("document.getElementById('phrase-status').textContent.includes('next phrase ready')",8000);
+  const queueTime = await evaluate('window.__smoke.contexts[0].currentTime');
   if (process.env.SMOKE_SCREENSHOT) {
     const shot = await send('Page.captureScreenshot',{format:'png'});
     await writeFile(process.env.SMOKE_SCREENSHOT,Buffer.from(shot.data,'base64'));
   }
+  await until("window.__smoke.notes.filter(note=>note.type==='triangle').length>=18",15000);
+  await until("document.getElementById('reply').textContent === '—'",5000);
+  const replies = await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle')");
+  assert.equal(replies.length,18,'Expected two phrases, each played three times');
+  assert.ok(replies[0].time+input.delay>=input.firstAttack+5,'The third input phrase was incomplete');
+  const pcs = replies.map(note=>(Math.round(69+12*Math.log2(note.hz/440))%12));
+  assert.deepEqual(pcs.slice(0,9),[9,0,4,9,0,4,9,0,4]);
+  assert.deepEqual(pcs.slice(9),[2,5,11,2,5,11,2,5,11]);
+  for (const start of [0,9]) for (let i=0;i<9;i++) {
+    assert.ok(replies[start+i].time>=replies[start+i].now,'A note was scheduled late');
+    if (i%3) assert.ok(Math.abs(replies[start+i].time-replies[start+i-1].time-0.5)<0.08,'Within-phrase pace changed');
+    if (i>=3) {
+      assert.ok(Math.abs(replies[start+i].time-replies[start+i-3].time-2)<0.06,'Cycle pace changed');
+      assert.equal(replies[start+i].hz,replies[start+i-3].hz,'Pitch changed between replies');
+    }
+  }
+  assert.ok(queueTime<replies[0].time+6,'The new phrase was not learned during playback');
+  assert.ok(replies[9].time>=replies[0].time+6-0.06,'A new phrase interrupted the third pass');
+  replies.slice(1).forEach((next,i)=>assert.ok(replies[i].end<=next.time+0.001,'Synthesized notes overlapped'));
+  await pause(6000); // The player keeps repeating B; the app must not reply forever.
+  assert.equal(await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length"),18,'A completed phrase retriggered indefinitely');
+  // Reopening Chrome's fake microphone restarts the WAV, so switch after the finite-exchange check.
+  await evaluate("document.getElementById('output').click()");
+  await until("document.getElementById('mic').textContent.includes('headphones')");
+  const graph = await evaluate('({contexts:window.__smoke.contexts.length,constraints:window.__smoke.constraints,late:window.__smoke.notes.filter(note=>note.time<note.now-0.001).length})');
+  assert.equal(graph.contexts,1); assert.equal(graph.late,0);
+  assert.equal(graph.constraints[0].audio.echoCancellation,true); assert.equal(graph.constraints.at(-1).audio.echoCancellation,false);
+  await evaluate("document.getElementById('companion-mute').click(); document.getElementById('listen-again').click()");
+  await until("document.getElementById('phrase-status').textContent.includes('next phrase ready')",15000);
+  assert.equal(await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length"),18,'Muted replies were scheduled');
   await evaluate("document.getElementById('companion-mute').click()");
-  const mutedCount = await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length");
-  await pause(1000);
-  assert.equal(await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length"),mutedCount);
-  assert.equal(await evaluate("document.getElementById('harmony').textContent"),'Am');
-  await evaluate("document.getElementById('companion-mute').click()");
-  await until(`window.__smoke.notes.filter(note=>note.type==='triangle').length>${mutedCount}`,4000);
+  await until("window.__smoke.notes.filter(note=>note.type==='triangle').length>18",4000);
   await evaluate('window.__smoke.tracks.forEach(track=>track.enabled=false)');
   await send('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyL',key:'l'});
   await send('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyL',key:'l'});
-  await until("document.getElementById('harmony').textContent === '—'");
+  await until("document.getElementById('reply').textContent === '—'");
   const resetCount = await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length");
   await pause(2200);
-  assert.equal(await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length"),resetCount,'Listen again kept an old accompaniment');
-  assert.equal(await evaluate("document.querySelectorAll('.pass.heard').length"),0);
-  await evaluate("document.getElementById('bpm').value='80'; document.getElementById('bpm').dispatchEvent(new Event('input')); document.getElementById('responsive').click(); document.getElementById('threshold').value='0.62'; document.getElementById('threshold').dispatchEvent(new Event('input'))");
+  assert.equal(await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length"),resetCount,'Start fresh kept an old reply');
+  await evaluate("document.getElementById('bpm').value='80'; document.getElementById('bpm').dispatchEvent(new Event('input')); document.getElementById('responsive').click(); document.getElementById('threshold').value='0.62'; document.getElementById('threshold').dispatchEvent(new Event('input')); document.getElementById('click-mute').click()");
+  await until("window.__smoke.notes.some(note=>note.type==='sine')",3000);
   const saved = await evaluate("JSON.parse(localStorage.getItem('guitar.practice.v1'))");
   assert.equal(saved.bpm,80); assert.equal(saved.responsive,false); assert.equal(saved.voicedThreshold,0.62);
   assert.ok(!('phrase' in saved) && !('memoryBars' in saved));
@@ -179,8 +186,8 @@ try {
   await until(`document.getElementById('model')?.textContent === '${modelState}'`,60000);
   assert.equal(await evaluate("document.getElementById('bpm').value"),'80');
   assert.equal(await evaluate("document.getElementById('responsive').checked"),false);
-  assert.equal(await evaluate("document.getElementById('harmony').textContent"),'—');
+  assert.equal(await evaluate("document.getElementById('reply').textContent"),'—');
   assert.equal(errors.length,0,JSON.stringify(errors));
-  console.log(JSON.stringify({model:modelState,...graph,input,firstChord:first,secondChord:second,persisted:saved,browserErrors:errors.length},null,2));
+  console.log(JSON.stringify({model:modelState,...graph,input,queueTime,replies,persisted:saved,browserErrors:errors.length},null,2));
   await Promise.race([send('Browser.close'),pause(1000)]);
 } finally { socket?.close(); chrome.kill(); }

@@ -1,68 +1,65 @@
 import { SelfMask } from '../audio/self-mask';
-import { fireTime } from '../audio/timing';
-import { MotifListener } from './motif';
-import { chooseHarmony } from './harmony';
-import type { Harmony } from './harmony';
+import { MotifListener, sameMotif } from './motif';
+import type { Motif } from './motif';
 import { Touch } from './touch';
-import { midiToHz } from './notes';
 import type { NoteOn } from './notes';
-
-export interface HarmonyNote { midi: number; hz: number; at: number; fireAt: number; duration: number; velocity: number }
-export interface Accompaniment { readonly harmony: Harmony; readonly startAt: number; readonly duration: number; readonly bars: number }
+import { PhraseReply } from './reply';
+import type { ReplyNote } from './reply';
 
 export class Companion {
   readonly mask = new SelfMask();
   readonly touch = new Touch();
   listener = new MotifListener(0.6);
-  active?: Accompaniment;
+  active?: PhraseReply;
+  waiting?: Motif;
   lastPlayer?: NoteOn;
-  unclear = false;
+  lastReply?: ReplyNote;
+  private lastAnswered?: Motif;
   private origin = 0;
   private period = 0.6;
   private listeningFrom = 0;
-  private cycle = 0;
   private muted = false;
+  get hasReplied(): boolean { return Boolean(this.lastAnswered); }
   reset(origin: number, period: number, listeningFrom = origin): void {
     this.origin = origin; this.period = period; this.listeningFrom = listeningFrom;
-    this.listener = new MotifListener(period); this.active = undefined; this.unclear = false; this.cycle = 0;
-    // Keep masks while the room still contains a chord that was just stopped.
+    this.listener = new MotifListener(period); this.active = undefined; this.waiting = undefined; this.lastAnswered = undefined; this.lastReply = undefined;
+    // The room may still contain a recently stopped reply; retain its shortened masks.
   }
   accept(note: NoteOn): boolean {
     if (!Number.isFinite(note.t) || note.t < this.listeningFrom || !Number.isFinite(note.hz) || note.hz <= 0 || this.mask.drops(note)) return false;
     this.lastPlayer = {...note,velocity:note.velocity ?? this.touch.velocity(note.level)};
-    if (!this.active) {
-      if (this.unclear) this.listener.reconsider();
-      this.listener.record(this.lastPlayer);
-      this.unclear = Boolean(this.listener.motif && !chooseHarmony(this.listener.motif.notes));
+    this.listener.record(this.lastPlayer);
+    const found = this.listener.motif;
+    if (found) {
+      const same = (other?: Motif) => other && sameMotif(found,other,this.period);
+      if (!same(this.active?.motif) && !same(this.lastAnswered) && !same(this.waiting)) this.waiting = found;
+      // Keep listening during playback, without letting old evidence trigger another reply.
+      this.listener = new MotifListener(this.period);
     }
     return true;
   }
+  finish(t: number, end: number): void { this.listener.finish(t,end); }
   setMuted(muted: boolean): void { this.muted = muted; }
-  takeDue(now: number, outputDelay: number, lookahead = 0.075): HarmonyNote[] {
-    if (!this.active && this.listener.motif) {
-      const harmony = chooseHarmony(this.listener.motif.notes);
-      if (harmony) {
-        const bars = Math.max(1,Math.min(4,Math.round(this.listener.motif.beats/4)));
-        const bar = this.period*4;
-        const startAt = this.origin+(Math.floor((now+outputDelay+0.01-this.origin)/bar)+1)*bar;
-        this.active = Object.freeze({harmony,bars,startAt,duration:bars*bar});
+  private startWaiting(now: number, outputDelay: number, earliest: number): void {
+    if (!this.waiting) return;
+    const bar = this.period*4;
+    const startAt = this.origin+Math.ceil((Math.max(earliest,now+outputDelay+0.01)-this.origin)/bar-1e-9)*bar;
+    this.active = new PhraseReply(this.waiting,startAt,this.period);
+    this.lastAnswered = this.waiting; this.waiting = undefined;
+  }
+  takeDue(now: number, outputDelay: number, lookahead = 0.075): ReplyNote[] {
+    if (this.active && now >= this.active.endAt) this.active = undefined;
+    if (!this.muted && this.waiting) {
+      if (!this.active) this.startWaiting(now,outputDelay,now);
+      else if (this.active.scheduledAll && this.active.endAt-outputDelay <= now+lookahead) {
+        this.startWaiting(now,outputDelay,this.active.endAt);
       }
     }
-    const phrase = this.active;
-    if (!phrase || this.muted) return [];
-    this.cycle = Math.max(this.cycle,Math.max(0,Math.floor((now+outputDelay-0.015-phrase.startAt)/phrase.duration)));
-    while (true) {
-      const at = phrase.startAt+this.cycle*phrase.duration;
-      if (at-outputDelay > now+lookahead) return [];
-      this.cycle++;
-      const fireAt = fireTime(at,now,outputDelay);
-      if (fireAt === null) continue;
-      return phrase.harmony.midis.map(midi => ({midi,hz:midiToHz(midi),at,fireAt,
-        duration:Math.max(0.2,phrase.duration-0.15),velocity:phrase.harmony.velocity/Math.sqrt(phrase.harmony.midis.length)}));
-    }
+    if (this.muted) return [];
+    return this.active?.takeDue(now,outputDelay,lookahead) ?? [];
   }
-  scheduled(note: HarmonyNote, outputDelay: number): void {
-    // CREPE can report an octave of one chord voice; mask those known output pitches too.
+  scheduled(note: ReplyNote, outputDelay: number): void {
+    this.lastReply = note;
     for (const octave of [-12,0,12]) this.mask.arm(note.fireAt+outputDelay,note.duration,note.midi+octave);
   }
 }
