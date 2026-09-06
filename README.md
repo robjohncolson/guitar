@@ -4,6 +4,10 @@ A local browser app that shares your pulse, listens to an acoustic guitar, infer
 
 V1 is implemented with local CREPE tiny inference, four companion roles, and an audio-clock scheduler. No account, backend, or runtime CDN.
 
+**Live app:** [guitar-lac-seven.vercel.app](https://guitar-lac-seven.vercel.app) · **Source:** [robjohncolson/guitar](https://github.com/robjohncolson/guitar) (private)
+
+Vercel serves the app and model files over HTTPS. Microphone audio and pitch inference stay in your browser. Pushes to `main` deploy through the connected Vercel project; its build runs all tests and verifies model integrity before publishing.
+
 ## What it is
 
 Afternoon practice partner. Tap Space to set BPM, play into the laptop mic, hear a companion from the speakers on the off-beats once it knows the scale. Four roles (hole-filler, bass, harmony, call-response), two densities (shy / busy). CREPE (Kim et al., ICASSP 2018) is the pitch ear. Music theory is the brain.
