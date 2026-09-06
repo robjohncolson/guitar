@@ -3,11 +3,12 @@ import { outputDelay } from './context';
 import { fireTime } from './timing';
 import type { Synth } from './synth';
 import type { Repeater } from '../music/repeater';
+import type { PhraseMemory } from '../music/phrase-memory';
 export { fireTime } from './timing';
 
 export class Scheduler {
   private clicked = new Set<number>();
-  constructor(readonly grid: Grid, readonly synth: Synth, readonly repeater: Repeater) {}
+  constructor(readonly grid: Grid, readonly synth: Synth, readonly repeater: Repeater, readonly memory: PhraseMemory) {}
   tick(): void {
     const now = this.synth.context.currentTime, delay = outputDelay(this.synth.context);
     this.grid.maintain(now);
@@ -20,8 +21,10 @@ export class Scheduler {
       if (time !== null) this.synth.click(time,mod(i,4) === 0);
     }
     for (const i of this.clicked) if (i<first-16) this.clicked.delete(i);
-    // Echo timing belongs to the original attack, regardless of beat occupancy.
-    for (const note of this.repeater.takeDue(now,delay)) {
+    this.memory.prune(now);
+    // A frozen phrase replaces the echo; new playing never overdubs the snapshot.
+    const notes = this.memory.active ? this.memory.takeDue(now,delay) : this.repeater.takeDue(now,delay);
+    for (const note of notes) {
       this.synth.note(note.midi,note.fireAt,note.duration);
       this.repeater.scheduled(note,delay);
       const slot = this.grid.slot(this.grid.onsetIndex(note.at));

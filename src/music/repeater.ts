@@ -35,11 +35,11 @@ export class Repeater {
     this.muted = muted;
     if (muted) this.clear();
   }
-  accept(note: NoteOn): boolean {
+  accept(note: NoteOn, repeat = true): boolean {
     if (!Number.isFinite(note.t) || !Number.isFinite(note.hz) || note.hz <= 0 || this.mask.drops(note)) return false;
     this.lastPlayer = note;
     this.onsetCount++;
-    if (this.muted) return true;
+    if (this.muted || !repeat) return true;
     this.queue.push({ sourceTime: note.t, at: note.t + this.delay, hz: note.hz,
       midi: hzToMidi(note.hz), duration: Math.min(0.45, 0.55 * 60 / this.bpm) });
     this.queue.sort((a,b) => a.at-b.at);

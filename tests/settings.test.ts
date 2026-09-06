@@ -5,4 +5,6 @@ it('recovers from malformed saved state and only restores supported session pref
   expect(parseSettings('null')).toEqual(defaults);
   expect(parseSettings(JSON.stringify({role:'invalid',density:'busy',voicedThreshold:10,crepeCapacity:'small',bpm:200,locked:true}))).toEqual({...defaults,bpm:200,voicedThreshold:0.8});
   expect(parseSettings(JSON.stringify({bpm:0})).bpm).toBe(100);
+  expect(parseSettings(JSON.stringify({memoryBars:4})).memoryBars).toBe(4);
+  expect(parseSettings(JSON.stringify({memoryBars:3,phrase:[440]})).memoryBars).toBe(2);
 });

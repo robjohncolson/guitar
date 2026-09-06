@@ -11,7 +11,10 @@ const directory = await mkdtemp(path.join(tmpdir(), 'guitar-chrome-'));
 const wav = path.join(directory, 'guitar.wav');
 const rate = 48000, seconds = 6, pcm = Buffer.alloc(rate * seconds * 2);
 for (let i = 0; i < rate * seconds; i++) {
-  const t = i / rate, age = t % 3;
+  // Let fake-microphone startup/AEC settle before the first deliberate pluck.
+  const t = i / rate - 1;
+  if (t < 0) continue;
+  const age = t % 3;
   const envelope = Math.min(1, age / 0.004) * Math.exp(-age * 5);
   const sample = envelope * (Math.sin(2 * Math.PI * 110 * t) + 0.35 * Math.sin(2 * Math.PI * 220 * t) + 0.12 * Math.sin(2 * Math.PI * 330 * t));
   pcm.writeInt16LE(Math.round(sample * 14000), i * 2);
@@ -61,7 +64,8 @@ try {
   const until = async (expression, milliseconds = 30000) => {
     const end = Date.now() + milliseconds;
     while (Date.now() < end) { const result = await evaluate(expression); if (result) return result; await pause(100); }
-    throw new Error(`Timed out: ${expression}`);
+    const state = await evaluate("({hint:document.getElementById('hint')?.textContent,queue:document.getElementById('queue')?.textContent,memory:document.getElementById('memory-status')?.textContent,notes:window.__smoke?.notes,attacks:window.__smoke?.attacks})");
+    throw new Error(`Timed out: ${expression}\n${JSON.stringify({state,errors})}`);
   };
   await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable');
   if (modelFailure) await send('Fetch.enable', {patterns:[{urlPattern:'*/models/crepe-tiny/model.json'}]});
@@ -105,7 +109,7 @@ try {
   assert.ok(heardCents,JSON.stringify(timing));
   assert.ok(Math.abs(Math.round(1200*Math.log2(timing.hz/110))-Number(heardCents[2])*(heardCents[1]==='−'?-1:1))<=1,'Repeat changed the detected pitch');
   assert.ok(timing.attacks.some(t=>Math.abs(timing.echoAt-t-1)<0.025),`Repeat is not two beats after the original attack: ${JSON.stringify(timing)}`);
-  assert.ok(timing.echoAt-timing.attacks[0]<1.15,'First attack was not immediately queued');
+  assert.ok(timing.echoAt-timing.attacks[0]<1.15,`First attack was not immediately queued: ${JSON.stringify(timing)}`);
   const bpmBefore = await evaluate("document.getElementById('bpm').value");
   await evaluate("document.getElementById('output').click()");
   await until("document.getElementById('mic')?.textContent.includes('headphones')");
@@ -113,10 +117,42 @@ try {
   const graph = await evaluate("({constraints:window.__smoke.constraints,contexts:window.__smoke.contexts.length,notes:window.__smoke.notes.length,late:window.__smoke.notes.filter(note=>note.time<note.now-0.001).length})");
   assert.equal(graph.contexts,1); assert.equal(graph.constraints[0].audio.echoCancellation,true);
   assert.equal(graph.constraints.at(-1).audio.echoCancellation,false); assert.equal(graph.late,0);
+  assert.equal(await evaluate("document.querySelector('[data-memory-bars=\"2\"]').getAttribute('aria-pressed')"),'true');
+  await evaluate("document.querySelector('[data-memory-bars=\"1\"]').click()");
+  await until("!document.getElementById('remember').disabled",10000);
+  const loopEventStart = await evaluate("window.__smoke.notes.length");
+  await evaluate("document.getElementById('remember').click()");
+  await until("document.getElementById('remember').textContent.startsWith('Clear')");
+  await until("document.getElementById('memory-status').textContent.startsWith('Looping')",5000);
+  await pause(4300);
+  const loopNotes = await evaluate(`window.__smoke.notes.slice(${loopEventStart}).filter(note=>note.type==='triangle')`);
+  assert.ok(loopNotes.length>=2,`No repeating phrase: ${JSON.stringify(loopNotes)}`);
+  const firstCycle = loopNotes.filter(note=>note.time<loopNotes[0].time+1.98);
+  for (const note of firstCycle) assert.ok(loopNotes.some(next=>Math.abs(next.time-note.time-2)<0.02 && Math.abs(next.hz-note.hz)<0.01),'Frozen phrase did not repeat at its original pitch/rhythm');
+  for (const note of loopNotes) assert.ok(firstCycle.some(first=>Math.abs(note.hz-first.hz)<0.01 && Math.abs((note.time-first.time)/2-Math.round((note.time-first.time)/2))<0.01),'Live playing overdubbed the frozen phrase');
+  if (process.env.SMOKE_SCREENSHOT) {
+    const shot = await send('Page.captureScreenshot', {format:'png'});
+    await writeFile(process.env.SMOKE_SCREENSHOT,Buffer.from(shot.data,'base64'));
+  }
+  await evaluate("document.getElementById('companion-mute').click()");
+  const mutedCount = await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length");
+  await pause(500);
+  assert.equal(await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length"),mutedCount,'Loop continued scheduling while muted');
+  assert.ok(await evaluate("document.getElementById('remember').textContent.startsWith('Clear')"),'Mute lost the phrase');
+  await evaluate("document.getElementById('companion-mute').click()");
+  await until(`window.__smoke.notes.filter(note=>note.type==='triangle').length>${mutedCount}`,4000);
+  await send('Input.dispatchKeyEvent',{type:'keyDown',code:'KeyL',key:'l'});
+  await send('Input.dispatchKeyEvent',{type:'keyUp',code:'KeyL',key:'l'});
+  await until("document.getElementById('remember').textContent.startsWith('Remember')");
+  assert.equal(await evaluate("document.getElementById('repeat-label').textContent"),'REPEAT');
+  const afterClear = await evaluate("window.__smoke.notes.filter(note=>note.type==='triangle').length");
+  await until(`window.__smoke.notes.filter(note=>note.type==='triangle').length>${afterClear}`,6000);
+  await evaluate("document.querySelector('[data-memory-bars=\"4\"]').click()");
   await evaluate("document.getElementById('threshold').value='0.62'; document.getElementById('threshold').dispatchEvent(new Event('input'))");
   const saved = await evaluate("JSON.parse(localStorage.getItem('guitar.practice.v1'))");
   assert.equal(saved.voicedThreshold,0.62); assert.equal(saved.outputMode,'headphones');
   assert.equal(saved.bpm,120); assert.equal(saved.crepeCapacity,'tiny'); assert.ok(!('role' in saved)); assert.ok(!('locked' in saved));
+  assert.equal(saved.memoryBars,4); assert.ok(!('phrase' in saved));
   await send('Input.dispatchKeyEvent', {type:'keyDown',code:'Escape',key:'Escape'});
   await until("document.getElementById('hint')?.textContent.includes('Output silenced')");
   assert.equal(await evaluate("document.getElementById('bpm').value"),bpmBefore,'Panic reset the clock');
@@ -127,13 +163,11 @@ try {
   assert.equal(errors.length, 0, JSON.stringify(errors));
   assert.ok(requests.some(url => url === `${origin}/models/crepe-tiny/model.json`));
   assert.ok(requests.filter(url => /^https?:/.test(url)).every(url => url.startsWith(origin)), 'Unexpected nonlocal runtime request');
-  if (process.env.SMOKE_SCREENSHOT) {
-    const shot = await send('Page.captureScreenshot', { format: 'png' });
-    await writeFile(process.env.SMOKE_SCREENSHOT, Buffer.from(shot.data, 'base64'));
-  }
   await send('Page.reload');
   await until("document.getElementById('threshold')?.value === '0.62'");
   assert.equal(await evaluate("document.getElementById('bpm').value"),'120','Entered BPM was not restored');
-  console.log(JSON.stringify({ ...state, ...graph, timing, persisted:saved, localModelRequests: requests.filter(url => url.includes('/models/')).length, browserErrors: errors.length }, null, 2));
+  assert.equal(await evaluate("document.querySelector('[data-memory-bars=\"4\"]').getAttribute('aria-pressed')"),'true');
+  assert.ok(await evaluate("document.getElementById('remember').textContent.startsWith('Remember')"),'A phrase persisted across reload');
+  console.log(JSON.stringify({ ...state, ...graph, timing, loopNotes, persisted:saved, localModelRequests: requests.filter(url => url.includes('/models/')).length, browserErrors: errors.length }, null, 2));
   await send('Browser.close');
 } finally { socket?.close(); chrome.kill(); }

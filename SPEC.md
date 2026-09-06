@@ -1,8 +1,22 @@
 # Guitar Practice Partner — Spec
 
-## Current product: two-beat repeater (user revision, September 5, 2026)
+## Current product: two-beat repeater with phrase memory (user revision, September 5, 2026)
 
 This contract supersedes the scale-inference and four-role product below. The user asked for a simple repeater with no musical setup wait.
+
+### Phrase memory addition
+
+Keep the two-beat repeater as the default. Add just a **Memory: 1 / 2 / 4 bars** selector (default 2) and a **Remember / Clear** toggle, also on **L**.
+
+Continuously retain the last four completed bars plus the current bar of accepted player attacks. Remember snapshots the selected number of most recent completed bars, on the existing 4/4 clock, once full listening bars and at least one accepted note are available. Preserve detected pitch, attack timing between beats, and rests. Do not quantize or fill empty beats. Playback uses the same short triangle tones, clipped at the phrase boundary.
+
+Start the frozen phrase on the next downbeat with enough lead for output latency; repeat it at exactly the selected bar length. While armed or looping, incoming guitar continues entering rolling memory but cannot alter the frozen snapshot and cannot queue ordinary echoes. Both modes share the existing self-play mask, so companion output never enters memory. Remember stops pending/current ordinary echoes. No overdub or automatic replacement.
+
+Clear cancels active/future loop tones and returns immediately to the ordinary repeater, retaining rolling history for a new capture. Disable length changes while a phrase is frozen. M mutes notes while preserving a loop and its phase; unmute rejoins the current cycle without a burst. Escape clears the frozen loop and silences output. BPM changes and Shift+Space clear the loop and rolling history, then restart the pulse. H preserves the clock and phrase. Save only the selected `memoryBars`, never history or a frozen phrase.
+
+Show listening progress until capture is ready, then a next-downbeat start status and current loop bar. Acceptance: capture 1, 2, and 4 bars with unevenly spaced notes/rests; confirm repeated cycles match, new playing does not overdub, and Clear restores the echo. Verify mute/resume phase, panic, tempo reset, empty/partial capture, stale-cycle skipping, latency, and the self-mask.
+
+### Default repeater behavior
 
 - Enter BPM directly (40–240, default 100, saved). Click Enable audio & mic. Space tap tempo remains optional; the guitar never sets tempo.
 - The **first** accepted note-on queues the same detected pitch, at `onset.t + 120 / bpm`. At 120 BPM this is one second after the original attack, including for off-grid notes. Preserve detected tuning rather than snapping to a scale or octave. CREPE's short onset-settling window does not add to the delay.

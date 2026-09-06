@@ -32,6 +32,13 @@ h1 { font-size: 38px; letter-spacing: -1.5px; font-weight: 500; margin: 10px 0 0
 .beat.active { border-color: #d0dfb4; box-shadow: inset 0 3px #d0dfb4; }
 .beat.player { background: #4d3829; }
 .beat.companion { background: #24423e; }
+.memory-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 20px; padding-top: 22px; }
+.memory-length { display: flex; align-items: center; gap: 8px; }
+.memory-length .eyebrow { margin-right: 8px; }
+.memory-panel button { padding: 9px 13px; font-size: 13px; }
+#remember { min-width: 122px; border-color: #8da775; }
+#remember[aria-pressed=true] { background: #24423e; border-color: #add6cf; }
+#memory-status { flex: 1; min-width: 190px; }
 .hint { font-size: 20px; color: #c6d3b3; margin: 24px 0 30px; min-height: 28px; }
 .listening { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; padding-bottom: 30px; border-bottom: 1px solid #353d35; }
 .note { font-size: 40px; margin: 12px 0 4px; font-variant-numeric: tabular-nums; }
