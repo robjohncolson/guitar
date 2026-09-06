@@ -1,5 +1,15 @@
 # Four-bar audio Looper and Partner replies
 
+## Automatic Looper level matching
+
+Previously, 100% loop volume applied unity gain to a raw microphone recording, so a quiet take stayed quiet. The native capture engine now tracks the absolute sample peak incrementally and freezes `min(16, 0.8 / peak)` as `levelGain` at completion. Peaks below 0.005 remain at unity. This is static peak normalization, preserving dynamics without compressor pumping, waveform shaping, a second scan at completion, or added playback latency. Finite input samples remain unchanged; invalid nonfinite samples become silence.
+
+Each take carries its own gain through completion, Replace, Undo, Stop/Play and Stop-completion rollback. Playback applies that gain before the existing seam fade, optional headphone softening and user volume. At 100% volume the loop sample peak stays at or below 0.8, leaving room for the metronome's 0.126 maximum amplitude. This is a sample-peak bound, not a claim to repair microphone clipping or a calibrated true-peak mastering process. The UI shows the rounded gain in dB and draws the waveform at its matched level. WAV export applies the same fixed gain and edge fades independently of monitoring controls; raw samples remain intact in memory.
+
+Phase 1 passed all 99 tests, including quiet, hot and nearly silent level calculations. Phase 2 passed all 101 tests and the production build: a late peak controls the first playback pass, accents and rests survive, distinct take gains follow Undo, native softening still works, and export preserves normalized PCM. The quiet recorded-guitar Chrome check passed with a 0.06495 input peak raised by 12.318× (about +22 dB) to a 0.8 playback peak at 100% volume. Two passes and Undo matched the independently calculated waveform within 2.99e-8; WAV differences stayed within half a 16-bit PCM step. Replace, cancellation, Stop/Play at 50%, unchanged WAV after Undo/volume changes, mute, mic races, mode switching, reload, and mobile overflow passed with no browser or worklet errors. The display-only waveform adjustment was followed by all 101 tests and another successful build.
+
+The broader real-CREPE Partner browser check was not clean in this session: the updated build recognized a two-note second phrase and produced 15 rather than the fixture's expected 18 replies; a comparison against the still-unmodified live deployment failed the late-note assertion. Both loaded and ran real CREPE without browser exceptions. These are different failures and do not establish identical causes; Partner detection/scheduling remains variable. No Partner pitch, phrase, masking or scheduling implementation changed for this gain revision, and its unit regressions passed. The historical successful Partner run below predates this revision.
+
 ## Looper addition
 
 The user-approved Looper is a separate app mode. It records native-rate mono audio for 16 beats in 4/4, after a four-beat count-in, and plays it continuously. The existing Partner still runs real CREPE and retains its finite Echo/Harmony behavior. No new model, dependency, backend, upload, or alternative pitch detector was added.

@@ -19,10 +19,10 @@ it('softens native playback under live input, recovers in silence, and keeps the
     };
     processor.port.onmessage({data:{type:'record',id:1,bpm:240,startFrame:0}}); render(4100,.5);
     processor.port.onmessage({data:{type:'soften',enabled:true}});
-    const soft=render(500,.1); expect(soft.at(-1)).toBeGreaterThan(.27); expect(soft.at(-1)).toBeLessThan(.29);
-    const recovered=render(1500,0); expect(recovered.at(-1)).toBeGreaterThan(.495);
+    const soft=render(500,.1); expect(soft.at(-1)).toBeGreaterThan(.43); expect(soft.at(-1)).toBeLessThan(.46);
+    const recovered=render(1500,0); expect(recovered.at(-1)).toBeGreaterThan(.792); expect(recovered.at(-1)).toBeLessThanOrEqual(.800001);
     processor.port.onmessage({data:{type:'soften',enabled:false}});
-    expect(render(500,.2).at(-1)).toBeGreaterThan(.495);
+    expect(render(500,.2).at(-1)).toBeGreaterThan(.792);
     expect(chunks.flatMap(chunk=>Array.from(chunk.samples)).every(sample=>sample===.5)).toBe(true);
   } finally {vi.unstubAllGlobals();}
 });

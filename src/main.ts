@@ -268,13 +268,14 @@ function renderLoop():void {
   const view=looper?.view(), take=looper?.take, busy=changingMic || Boolean(looper?.busy), recording=Boolean(looper?.recording), running=Boolean(looper?.running);
   if(take && displayedTake!==take.id) {
     displayedTake=take.id; settings.bpm=take.bpm; bpmInput.value=String(take.bpm); saveSettings(settings);
-    URL.revokeObjectURL(loopUrl); loopUrl=URL.createObjectURL(new Blob([loopWav(take.samples,context!.sampleRate)],{type:'audio/wav'}));
+    URL.revokeObjectURL(loopUrl); loopUrl=URL.createObjectURL(new Blob([loopWav(take.samples,context!.sampleRate,take.levelGain)],{type:'audio/wav'}));
     element<HTMLAnchorElement>('loop-download').href=loopUrl;
     const canvas=element<HTMLCanvasElement>('loop-waveform'), painter=canvas.getContext('2d')!;
     painter.clearRect(0,0,canvas.width,canvas.height); painter.fillStyle='#c8d8a7';
     for(let x=0;x<canvas.width;x++) {
       let peak=0; const to=Math.floor((x+1)*take.samples.length/canvas.width);
       for(let i=Math.floor(x*take.samples.length/canvas.width);i<to;i++) peak=Math.max(peak,Math.abs(take.samples[i]));
+      peak*=take.levelGain;
       painter.fillRect(x,45-peak*43,1,Math.max(1,peak*86));
     }
   }
@@ -300,7 +301,8 @@ function renderLoop():void {
   [...progress.children].forEach((bar,i)=>bar.classList.toggle('active',i===view?.bar));
   element('loop-playhead').style.left=`${(view?.progress ?? 0)*100}%`; element('loop-playhead').hidden=!running || recording;
   element('pulse').classList.toggle('active',running && (view?.recording || view?.state==='Looping') && (view.progress*16)%1<.18);
-  element('loop-take-detail').textContent=take ? `4 bars · ${take.bpm} BPM · ${(take.samples.length/context!.sampleRate).toFixed(2)}s · saved in this page` : '';
+  const levelDb=take ? Math.round(20*Math.log10(take.levelGain)) : 0;
+  element('loop-take-detail').textContent=take ? `4 bars · ${take.bpm} BPM · ${(take.samples.length/context!.sampleRate).toFixed(2)}s · Auto level ${levelDb>=0 ? '+' : ''}${levelDb} dB · saved in this page` : '';
   let hint=recording ? view?.recording ? 'Play your four bars. Playback will start automatically.' : view?.state==='Count in' ? 'One bar to count in. Start playing on the next one.' : 'The new recording starts at the loop boundary. The old loop will go quiet.' : running ? 'Play along. Replace records a new four-bar take at the next loop boundary.' : take ? 'Your take is saved. Play it again, or record a replacement.' : 'Set BPM and press Record. One bar to count in, then four bars of your guitar.';
   if(looper?.pendingUndo) hint='The previous take will return at the next loop boundary.';
   if(!running && take && take.bpm!==settings.bpm) hint=`Record a new take at ${settings.bpm} BPM. Play restores your saved ${take.bpm} BPM loop.`;

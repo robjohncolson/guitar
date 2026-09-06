@@ -1,6 +1,7 @@
 import { validBpm } from './tap-tempo';
+import { loopLevelGain } from './loop-level';
 
-export interface LoopTake { id:number; bpm:number; samples:Float32Array }
+export interface LoopTake { id:number; bpm:number; samples:Float32Array; levelGain:number }
 export type LoopCommand =
   | {type:'record';id:number;bpm:number;startFrame:number}
   | {type:'play' | 'undo';startFrame:number}
@@ -8,7 +9,7 @@ export type LoopCommand =
   | {type:'clear'};
 export type LoopEvent =
   | {type:'chunk';id:number;offset:number;samples:Float32Array}
-  | {type:'take';id:number;bpm:number;length:number;startFrame:number}
+  | {type:'take';id:number;bpm:number;length:number;startFrame:number;levelGain:number}
   | {type:'playing';id:number;startFrame:number}
   | {type:'error';message:string};
 
@@ -24,7 +25,7 @@ export class LoopEngine {
   previous?:LoopTake;
   playing = false;
   origin = 0;
-  private record?: {take:LoopTake;start:number;copied:number};
+  private record?: {take:LoopTake;start:number;copied:number;peak:number};
   private transition?: {type:'play'|'undo';frame:number};
   private rollback?: {take?:LoopTake;previous?:LoopTake};
   constructor(readonly rate:number,readonly emit:(event:LoopEvent)=>void = ()=>{}) {}
@@ -36,7 +37,7 @@ export class LoopEngine {
       if (!validBpm(command.bpm) || this.record) return;
       this.rollback=undefined;
       this.transition = undefined;
-      this.record = {take:{id:command.id,bpm:command.bpm,samples:new Float32Array(loopFrames(this.rate,command.bpm))},start:command.startFrame,copied:0};
+      this.record = {take:{id:command.id,bpm:command.bpm,samples:new Float32Array(loopFrames(this.rate,command.bpm)),levelGain:1},start:command.startFrame,copied:0,peak:0};
     } else if (command.type === 'play' || command.type === 'undo') {
       if (this.record || !(command.type === 'undo' ? this.previous : this.take)) return;
       this.rollback=undefined;
@@ -68,23 +69,27 @@ export class LoopEngine {
         this.playing = false;
         const index = frame-recording.start;
         if (index < recording.take.samples.length) {
-          recording.take.samples[index] = input?.[i] ?? 0;
+          const sample = input?.[i] ?? 0;
+          recording.take.samples[index] = Number.isFinite(sample) ? sample : 0;
+          recording.peak = Math.max(recording.peak,Math.abs(recording.take.samples[index]));
           // Send bounded chunks for the local waveform/export; never clone a whole take on the audio thread.
           if (index+1-recording.copied >= 4096 || index+1 === recording.take.samples.length) {
             this.emit({type:'chunk',id:recording.take.id,offset:recording.copied,samples:recording.take.samples.slice(recording.copied,index+1)});
             recording.copied = index+1;
           }
         } else {
+          // Peak was measured incrementally; no scan or delay at the playback boundary.
+          recording.take.levelGain = loopLevelGain(recording.peak);
           this.rollback={take:this.take,previous:this.previous};
           this.previous = this.take; this.take = recording.take; this.record = undefined;
           this.origin = recording.start+this.take.samples.length; this.playing = true;
-          this.emit({type:'take',id:this.take.id,bpm:this.take.bpm,length:this.take.samples.length,startFrame:this.origin});
+          this.emit({type:'take',id:this.take.id,bpm:this.take.bpm,length:this.take.samples.length,startFrame:this.origin,levelGain:this.take.levelGain});
         }
       }
       output[i] = 0;
       if (this.playing && this.take && frame >= this.origin) {
         const index = (frame-this.origin)%this.take.samples.length;
-        output[i] = this.take.samples[index]*edgeGain(index,this.take.samples.length,this.rate);
+        output[i] = this.take.samples[index]*this.take.levelGain*edgeGain(index,this.take.samples.length,this.rate);
       }
     }
   }

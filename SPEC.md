@@ -1,5 +1,13 @@
 # Guitar Practice Partner — Spec
 
+## Current refinement: automatic Looper level matching
+
+Quiet recordings should be louder at the existing volume setting without clipping. Measure the native recording's sample peak during capture, then freeze one gain for the completed take: target a peak of 0.8, cap boost at 16× (about +24 dB), and leave peaks below 0.005 unboosted. Attenuate hot recordings as needed. This retains articulation, rests, dynamics and exact sample timing, with headroom for the existing 0.126-peak metronome at full loop volume; no compressor latency or automatic gain pumping.
+
+Keep original samples intact. Apply the take's gain before seam fades, optional headphone softening and user volume. Play and Undo retain the appropriate take's gain. WAV download includes level matching and seam fades, independently of monitor volume/mute/softening. Show the applied gain in the saved take detail and the waveform at the matched level, without another required control. Processing cannot repair distortion already recorded by the microphone.
+
+Phases, each followed by tests before continuing: (1) bounded level calculation and quiet/hot/silent sample tests; (2) native capture/playback, take metadata, Undo and WAV/UI integration, regression tests and production build; (3) Chrome measured output and export checks with quiet recorded guitar at full volume, transport regression, then publish and verify the live deployment under existing authorization.
+
 ## Current addition: four-bar audio Looper
 
 The user approved a separate Partner / Looper mode. Partner retains real CREPE and its Echo/Harmony contract below. Looper records actual mono microphone audio at the AudioContext sample rate, including chords, rests, and articulation; pitch detection does not gate recording or replay. No detector substitution, backend, uploads, overdubbing, or automatic recording archive.

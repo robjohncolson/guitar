@@ -62,7 +62,7 @@ export class AudioLooper {
       const replacing=this.running && this.take;
       const start=replacing ? nextLoopBoundary(this.origin/rate+delay,this.take!.samples.length/rate,earliest) : earliest+4*60/bpm;
       const startFrame=loopFrameAt(start,delay,rate), length=loopFrames(rate,bpm), id=++this.sequence;
-      this.recording={id,startFrame,endFrame:startFrame+length,take:{id,bpm,samples:new Float32Array(length)},complete:false,countIn:!replacing};
+      this.recording={id,startFrame,endFrame:startFrame+length,take:{id,bpm,samples:new Float32Array(length),levelGain:1},complete:false,countIn:!replacing};
       const clock={from:startFrame,origin:startFrame,period:length/16};
       if(replacing) this.clocks=[...this.clocks.filter(c=>c.from<startFrame),clock];
       else { clock.from=clock.origin=startFrame-Math.round(length/4); this.clocks=[clock]; this.clicked.clear(); }
@@ -100,6 +100,7 @@ export class AudioLooper {
   private receive(event:LoopEvent):void {
     if(event.type==='chunk' && this.recording?.id===event.id) this.recording.take.samples.set(event.samples,event.offset);
     if(event.type==='take' && this.recording?.id===event.id) {
+      this.recording.take.levelGain=event.levelGain;
       this.previous=this.take; this.take=this.recording.take; this.recording.complete=true; this.origin=event.startFrame;
       if(!this.soften || this.mode!=='headphones') this.releaseMic();
     }

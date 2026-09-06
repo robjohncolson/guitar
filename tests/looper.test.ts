@@ -28,13 +28,14 @@ it('arms a native-rate four-bar take with count-in and output-latency scheduling
   expect(command.startFrame/48000).toBeCloseTo(7.15); expect(looper.recording?.take.samples.length).toBe(1152000);
   context.currentTime=1.1; looper.tick(); expect(synth.click.mock.calls[0][0]).toBeCloseTo(1.15); expect(synth.click.mock.calls[0][1]).toBe(true);
   port.onmessage?.({data:{type:'chunk',id:command.id,offset:0,samples:new Float32Array([.25,.5])}});
-  port.onmessage?.({data:{type:'take',id:command.id,bpm:40,length:1152000,startFrame:command.startFrame+1152000}});
-  expect(looper.take?.samples[1]).toBe(.5); expect(stop).toHaveBeenCalledOnce();
-  looper.stop(); expect(looper.take?.samples[1]).toBe(.5);
+  port.onmessage?.({data:{type:'take',id:command.id,bpm:40,length:1152000,startFrame:command.startFrame+1152000,levelGain:1.6}});
+  expect(looper.take?.samples[1]).toBe(.5); expect(looper.take?.levelGain).toBe(1.6); expect(stop).toHaveBeenCalledOnce();
+  looper.stop(); expect(looper.take?.samples[1]).toBe(.5); expect(looper.take?.levelGain).toBe(1.6);
 });
 it('ignores late capture messages after Stop instead of replacing the old take',async()=>{
   const {looper,port}=setup(); vi.stubGlobal('navigator',{mediaDevices:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})}});
-  looper.take={id:9,bpm:120,samples:new Float32Array([.4])}; await looper.record(120,'speakers'); const id=looper.recording!.id;
-  looper.stop(); port.onmessage?.({data:{type:'take',id,bpm:120,length:384000,startFrame:1}});
+  looper.take={id:9,bpm:120,samples:new Float32Array([.4]),levelGain:2}; await looper.record(120,'speakers'); const id=looper.recording!.id;
+  looper.stop(); port.onmessage?.({data:{type:'take',id,bpm:120,length:384000,startFrame:1,levelGain:16}});
   expect(looper.take.id).toBe(9); expect(looper.running).toBe(false);
+  expect(looper.take.levelGain).toBe(2);
 });

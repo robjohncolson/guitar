@@ -19,8 +19,9 @@ it('records exactly sixteen beats after a scheduled count-in, preserving audio a
   expect(engine.take?.samples[100]).toBeCloseTo(input(2100));
   expect(engine.take?.samples[4000]).toBe(0);
   expect(output.slice(0,10000).every(n=>n===0)).toBe(true);
-  expect(output[10100]).toBeCloseTo(input(2100));
-  expect(events.filter(e=>e.type==='take')).toEqual([{type:'take',id:1,bpm:120,length:8000,startFrame:10000}]);
+  expect(engine.take?.levelGain).toBeCloseTo(.8);
+  expect(output[10100]).toBeCloseTo(input(2100)*engine.take!.levelGain);
+  expect(events.filter(e=>e.type==='take')).toEqual([{type:'take',id:1,bpm:120,length:8000,startFrame:10000,levelGain:engine.take!.levelGain}]);
   const chunks=events.filter(e=>e.type==='chunk'); expect(chunks.map(c=>c.samples.length)).toEqual([4096,3904]);
 });
 it('loops indefinitely without accumulating timing drift and fades both seam edges',()=>{
@@ -28,25 +29,38 @@ it('loops indefinitely without accumulating timing drift and fades both seam edg
   const output=run(engine,0,33000,()=>.7);
   expect(output[5000]).toBe(0); expect(output[8999]).toBe(0); expect(output[9000]).toBe(0);
   for(let pass=1;pass<7;pass++) expect(output.slice(5000+pass*4000,9000+pass*4000)).toEqual(output.slice(5000,9000));
-  expect(output[5100]).toBeCloseTo(.7);
+  expect(output[5100]).toBeCloseTo(.8);
 });
 it('replaces only at the boundary, silences the old take during capture, then supports one Undo',()=>{
-  const engine=new LoopEngine(rate); engine.command({type:'record',id:1,bpm:240,startFrame:0},0); run(engine,0,4500,()=>.2);
+  const engine=new LoopEngine(rate); engine.command({type:'record',id:1,bpm:240,startFrame:0},0); run(engine,0,4500,frame=>frame===3000 ? .2 : .1);
   engine.command({type:'record',id:2,bpm:120,startFrame:8000},4500);
   const output=run(engine,4500,17000,()=>.6);
-  expect(output[100]).toBeCloseTo(.2); expect(output.slice(3500,11500).every(n=>n===0)).toBe(true);
-  expect(output[11600]).toBeCloseTo(.6); expect(engine.previous?.id).toBe(1);
-  engine.command({type:'undo',startFrame:24000},17000); run(engine,17000,25000);
+  expect(output[100]).toBeCloseTo(.4); expect(output.slice(3500,11500).every(n=>n===0)).toBe(true);
+  expect(output[11600]).toBeCloseTo(.8); expect(engine.previous?.id).toBe(1);
+  expect(engine.take?.levelGain).toBeCloseTo(4/3); expect(engine.previous?.levelGain).toBeCloseTo(4);
+  engine.command({type:'undo',startFrame:24000},17000); const restored=run(engine,17000,25000);
   expect(engine.take?.id).toBe(1); expect(engine.take?.bpm).toBe(240); expect(engine.previous).toBeUndefined();
   expect(engine.origin).toBe(24000);
+  expect(engine.take?.levelGain).toBeCloseTo(4); expect(restored[7100]).toBeCloseTo(.4);
 });
 it('Stop cancels partial replacement, keeps the complete take, and Play starts at its beginning',()=>{
   const engine=new LoopEngine(rate); engine.command({type:'record',id:1,bpm:240,startFrame:0},0); run(engine,0,4500,()=>.2);
   engine.command({type:'record',id:2,bpm:240,startFrame:8000},4500); run(engine,4500,8500,()=>.8);
   engine.command({type:'stop'},8500); expect(run(engine,8500,9000).every(n=>n===0)).toBe(true); expect(engine.take?.id).toBe(1);
   engine.command({type:'play',startFrame:9200},9000); const played=run(engine,9000,9500);
-  expect(played[200]).toBe(0); expect(played[210]).toBeCloseTo(.2);
+  expect(played[200]).toBe(0); expect(played[210]).toBeCloseTo(.8);
   engine.command({type:'clear'},9500); expect(engine.take).toBeUndefined(); expect(engine.previous).toBeUndefined();
+});
+
+it('uses the entire take peak before the first playback sample, without changing raw audio or rests',()=>{
+  const engine=new LoopEngine(rate), input=(frame:number)=>frame===3996 ? -.1 : frame<2000 ? .02 : 0;
+  engine.command({type:'record',id:1,bpm:240,startFrame:0},0);
+  const output=run(engine,0,12000,input);
+  expect(engine.take?.levelGain).toBeCloseTo(8);
+  expect(engine.take?.samples[100]).toBeCloseTo(.02); expect(engine.take?.samples[3996]).toBeCloseTo(-.1);
+  expect(output[4100]).toBeCloseTo(.16); expect(output[7996]).toBeCloseTo(-.8);
+  expect(output.slice(6000,7996).every(n=>n===0)).toBe(true);
+  expect(output.slice(4000,8000)).toEqual(output.slice(8000,12000));
 });
 it('Undo while stopped restores without starting playback',()=>{
   const engine=new LoopEngine(rate);

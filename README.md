@@ -15,9 +15,11 @@ Tempo stays fixed while recording or looping. After Stop, edit BPM for a new rec
 
 Looper has its own metronome preference, initially on. M mutes the loop without moving its position; C toggles the click. Volume is shared with Partner. The optional **Soften the loop while I play** setting works with Headphones processing and leaves the recording itself untouched. It opens the microphone while playing; with softening off, the microphone closes when recording finishes.
 
+Each completed take gets **Auto level**: quiet audio is boosted by up to 24 dB, with headroom for the metronome at 100% loop volume. One fixed gain preserves your accents and rests; near-silent takes stay unboosted. The applied gain appears below the waveform and follows the take through Play, Undo and WAV download. Original samples stay intact. This cannot repair distortion already captured by the microphone.
+
 Use headphones for a clean recording: a microphone can record the speaker metronome and playback, and pitch self-masking cannot remove that sound from audio. Recording uses the device's native sample rate, a sample-clock worklet, and a tiny fade at each loop seam. Physical microphone/output latency and room bleed can affect alignment; this is a browser audio looper, not an input-latency-calibrated recording system.
 
-With preview running, `node scripts/looper-smoke.mjs` checks the real Chrome audio path using recorded guitar plucks and chords. An independent worklet probes actual output for waveform fidelity, repeated timing, silent replacement, Undo, Stop/Play, mute, permission races, mode changes, WAV export, persistence and mobile layout. It uses software WebGL for the retained CREPE model and mutes the test browser's external audio output.
+With preview running, `node scripts/looper-smoke.mjs` checks the real Chrome audio path using recorded guitar plucks and chords. It attenuates the fixture to exercise automatic gain at 100% volume; `SMOKE_INPUT_GAIN` overrides that input multiplier (default 0.12). An independent worklet probes actual output for level matching without clipping, waveform fidelity, repeated timing, silent replacement, Undo, Stop/Play at reduced volume, mute, permission races, mode changes, normalized WAV export, persistence and mobile layout. It uses software WebGL for the retained CREPE model and mutes the test browser's external audio output.
 
 ## Partner
 

@@ -5,6 +5,8 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 const origin=process.env.SMOKE_ORIGIN || 'http://127.0.0.1:4173';
+const inputGain=Number(process.env.SMOKE_INPUT_GAIN ?? .12);
+assert.ok(inputGain>0 && inputGain<=1,'SMOKE_INPUT_GAIN must be in (0, 1]');
 const directory=await mkdtemp(path.join(tmpdir(),'guitar-looper-')), wav=path.join(directory,'input.wav');
 const fixture=JSON.parse(await readFile(new URL('../tests/fixtures/guitar-plucks.json',import.meta.url),'utf8'));
 const source=await readFile(new URL('../tests/fixtures/guitar-plucks.wav',import.meta.url));
@@ -16,7 +18,7 @@ for(let attack=0;attack<seconds/.375;attack++) {
     const index=Math.round(t*rate)+i; if(index>=rate*seconds) break;
     let sample=0;
     for(const midi of pitches) sample+=source.readInt16LE(44+2*(fixture.midis.indexOf(midi)*Math.round(fixture.secondsPerPluck*rate)+i))/32768;
-    pcm.writeInt16LE(Math.round(sample/Math.sqrt(pitches.length)*.7*Math.min(1,(.32-i/rate)/.015)*32767),index*2);
+    pcm.writeInt16LE(Math.round(sample/Math.sqrt(pitches.length)*.7*inputGain*Math.min(1,(.32-i/rate)/.015)*32767),index*2);
   }
 }
 const header=Buffer.alloc(44); header.write('RIFF'); header.writeUInt32LE(pcm.length+36,4); header.write('WAVEfmt ',8);
@@ -85,13 +87,15 @@ try {
     OscillatorNode.prototype.start=function(time){__loop.clicks.push({time,hz:this.frequency.value,now:this.context.currentTime});return start.call(this,time);};
     __loop.audio=(from,length)=>{const samples=new Float32Array(length);for(const chunk of __loop.output){const a=Math.max(from,chunk.frame),b=Math.min(from+length,chunk.frame+chunk.samples.length);if(b>a)samples.set(chunk.samples.subarray(a-chunk.frame,b-chunk.frame),a-from);}return samples;};
     __loop.take=id=>{const event=__loop.events.find(e=>e.type==='take'&&e.id===id);const samples=new Float32Array(event.length);for(const chunk of __loop.chunks)if(chunk.id===id)samples.set(chunk.samples,chunk.offset);return {event,samples};};
-    __loop.compare=(id,from,cycles=1,gain=.44)=>{const {samples}=__loop.take(id),rate=__loop.contexts[0].sampleRate,output=__loop.audio(from,samples.length*cycles);let maxError=0,energy=0,outputEnergy=0,bad=0,firstBad;
-      for(let i=0;i<output.length;i++){const at=i%samples.length,fade=Math.max(0,Math.min(1,at/(rate*.003),(samples.length-1-at)/(rate*.003))),expected=samples[at]*fade*gain,error=Math.abs(output[i]-expected);maxError=Math.max(maxError,error);energy+=expected*expected;outputEnergy+=output[i]*output[i];if(error>.00001){bad++;firstBad ??={i,actual:output[i],expected};}}
-      return {maxError,rms:Math.sqrt(energy/output.length),outputRms:Math.sqrt(outputEnergy/output.length),bad,firstBad,gaps:__loop.gaps};};
+    // Independent reference: derive gain from captured samples, never from app metadata.
+    __loop.level=samples=>{const peak=samples.reduce((peak,sample)=>Math.max(peak,Math.abs(sample)),0);return {inputPeak:peak,levelGain:peak<.005 ? 1 : Math.min(16,.8/peak)};};
+    __loop.compare=(id,from,cycles=1,gain=1)=>{const {samples}=__loop.take(id),level=__loop.level(samples),rate=__loop.contexts[0].sampleRate,output=__loop.audio(from,samples.length*cycles);let maxError=0,energy=0,outputEnergy=0,outputPeak=0,bad=0,firstBad;
+      for(let i=0;i<output.length;i++){const at=i%samples.length,fade=Math.max(0,Math.min(1,at/(rate*.003),(samples.length-1-at)/(rate*.003))),expected=samples[at]*level.levelGain*fade*gain,error=Math.abs(output[i]-expected);maxError=Math.max(maxError,error);energy+=expected*expected;outputEnergy+=output[i]*output[i];outputPeak=Math.max(outputPeak,Math.abs(output[i]));if(error>.00001){bad++;firstBad ??={i,actual:output[i],expected};}}
+      return {...level,maxError,rms:Math.sqrt(energy/output.length),outputRms:Math.sqrt(outputEnergy/output.length),outputPeak,bad,firstBad,gaps:__loop.gaps};};
   `});
   await send('Page.navigate',{url:origin});
   await until("document.getElementById('model')?.textContent==='CREPE ready (tiny)'",60000);
-  await evaluate("document.getElementById('app-mode').value='looper';document.getElementById('app-mode').dispatchEvent(new Event('change'));document.getElementById('bpm').value='120';document.getElementById('bpm').dispatchEvent(new Event('input'));document.getElementById('output').click();document.getElementById('enable').click()");
+  await evaluate("document.getElementById('app-mode').value='looper';document.getElementById('app-mode').dispatchEvent(new Event('change'));document.getElementById('bpm').value='120';document.getElementById('bpm').dispatchEvent(new Event('input'));document.getElementById('volume').value='.5';document.getElementById('volume').dispatchEvent(new Event('input'));document.getElementById('output').click();document.getElementById('enable').click()");
   await until("__loop.commands.some(c=>c.type==='record')");
   const plan=await evaluate("__loop.commands.find(c=>c.type==='record')"), actualRate=await evaluate('__loop.contexts[0].sampleRate');
   assert.ok(plan.startFrame/actualRate-plan.now>=2,'One-bar count-in was missing');
@@ -103,14 +107,23 @@ try {
   clicks.forEach((c,i)=>assert.ok(Math.abs(c.time-(plan.startFrame/actualRate-2+i*.5))<.012,'Count-in click drifted'));
   assert.ok(await evaluate(`__loop.audio(${plan.startFrame},${first.length}).every(sample=>sample===0)`),'Loop audio played during recording');
   await until("document.getElementById('loop-download').href.startsWith('blob:')");
-  const wavInfo=await evaluate(`fetch(document.getElementById('loop-download').href).then(r=>r.arrayBuffer()).then(async bytes=>({rate:new DataView(bytes).getUint32(24,true),length:bytes.byteLength,first:new DataView(bytes).getInt16(44,true),last:new DataView(bytes).getInt16(bytes.byteLength-2,true),hash:Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).join(',')}))`);
+  const wavInfo=await evaluate(`fetch(document.getElementById('loop-download').href).then(r=>r.arrayBuffer()).then(async bytes=>{
+    const view=new DataView(bytes),{samples}=__loop.take(${first.id}),{levelGain}=__loop.level(samples),rate=view.getUint32(24,true);let maxError=0,peak=0;
+    for(let i=0;i<samples.length;i++){const value=view.getInt16(44+i*2,true)/32767,fade=Math.max(0,Math.min(1,i/(rate*.003),(samples.length-1-i)/(rate*.003)));maxError=Math.max(maxError,Math.abs(value-samples[i]*levelGain*fade));peak=Math.max(peak,Math.abs(value));}
+    return {rate,length:bytes.byteLength,first:view.getInt16(44,true),last:view.getInt16(bytes.byteLength-2,true),maxError,peak,hash:Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).join(',')};})`);
   assert.equal(wavInfo.rate,actualRate); assert.equal(wavInfo.length,44+first.length*2); assert.equal(wavInfo.first,0);assert.equal(wavInfo.last,0);
+  assert.ok(wavInfo.maxError<=.5/32767+1e-9 && wavInfo.peak<=.80002,'WAV gain differs from playback or clips');
   await evaluate("document.getElementById('bpm').value='80';document.getElementById('bpm').dispatchEvent(new Event('input'))");
   assert.equal(await evaluate("document.getElementById('bpm').value"),'120','Tempo changed during playback');
   await until(`__loop.contexts[0].currentTime>${(first.startFrame+first.length*2)/actualRate+.2}`,20000);
   const repeated=await evaluate(`__loop.compare(${first.id},${first.startFrame},2)`);
   assert.ok(repeated.rms>.01 && repeated.maxError<.00001,`Playback differs from captured audio: ${JSON.stringify(repeated)}`);
-  console.log(JSON.stringify({phase:'two exact audio passes',first,repeated,wavRate:wavInfo.rate}));
+  assert.ok(Math.abs(first.levelGain-repeated.levelGain)<1e-6,'Take metadata has the wrong gain');
+  assert.ok(repeated.outputPeak<=.800001 && repeated.outputPeak+.126<1,'No headroom for the metronome');
+  if(inputGain===.12) assert.ok(repeated.levelGain>=8 && repeated.outputPeak>.4,'Quiet recording was not made substantially louder');
+  assert.equal(await evaluate("document.getElementById('volume-value').textContent"),'100%');
+  assert.ok((await evaluate("document.getElementById('loop-take-detail').textContent")).includes(`Auto level +${Math.round(20*Math.log10(first.levelGain))} dB`));
+  console.log(JSON.stringify({phase:'two exact audio passes',inputGain,first,repeated,wavInfo}));
   if(process.env.SMOKE_SCREENSHOT) await writeFile(process.env.SMOKE_SCREENSHOT,Buffer.from((await send('Page.captureScreenshot',{format:'png'})).data,'base64'));
   await evaluate("document.getElementById('enable').click()");
   const replacement=await until("__loop.commands.filter(c=>c.type==='record')[1]");
@@ -137,11 +150,13 @@ try {
   await until("__loop.tracks.every(track=>track.readyState==='ended')");
   assert.equal(await evaluate("__loop.events.filter(e=>e.type==='take').length"),2);
   await until("!document.getElementById('loop-play').disabled");
-  await evaluate("document.getElementById('bpm').value='80';document.getElementById('bpm').dispatchEvent(new Event('input'));document.getElementById('loop-play').click()");
+  await evaluate("document.getElementById('bpm').value='80';document.getElementById('bpm').dispatchEvent(new Event('input'));document.getElementById('volume').value='.25';document.getElementById('volume').dispatchEvent(new Event('input'));document.getElementById('loop-play').click()");
   await until("document.getElementById('bpm').value==='120'");
   const played=await until("__loop.commands.find(c=>c.type==='play')");
   await until(`__loop.contexts[0].currentTime>${(played.startFrame+first.length)/actualRate+.2}`,10000);
-  assert.ok((await evaluate(`__loop.compare(${first.id},${played.startFrame})`)).maxError<.00001,'Stop/cancel/Play lost the saved take');
+  assert.ok((await evaluate(`__loop.compare(${first.id},${played.startFrame},1,.5)`)).maxError<.00001,'Stop/cancel/Play lost the saved take or volume control');
+  const restoredHash=await evaluate("fetch(document.getElementById('loop-download').href).then(r=>r.arrayBuffer()).then(async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).join(','))");
+  assert.equal(restoredHash,wavInfo.hash,'Undo or volume changed the saved WAV');
   // Mute preserves transport position, and Stop also cancels a pending permission request.
   await evaluate("document.getElementById('companion-mute').click()");
   const mutedAt=await evaluate('__loop.contexts[0].currentTime'); await pause(500);
