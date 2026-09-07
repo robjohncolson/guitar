@@ -8,13 +8,14 @@ Listen continuously for three complete matching cycles, including internal and c
 
 ## Rules
 
+- Trainer is now the landing page, with the existing Partner/Looper on the Play page. The approved Trainer contract at the top of SPEC.md allows lessons, fret/string guidance and local progress. Use CREPE for single-note grading, explicitly label rhythm-only chord work, and never grade uncertain input as success or failure. Adaptive tempo changes only between attempts.
 - CREPE is the pitch ear and must actually run as a tfjs Layers model from committed `public/models/` assets. Never substitute YIN as the default.
 - Occupancy is note-on attacks, not ringing energy. Confidence dropouts and octave blips must not invent attacks or rests. Masked app notes must not cut up player sustains.
 - Manual BPM or Space tapping sets the clock. No guitar BPM estimation. The first accepted pluck anchors phase at the entered tempo; subsequent playing never retimes the pulse.
 - Offbeat means the whole loop shifted by half an entered beat, preserving its captured pace. No bar rounding or downbeat entry wait.
 - Harmony chooses one smooth line from the whole source loop and the expected guitar at each delayed landing. Keep the line fixed for three passes; soften the third. Mode changes apply to the next exchange. Recognition compares source notes; masking uses actual output notes.
 - Schedule musical events with `AudioContext.currentTime` minus `outputLatency`.
-- No generative models, backend, fretboard, lessons, or tabs. Harmony uses deterministic phrase-level pitch selection, one note at a time; no chord layer. See the current Harmony addition in SPEC.md.
+- No generative models or backend. Trainer uses authored exercises and local progress. Partner Harmony uses deterministic phrase-level pitch selection, one note at a time; see the current additions in SPEC.md.
 - Stop releases the microphone and silences audio, including a pending microphone request. Partner starts fresh; Looper retains its completed take and Undo history in this page. Protect against Stop racing a worklet completion message.
 - Minimal primary controls: BPM, Reply: Echo / Harmony, one pulse dot, state, and Stop. Keep optional settings and the explicit local 20-second listening check collapsed. Never store or upload captured audio/notes automatically.
 - North-star demo: repeat a five-beat A-C-E idea three times with pauses; hear C-E-G in Harmony or A-C-E in Echo a half beat later for three passes, then quiet. Learn a different loop during playback and let it follow without overlap.

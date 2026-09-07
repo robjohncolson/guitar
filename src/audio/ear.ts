@@ -29,6 +29,11 @@ export class Ear {
     catch (error) { this.crepe.dispose(); this.fallback = true; this.status('FALLBACK: YIN'); console.error('CREPE loading failed:', error); }
     this.ready = true;
   }
+  /** Recheck a stored frame with the same real model, without live queue dropping. */
+  async analyze(frame:Float32Array):Promise<Pitch> {
+    if(!this.ready || this.fallback) throw new Error('Recorded-note grading requires real CREPE.');
+    return this.crepe.infer(frame);
+  }
   receive(message: CaptureMessage): void {
     if (!this.ready) return;
     if (message.type === 'attack') {

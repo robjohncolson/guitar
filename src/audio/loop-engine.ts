@@ -3,7 +3,7 @@ import { loopLevelGain } from './loop-level';
 
 export interface LoopTake { id:number; bpm:number; samples:Float32Array; levelGain:number }
 export type LoopCommand =
-  | {type:'record';id:number;bpm:number;startFrame:number}
+  | {type:'record';id:number;bpm:number;startFrame:number;beats?:number}
   | {type:'play' | 'undo';startFrame:number}
   | {type:'stop';keepId?:number|null}
   | {type:'clear'};
@@ -13,7 +13,7 @@ export type LoopEvent =
   | {type:'playing';id:number;startFrame:number}
   | {type:'error';message:string};
 
-export const loopFrames = (rate:number,bpm:number) => Math.round(rate*16*60/bpm);
+export const loopFrames = (rate:number,bpm:number,beats=16) => Math.round(rate*beats*60/bpm);
 export const edgeGain = (index:number,length:number,rate:number) => Math.max(0,Math.min(1,index/(rate*0.003),(length-1-index)/(rate*0.003)));
 /** Translate an audible clock boundary to the sample clock used by the worklet. */
 export const loopFrameAt = (audibleTime:number,delay:number,rate:number) => Math.round((audibleTime-delay)*rate);
@@ -35,9 +35,11 @@ export class LoopEngine {
     }
     if (command.type === 'record') {
       if (!validBpm(command.bpm) || this.record) return;
+      const beats=command.beats ?? 16;
+      if(!Number.isFinite(beats) || beats<1 || beats>32) {this.emit({type:'error',message:'Recording length must be between 1 and 32 beats.'});return;}
       this.rollback=undefined;
       this.transition = undefined;
-      this.record = {take:{id:command.id,bpm:command.bpm,samples:new Float32Array(loopFrames(this.rate,command.bpm)),levelGain:1},start:command.startFrame,copied:0,peak:0};
+      this.record = {take:{id:command.id,bpm:command.bpm,samples:new Float32Array(loopFrames(this.rate,command.bpm,beats)),levelGain:1},start:command.startFrame,copied:0,peak:0};
     } else if (command.type === 'play' || command.type === 'undo') {
       if (this.record || !(command.type === 'undo' ? this.previous : this.take)) return;
       this.rollback=undefined;

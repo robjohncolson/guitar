@@ -1,6 +1,8 @@
 # Codex Implementation Prompt — Guitar Practice Partner
 
-> Current user revision (September 6, 2026): remove unreliable Auto BPM and four-beat listening. Enter BPM manually, listen continuously for three matching whole cycles including rests, and replay the phrase half a beat later exactly three times. Keep listening with one waiting phrase and no overlapping app voices. The first accepted pluck anchors phase but never estimates or changes BPM. Follow the current contract at the top of `SPEC.md`. Auto tempo, held chords, ordinary echoes, manual memory, and four-role product phases are historical. Retain the technical constraints: real CREPE, attack segmentation, self-mask, vanilla Vite/TypeScript, local model assets, Web Audio timing, no backend or generative music.
+> Current approved revision: implement the guided Guitar Trainer contract and phase gates at the top of `SPEC.md`. Trainer is the landing page; the existing Partner and Looper are retained. Authored lessons and local learning progress are explicitly authorized.
+
+> Previous Partner revision (September 6, 2026): remove unreliable Auto BPM and four-beat listening. Enter BPM manually, listen continuously for three matching whole cycles including rests, and replay the phrase half a beat later exactly three times. Keep listening with one waiting phrase and no overlapping app voices. The first accepted pluck anchors phase but never estimates or changes BPM. Follow the current contract at the top of `SPEC.md`. Auto tempo, held chords, ordinary echoes, manual memory, and four-role product phases are historical. Retain the technical constraints: real CREPE, attack segmentation, self-mask, vanilla Vite/TypeScript, local model assets, Web Audio timing, no backend or generative music.
 
 The product spec is `SPEC.md`. Read it before writing any code. If this prompt and `SPEC.md` conflict, **`SPEC.md` wins**, except for the hard constraints below (those always win). The original greenfield instructions and product phases below are retained as history; current revision phases appear first.
 
@@ -25,7 +27,7 @@ This is a greenfield folder. Build the whole v1. Do not ask to shrink scope. Do 
 
 6. **Vite + TypeScript + vanilla DOM.** No React, Vue, Svelte, p5, ml5.
 
-7. **No backend.** No accounts. No fretboard, tab, lessons, or song library.
+7. **No backend.** No accounts. The user's approved Trainer revision now permits authored lessons, fret/string guidance and local learning progress; it supersedes the original no-lessons product restriction. No song library service or generative music.
 
 8. **Schedule audio with `AudioContext.currentTime` minus `outputLatency`.** No `setTimeout` for musical timing.
 
@@ -99,6 +101,8 @@ If the official URL layout has changed, hunt the same tiny tfjs model (ml5 `pitc
 ---
 
 ## Current revision phases
+
+The latest user-approved revision is the guided Guitar Trainer at the top of SPEC.md. Follow its phase gates. Adaptive lesson tempo changes only between attempts, never from beat-tracking guitar input. Preserve the Partner/Looper tools and all retained technical constraints.
 
 The latest user-approved addition is the four-bar audio Looper. Follow its phase gates at the top of SPEC.md. The existing Partner retains CREPE and its Echo/Harmony behavior. Looper records native-rate audio directly; no alternative pitch detector is introduced. The manual clock, local-only architecture, committed real CREPE assets, and audio scheduling constraints remain in force.
 

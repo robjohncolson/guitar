@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 
 export default defineConfig({
   server: { host: '127.0.0.1' },
-  build: { target: 'es2022' },
+  build: { target: 'es2022', rolldownOptions:{input:{trainer:'index.html',play:'play.html'}} },
   plugins: [{
     name: 'verify-local-crepe-assets',
     apply: 'build',

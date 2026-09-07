@@ -67,3 +67,6 @@ kbd { font-family: inherit; color: #d2d7cc; margin-right: 4px; }
   #phrase-status { font-size: 21px; }
   .hint { font-size: 17px; }
 }
+
+.app-nav{display:flex;gap:22px;align-items:center;margin-bottom:30px;font-size:13px}.app-nav a{text-decoration:none;color:#a7b6a5;padding:5px 0}.app-nav a[aria-current]{color:#e3ecd7;border-bottom:1px solid #c8d8a7}.app-nav span{margin-left:auto;color:#80927f;font-size:12px}
+@media(max-width:700px){.app-nav span{display:none}}

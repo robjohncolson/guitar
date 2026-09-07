@@ -93,7 +93,7 @@ try {
       for(let i=0;i<output.length;i++){const at=i%samples.length,fade=Math.max(0,Math.min(1,at/(rate*.003),(samples.length-1-at)/(rate*.003))),expected=samples[at]*level.levelGain*fade*gain,error=Math.abs(output[i]-expected);maxError=Math.max(maxError,error);energy+=expected*expected;outputEnergy+=output[i]*output[i];outputPeak=Math.max(outputPeak,Math.abs(output[i]));if(error>.00001){bad++;firstBad ??={i,actual:output[i],expected};}}
       return {...level,maxError,rms:Math.sqrt(energy/output.length),outputRms:Math.sqrt(outputEnergy/output.length),outputPeak,bad,firstBad,gaps:__loop.gaps};};
   `});
-  await send('Page.navigate',{url:origin});
+  await send('Page.navigate',{url:origin+'/play.html?mode=looper'});
   await until("document.getElementById('model')?.textContent==='CREPE ready (tiny)'",60000);
   await evaluate("document.getElementById('app-mode').value='looper';document.getElementById('app-mode').dispatchEvent(new Event('change'));document.getElementById('bpm').value='120';document.getElementById('bpm').dispatchEvent(new Event('input'));document.getElementById('volume').value='.5';document.getElementById('volume').dispatchEvent(new Event('input'));document.getElementById('output').click();document.getElementById('enable').click()");
   await until("__loop.commands.some(c=>c.type==='record')");
@@ -161,9 +161,9 @@ try {
   await evaluate("document.getElementById('companion-mute').click()");
   const mutedAt=await evaluate('__loop.contexts[0].currentTime'); await pause(500);
   assert.ok(await evaluate(`__loop.audio(${Math.round((mutedAt+.25)*actualRate)},${Math.round(.1*actualRate)}).every(sample=>Math.abs(sample)<.000001)`));
-  await evaluate("document.getElementById('companion-mute').click();document.getElementById('app-mode').value='partner';document.getElementById('app-mode').dispatchEvent(new Event('change'))");
+  await evaluate("document.getElementById('companion-mute').click();document.querySelector('.app-nav a[href*=partner]').click()");
   assert.equal(await evaluate("document.getElementById('looper-panel').hidden"),true);
-  await evaluate("document.getElementById('app-mode').value='looper';document.getElementById('app-mode').dispatchEvent(new Event('change'))");
+  await evaluate("document.querySelector('.app-nav a[href*=looper]').click()");
   await until("!document.getElementById('loop-take').hidden");
   await until("!document.getElementById('loop-play').disabled");
   await evaluate("__loop.micDelay=500;document.getElementById('enable').click()");

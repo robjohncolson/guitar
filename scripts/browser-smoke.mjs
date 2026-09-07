@@ -132,7 +132,7 @@ try {
       return stream;
     };
   ` });
-  await send('Page.navigate', {url:origin});
+  await send('Page.navigate', {url:origin+'/play.html?mode=partner'});
   const modelState = modelFailure ? 'FALLBACK: YIN' : 'CREPE ready (tiny)';
   await until(`document.getElementById('model')?.textContent === '${modelState}'`,60000);
   const renderer = await evaluate("(() => { const gl=document.createElement('canvas').getContext('webgl'); const debug=gl?.getExtension('WEBGL_debug_renderer_info'); return debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : 'unavailable'; })()");

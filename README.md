@@ -1,8 +1,25 @@
-# Practice Partner
+# Guitar Trainer
 
-Choose **Partner** for Echo/Harmony replies, or **Looper** to record and replay your actual guitar.
+A small, guided course for acoustic guitar. Start slowly, learn a musical idea, then carry it with less help. Partner and the four-bar Looper are still available from the top navigation.
 
 **Live:** [guitar-lac-seven.vercel.app](https://guitar-lac-seven.vercel.app) · **Source:** [robjohncolson/guitar](https://github.com/robjohncolson/guitar) (private)
+
+## Guided Trainer
+
+1. Open the Trainer, use headphones, and tune to standard E A D G B E. **Sound & timing** has six reference tones. Allow the microphone when starting practice.
+2. For reliable tempo progress, calibrate once: keep the guitar quiet and hold one headphone earcup near the mic for eight clicks. Return the headphones to your ears. Calibration measures the audio path, never your playing habits. A manual offset is also available. Recalibrate after changing devices or input processing.
+3. **Hear the phrase**, then **Start practice**. A bar of count-in leads into a six-string timing lane. The number is the fret; 0 means open. Follow the line and keep counting through gaps. New lessons can demonstrate automatically before the count-in.
+4. Review one suggestion and the separate timing, note and (where relevant) release scores. Say whether the take felt comfortable. Start the next take when ready. Three clear, comfortable takes at 90% or better remove moving cues; three more reduce the metronome to one click per bar. Three independent takes certify that tempo and suggest +2 BPM. Two difficult takes suggest -4 BPM. Changes apply between takes; you can turn them off or enter your own tempo. Unclear recordings and uncalibrated timing never change your level.
+5. Open **Course & your progress** to choose any lesson, find a starting point, revisit a due lesson, or bring back the cues. Each lesson keeps its own pace and best independent tempo. Begin around 50-55 BPM and develop control before speed.
+6. **Make it yours** records a creative answer with no correctness score. Listen to your latest or previous take, loop the latest to play along, or save a WAV. Finish the session in **Your practice today** for a short summary. A useful session is a little review, five minutes on one idea, and a creative ending.
+
+The course has 13 lessons across six connected skills: pulse, hand coordination, phrasing and rests, major/minor harmony through arpeggios, offbeats/strumming/fingerpicking, and playing by ear/transferring an idea. Each includes positions, technique guidance, theory and an application. Strumming is explicitly rhythm-only. Audio cannot certify a chord shape, string/finger choice, picking direction, posture or physical comfort.
+
+Real local CREPE identifies individual plucked pitches. After each practice phrase the mic closes and the stored audio is analyzed at the original attack times; slower inference does not move your notes or lose the recording. Timing and pitch are matched independently. Wrong, missing, extra, early and late notes have distinct feedback. Clipping, interrupted timing and uncertain pitches freeze adaptation. Natural room decay and overlapping strings can still make a take unclear. Headphones and separate, clear plucks give the best evidence; listen to the recording as well as the score.
+
+Only bounded learning progress is stored under `guitar.trainer.v1`. Audio stays in memory until reload; downloads are explicit and local. Nothing is uploaded. Space taps tempo while stopped (normal controls keep their keyboard behavior), Escape stops audio and releases the mic. Backgrounding or leaving the page stops practice.
+
+Run `node scripts/trainer-smoke.mjs` against preview for the real Chrome/CREPE progression and grading checks. Set `SMOKE_TRAINER_COURSE=1` for all lesson patterns, rests and creative review, or `SMOKE_TRAINER_QUICK=1` for one graded take plus calibration, export and lifecycle checks. `SMOKE_ORIGIN` targets another deployment. Tests use known recorded-guitar input through native Web Audio capture, not injected pitch answers. Desktop/mobile screenshots and traces go to ignored `smoke-artifacts/`.
 
 ## Four-bar Looper
 

@@ -16,6 +16,8 @@ import { loadSettings, saveSettings } from './ui/settings';
 
 shell();
 const settings = loadSettings(), tempo = new TapTempo(), companion = new Companion(), capture = new ListeningCapture();
+const requestedMode=new URLSearchParams(location.search).get('mode');
+if(requestedMode==='partner' || requestedMode==='looper')settings.appMode=requestedMode;
 let context: AudioContext | undefined, synth: Synth | undefined, scheduler: Scheduler | undefined;
 let grid: Grid | undefined, microphone: Microphone | undefined;
 let micRunning = false, changingMic = false, stopped = false, pulseAnchored = false, audioError = '', volume = 0.22;
@@ -26,6 +28,9 @@ const bpmInput = element<HTMLInputElement>('bpm'), enableButton = element<HTMLBu
 bpmInput.value = String(settings.bpm);
 const appMode=element<HTMLSelectElement>('app-mode'); appMode.value=settings.appMode;
 function showMode():void {
+  document.querySelectorAll<HTMLAnchorElement>('.app-nav a[href*="mode="]').forEach(link=>{
+    if(new URL(link.href).searchParams.get('mode')===settings.appMode)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
+  });
   document.querySelectorAll<HTMLElement>('.partner-only').forEach(item=>item.hidden=inLooper());
   element('looper-panel').hidden=!inLooper(); element('loop-soften-label').hidden=!inLooper();
   element('model').hidden=inLooper();
@@ -34,6 +39,11 @@ function showMode():void {
   element('input-help').textContent=inLooper() ? 'Headphones keep the click and playback out of your recording. Takes stay in this page until downloaded or cleared.' : 'Play individual plucks. Speakers uses echo cancellation. Headphones gives cleaner input.';
 }
 appMode.onchange=()=>{ stop(); settings.appMode=appMode.value==='looper' ? 'looper' : 'partner'; showMode(); updateMutes(); };
+document.querySelectorAll<HTMLAnchorElement>('.app-nav a[href*="mode="]').forEach(link=>link.addEventListener('click',event=>{
+  if(event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button!==0)return;
+  event.preventDefault();appMode.value=new URL(link.href).searchParams.get('mode')!;appMode.dispatchEvent(new Event('change'));
+  history.replaceState(null,'',link.href);
+}));
 showMode();
 const replyMode = element<HTMLSelectElement>('reply-mode');
 replyMode.value = settings.replyMode; companion.setReplyMode(settings.replyMode);
