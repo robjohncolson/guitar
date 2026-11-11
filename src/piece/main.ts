@@ -11,6 +11,8 @@ import { chordBox, drawKeys, drawStrings, pieceShell } from './view';
 import { chordSpans, prettyChord } from './analysis';
 import { barAt } from './grade';
 import { noteName, type Score } from './score';
+import { saveTracked } from '../account/changes';
+import { mountPieceAccount } from '../account/pieces';
 
 pieceShell();
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -43,7 +45,7 @@ const goal = () => progress.goals[pack.id] ?? score.tempo.bpm;
 const bpmNow = () => manualBpm ?? rungBpm(unit, current());
 const active = () => Boolean(audio.plan || audio.busy || audio.playing || !player.paused);
 function persist(): void {
-  try { localStorage.setItem(pieceProgressKey, JSON.stringify(progress)); el('piece-storage').textContent = 'Progress stays in this browser. Audio is never saved automatically.'; }
+  try { saveTracked(pieceProgressKey, JSON.stringify(progress)); el('piece-storage').textContent = 'Progress stays in this browser. Audio is never saved automatically.'; }
   catch { el('piece-storage').textContent = 'Storage is unavailable: progress will last only for this page.'; }
 }
 const title = (id: string) => units().find(u => u.id === id)?.title ?? id;
@@ -242,10 +244,20 @@ el<HTMLInputElement>('piece-file').onchange = async () => {
   el('piece-file-report').innerHTML = `<p>Added "${escape(result.score.meta.title)}": ${result.score.bars.length} bars, ${result.score.notes.length} notes.</p>${result.diagnostics.length ? `<p>Please check:</p><ul>${result.diagnostics.slice(0, 12).map(report).join('')}</ul>` : ''}`;
   progress.selected.unit = ''; loadPack(id); paintLocal();
 };
+let accountPieces: { paint: () => void } | undefined;
 function paintLocal(): void {
+  accountPieces?.paint();
   const mine = readMine();
   el('piece-local-list').innerHTML = mine.length ? `<p>Your pieces in this browser:</p>${mine.map(m => `<div class="journal-entry"><span>${escape(compile(m.text).score?.meta.title ?? m.id)}</span><button class="text-button" data-remove="${escape(m.id)}">Remove</button></div>`).join('')}` : '';
 }
+accountPieces = mountPieceAccount({
+  container: el('piece-account-list'), readMine, titleOf: text => compile(text).score?.meta.title ?? 'Untitled piece', refresh: () => paintLocal(),
+  addMine: m => {
+    const mine = readMine();
+    if (mine.length >= 30 && !mine.some(x => x.id === m.id)) return false;
+    try { localStorage.setItem(MINE, JSON.stringify([...mine.filter(x => x.id !== m.id), m])); return true; } catch { return false; }
+  },
+});
 el('piece-local-list').onclick = event => {
   const b = (event.target as HTMLElement).closest<HTMLElement>('[data-remove]'); if (!b) return;
   localStorage.setItem(MINE, JSON.stringify(readMine().filter(m => m.id !== b.dataset.remove))); paintLocal(); if (pack.id === b.dataset.remove) loadPack(packs()[0].id);
