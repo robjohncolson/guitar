@@ -5,7 +5,7 @@ import { noteNames } from '../music/notes';
 export const nameOf=(midi:number)=>`${noteNames[((Math.round(midi)%12)+12)%12]}${Math.floor(Math.round(midi)/12)-1}`;
 export function trainerShell():void {
   document.querySelector('#app')!.innerHTML=`<main class="trainer">
-    <nav class="app-nav" aria-label="Guitar tools"><a href="/" aria-current="page">Trainer</a><a href="/play.html?mode=partner">Partner</a><a href="/play.html?mode=looper">Looper</a><span>Your guitar. Your pace.</span></nav>
+    <nav class="app-nav" aria-label="Guitar tools"><a href="${import.meta.env.BASE_URL}" aria-current="page">Trainer</a><a href="${import.meta.env.BASE_URL}piece.html">Pieces</a><a href="${import.meta.env.BASE_URL}play.html?mode=partner">Partner</a><a href="${import.meta.env.BASE_URL}play.html?mode=looper">Looper</a><span>Your guitar. Your pace.</span></nav>
     <header class="trainer-header"><div><span class="eyebrow">GUITAR · A LITTLE EVERY DAY</span><h1>Find your rhythm.</h1><p class="intro">Listen. Play. Make it yours.</p></div><button id="trainer-stop" disabled>Stop · Esc</button></header>
     <div class="trainer-status"><span id="trainer-mic">Mic off</span><span id="trainer-model">CREPE loading</span><span id="trainer-calibration-label">Timing not calibrated</span></div>
     <section class="lesson-card" aria-labelledby="lesson-title">

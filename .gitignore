@@ -10,3 +10,5 @@ smoke-artifacts/
 .vercel/
 .env*
 !.env.example
+# Pieces made from your own (possibly copyrighted) sheet music stay on this machine.
+src/piece/packs/local/

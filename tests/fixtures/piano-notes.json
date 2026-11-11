@@ -1,0 +1,118 @@
+{
+  "rate": 24000,
+  "secondsPerNote": 1.5,
+  "gain": 7.6015749757337705,
+  "midis": [
+    38,
+    43,
+    57,
+    59,
+    60,
+    61,
+    62,
+    64,
+    66,
+    67,
+    78,
+    81
+  ],
+  "sha256": "a8a4d3f9bc7adf4572e42f43c98d45b640fcf71e906a89008e48c52d7b163207",
+  "provenance": [
+    {
+      "name": "D2",
+      "midi": 38,
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.mf.D2.aiff",
+      "sha256": "678b51577d963b57d84584d8c5126c06cea90211dbc4dd7c0a518f0bcf50c4c0",
+      "sourceRate": 44100,
+      "onsetSeconds": 0.6866
+    },
+    {
+      "name": "G2",
+      "midi": 43,
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.mf.G2.aiff",
+      "sha256": "a6f29e97b69797c81874cdc994888e392a1834497c63d99adfcc15b11b88ffc9",
+      "sourceRate": 44100,
+      "onsetSeconds": 0.1253
+    },
+    {
+      "name": "A3",
+      "midi": 57,
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.mf.A3.aiff",
+      "sha256": "2f71ffc089556dceec0544ab6d6767d22e361c440ff99f3659b7571e8a7fa03d",
+      "sourceRate": 44100,
+      "onsetSeconds": 0.5212
+    },
+    {
+      "name": "B3",
+      "midi": 59,
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.mf.B3.aiff",
+      "sha256": "14b9b21000cead5ae95c25e2c21d9a7920efcefbda2b860715b76ae5d9553221",
+      "sourceRate": 44100,
+      "onsetSeconds": 0.6264
+    },
+    {
+      "name": "C4",
+      "midi": 60,
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.mf.C4.aiff",
+      "sha256": "1a7d8ddea94a3639fa58d79ebcc0b09b170b9c324811d2b705f97e278fdefac2",
+      "sourceRate": 44100,
+      "onsetSeconds": 0.3358
+    },
+    {
+      "name": "Db4",
+      "midi": 61,
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.mf.Db4.aiff",
+      "sha256": "50e3b6201c01241abdd09fd914257e8a07a3712b5d29626a3b56975ab71de836",
+      "sourceRate": 44100,
+      "onsetSeconds": 0.5212
+    },
+    {
+      "name": "D4",
+      "midi": 62,
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.mf.D4.aiff",
+      "sha256": "0f5264652334906338dca950f69b063f6617bcfcef725cf2734127c6cb683e19",
+      "sourceRate": 44100,
+      "onsetSeconds": 0.4009
+    },
+    {
+      "name": "E4",
+      "midi": 64,
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.mf.E4.aiff",
+      "sha256": "3ee2ace7fd571c8868b3582b68417b1e456ef71169b136b732804d2f4eeabd9d",
+      "sourceRate": 44100,
+      "onsetSeconds": 0.2907
+    },
+    {
+      "name": "Gb4",
+      "midi": 66,
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.mf.Gb4.aiff",
+      "sha256": "b96802b034a42c45cdca1af419330a03069136eb0149dbe19c6167998c71e0ea",
+      "sourceRate": 44100,
+      "onsetSeconds": 0.436
+    },
+    {
+      "name": "G4",
+      "midi": 67,
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.mf.G4.aiff",
+      "sha256": "0bf10e0279d77cec93fe3c6cc47c53c4bab6b650e342b7c4badfa9bc11b9c3e3",
+      "sourceRate": 44100,
+      "onsetSeconds": 0.3558
+    },
+    {
+      "name": "Gb5",
+      "midi": 78,
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.mf.Gb5.aiff",
+      "sha256": "15ddf2d73e4aee342ece10fb1139f2db65361b2cafaaf68571bd985be8ec4773",
+      "sourceRate": 44100,
+      "onsetSeconds": 0.3709
+    },
+    {
+      "name": "A5",
+      "midi": 81,
+      "url": "https://theremin.music.uiowa.edu/sound%20files/MIS/Piano_Other/piano/Piano.mf.A5.aiff",
+      "sha256": "e846a6c12058ec8b5fc74af7dc4ae0c9456ab49fa7a6d92b58292a39a95af2b6",
+      "sourceRate": 44100,
+      "onsetSeconds": 0.2205
+    }
+  ]
+}

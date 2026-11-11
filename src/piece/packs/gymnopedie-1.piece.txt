@@ -1,0 +1,259 @@
+% Gymnopédie No. 1. Transcribed from the Mutopia LilyPond source, then checked note for note
+% against the Mutopia MIDI file in tests/piece-notation.test.ts.
+title: Gymnopédie No. 1
+composer: Erik Satie, 1888
+source: Mutopia Project piece 37 (LilyPond by Evin Robertson after the Dover edition), https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=37
+licence: Public domain. Mutopia: "Placed in the public domain by the typesetter"
+redistributable: yes
+verified: sources
+pitch-mode: sounding
+key: 2#
+mode: major
+time: 3/4
+tempo: q=66 Lent et douloureux (slow and sorrowful)
+voices: mel@1:R acc@1:L accb@2:L lo@2:L lo2@2:L
+section: Intro 1-4 "The left hand alone: a low bass note, then a soft chord, rocking between G and D."
+section: Theme 5-12 "The melody enters high, falls, then settles on a long F sharp."
+section: Return 13-21 "The theme returns, then drifts to B minor, E minor and a darker D minor."
+section: Middle 22-31 "C naturals colour the harmony; the melody circles around D."
+section: Ending1 32-39 "First ending: up to G, down to a D major chord. Then repeat from the start."
+section: Ending2 40-47 "Second ending: F naturals darken the close to D minor."
+
+|:
+== 1
+harmony: Gmaj7
+mel: R
+acc: r:4 <b3 d4 f#4>:2
+lo: g2:2.
+== 2
+harmony: Dmaj7
+mel: R
+acc: r:4 <a3 c#4 f#4>:2
+lo: d2:2.
+== 3
+harmony: Gmaj7
+mel: R
+acc: r:4 <b3 d4 f#4>:2
+lo: g2:2.
+== 4
+harmony: Dmaj7
+mel: R
+acc: r:4 <a3 c#4 f#4>:2
+lo: d2:2.
+== 5
+harmony: Gmaj7
+mel: s:4 f#5:4 a5:4
+acc: r:4 <b3 d4 f#4>:2
+lo: g2:2.
+== 6
+harmony: Dmaj7
+mel: g5:4 f#5:4 c#5:4
+acc: r:4 <a3 c#4 f#4>:2
+lo: d2:2.
+== 7
+harmony: Gmaj7
+mel: b4:4 c#5:4 d5:4
+acc: r:4 <b3 d4 f#4>:2
+lo: g2:2.
+== 8
+harmony: Dmaj7
+mel: a4:2.
+acc: r:4 <a3 c#4 f#4>:2
+lo: d2:2.
+== 9
+harmony: Gmaj7
+mel: f#4:2.~
+acc: r:4 <b3 d4 f#4>:2
+lo: g2:2.
+== 10
+harmony: Dmaj7
+mel: f#4:2.~
+acc: r:4 <a3 c#4 f#4>:2
+lo: d2:2.
+== 11
+harmony: Gmaj7
+mel: f#4:2.~
+acc: r:4 <b3 d4 f#4>:2
+lo: g2:2.
+== 12
+harmony: Dmaj7
+mel: f#4:2.
+acc: r:4 <a3 c#4 f#4>:2
+lo: d2:2.
+== 13
+harmony: Gmaj7
+mel: s:4 f#5:4 a5:4
+acc: r:4 <b3 d4 f#4>:2
+lo: g2:2.
+== 14
+harmony: Dmaj7
+mel: g5:4 f#5:4 c#5:4
+acc: r:4 <a3 c#4 f#4>:2
+lo: d2:2.
+== 15
+harmony: Gmaj7
+mel: b4:4 c#5:4 d5:4
+acc: r:4 <b3 d4 f#4>:2
+lo: g2:2.
+== 16
+harmony: Dmaj7
+mel: a4:2.
+acc: r:4 <a3 c#4 f#4>:2
+lo: d2:2.
+== 17
+harmony: F#m
+mel: c#5:2.
+acc: r:4 <a3 c#4 f#4>:2
+lo: f#2:2.
+== 18
+harmony: Bm
+mel: f#5:2.
+acc: r:4 <b3 d4 f#4>:2
+lo: b1:2.
+== 19
+harmony: Em
+mel: e4:2.~
+accb: r:4 <g3 b3>:2
+lo: e2:2.
+== 20
+harmony: Em7
+mel: e4:2.~
+accb: r:4 <b3 d4 g4>:2
+lo: e2:2.
+== 21
+harmony: Dm
+mel: e4:2.
+accb: r:4 <fn3 a3 d4>:2
+lo: d2:2.
+== 22
+harmony: Am
+mel: a4:4 b4:4 cn5:4
+accb: r:4 <a3 cn4 e4>:2
+lo: a1:2.
+== 23
+harmony: Em/D
+mel: e5:4 d5:4 b4:4
+accb: r:4 <g3 b3 e4>:2
+lo: d2:2.
+== 24
+harmony: Em/D
+mel: d5:4 cn5:4 b4:4
+accb: r:4 <d3 g3 b3 e4>:2
+lo: d2:2.
+== 25
+harmony: Am/D
+mel: d5:2.~
+accb: r:4 <cn3 e3 a3 d4>:2
+lo: d2:2.
+== 26
+harmony: D7
+mel: d5:2 d5:4
+accb: r:4 <cn3 f#3 a3 d4>:2
+lo: d2:2.
+== 27
+harmony: Dm7
+mel: e5:4 fn5:4 g5:4
+accb: r:4 <a3 cn4 fn4>:2
+lo: d2:2.
+== 28
+harmony: Am/D
+mel: a5:4 cn5:4 d5:4
+accb: r:4 <a3 cn4 e4>:2
+lo: d2:2.
+== 29
+harmony: Em/D
+mel: e5:4 d5:4 b4:4
+accb: r:4 <d3 g3 b3 e4>:2
+lo: d2:2.
+== 30
+harmony: Am/D
+mel: d5:2.~
+accb: r:4 <cn3 e3 a3 d4>:2
+lo: d2:2.
+== 31
+harmony: D7
+mel: d5:2 d5:4
+accb: r:4 <cn3 f#3 a3 d4>:2
+lo: d2:2.
+[1
+== 32
+harmony: Em
+mel: g5:2.
+acc: r:4 <b3 e4 g4>:2
+lo: e2:2.
+== 33
+harmony: F#m
+mel: f#5:2.
+acc: r:4 <a3 c#4 f#4>:2
+lo: f#2:2.
+== 34
+harmony: Bm
+mel: b4:4 a4:4 b4:4
+acc: r:4 <b3 d4 f#4>:2
+lo: b1:2.
+== 35
+harmony: A/E
+mel: c#5:4 d5:4 e5:4
+acc: r:4 <c#4 e4 a4>:2
+lo: e2:2.
+== 36
+harmony: F#m7/E
+mel: c#5:4 d5:4 e5:4
+acc: r:4 <a3 c#4 f#4 a4>:2
+lo: e2:2.
+== 37
+harmony: Em9
+mel: f#4:2.
+acc[R]: r:4 <a3 d4>:4 <b3 d4 g4>:4
+lo: e2:2.
+lo2: r:4 b2:4 e3:4
+== 38
+harmony: Am7
+mel: <cn4 e4 a4 cn5>:2.
+lo: <a2 g3>:2.
+== 39
+harmony: D
+mel: <d4 f#4 a4 d5>:2.
+lo: <d2 a2 d3>:2.
+:|
+[2
+== 40
+harmony: Em
+mel: g5:2.
+acc: r:4 <b3 e4 g4>:2
+lo: e2:2.
+== 41
+harmony: Dm/E
+mel: fn5:2.
+acc: r:4 <a3 d4 fn4 a4>:2
+lo: e2:2.
+== 42
+harmony: Fmaj7/E
+mel: b4:4 cn5:4 fn5:4
+acc: r:4 <a3 cn4 fn4>:2
+lo: e2:2.
+== 43
+harmony: Am/E
+mel: e5:4 d5:4 cn5:4
+acc: r:4 <cn4 e4 a4>:2
+lo: e2:2.
+== 44
+harmony: Fmaj7/E
+mel: e5:4 d5:4 cn5:4
+acc: r:4 <a3 cn4 fn4 a4>:2
+lo: e2:2.
+== 45
+harmony: Em7b9
+mel: fn4:2.
+acc[R]: r:4 <a3 d4>:4 <b3 d4 g4>:4
+lo: e2:2.
+lo2: r:4 b2:4 e3:4
+== 46
+harmony: Am7
+mel: <cn4 e4 a4 cn5>:2.
+lo: <a2 g3>:2.
+== 47
+harmony: Dm
+mel: <d4 fn4 a4 d5>:2.
+lo: <d2 a2 d3>:2.
+]

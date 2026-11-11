@@ -1,8 +1,22 @@
 # Guitar Trainer
 
-A small, guided course for acoustic guitar. Start slowly, learn a musical idea, then carry it with less help. Partner and the four-bar Looper are still available from the top navigation.
+A small, guided course for acoustic guitar. Start slowly, learn a musical idea, then carry it with less help. Partner, the four-bar Looper and **Pieces** (learn a specific piece on piano or guitar) are in the top navigation.
 
-**Live:** [guitar-lac-seven.vercel.app](https://guitar-lac-seven.vercel.app) · **Source:** [robjohncolson/guitar](https://github.com/robjohncolson/guitar) (private)
+**Live:** [robjohncolson.github.io/guitar](https://robjohncolson.github.io/guitar/) (GitHub Pages, deployed by `.github/workflows/pages.yml` on every push to `main`) · [guitar-lac-seven.vercel.app](https://guitar-lac-seven.vercel.app) (Vercel) · **Source:** [robjohncolson/guitar](https://github.com/robjohncolson/guitar)
+
+The build uses relative asset URLs (`base: './'` in `vite.config.ts`), so the same `dist/` works at a domain root and under a subpath. Everything a user saves lives in that browser's `localStorage`; there is no server. Keys: `guitar.trainer.v1` (Trainer progress, `src/trainer/progress.ts`), `guitar.practice.v1` (Partner and Looper settings, `src/ui/settings.ts`), `piece.trainer.v1` (Pieces progress, `src/piece/progress.ts`) and `piece.imported.v1` (pieces a user added, `src/piece/main.ts`).
+
+## Pieces: learn a specific piece on piano or guitar
+
+Open **Pieces** (`/piece.html`). The first piece is Satie's *Gymnopédie No. 1* (public domain). The page builds a course for the piece: every chord (as written, then one note at a time), every change between neighbouring chords, each passage per hand and hands together, the joins between passages including across the repeat, each section, the whole piece, and scale, arpeggio and cadence drills in its key with standard fingering. Every step climbs a tempo ladder (50 to 100% of the goal tempo) between takes, fades the help at 80% and 100%, and returns for spaced review once learned on two days. **Today's practice** suggests a short session.
+
+Piano listening works with an acoustic piano and the laptop microphone. Each attack is timed; each note is checked from its own partials: heard, not heard, wrong (with the pitch that sounded instead), unclear, or can't check (octave doublings). Unclear evidence never counts against you. Measured on held-out real piano recordings: a played note was called missing or wrong 1.8% of the time, an unplayed note confirmed 0.7% of the time, and nothing played was never credited as on time. Details and limits are in [PIECES.md](PIECES.md).
+
+**Guitar accompaniment** arranges the same harmony for guitar (one capo position, shapes that never add a note outside the chord, a bass-and-pinch pattern that mirrors the piano's left hand) with its own course: shapes string by string (pitch checked by CREPE), changes, the pattern, then sections and the whole piece with the melody in your headphones.
+
+To add your own piece, give the sheet music (PDF or photos) to your AI assistant with [PIECES.md](PIECES.md): it writes a `.piece.txt` file, transcribes it twice and checks it with `node scripts/piece-check.mjs`. Open the file under **Add your own piece**: it stays in this browser. Copyrighted music belongs in the git-ignored `src/piece/packs/local/`, never in the deployed site.
+
+Run `node scripts/piece-smoke.mjs` against `npm run preview` for the real Chrome check (calibration loopback, recorded piano and guitar notes, a wrong note, silence, the tempo ladder, CREPE guitar shape, mobile layout).
 
 ## Guided Trainer
 

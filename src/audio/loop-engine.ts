@@ -36,7 +36,8 @@ export class LoopEngine {
     if (command.type === 'record') {
       if (!validBpm(command.bpm) || this.record) return;
       const beats=command.beats ?? 16;
-      if(!Number.isFinite(beats) || beats<1 || beats>32) {this.emit({type:'error',message:'Recording length must be between 1 and 32 beats.'});return;}
+      // Piece run-throughs record a whole performance; the Looper still asks for 16 beats.
+      if(!Number.isFinite(beats) || beats<1 || beats>1200) {this.emit({type:'error',message:'Recording length must be between 1 and 1200 beats.'});return;}
       this.rollback=undefined;
       this.transition = undefined;
       this.record = {take:{id:command.id,bpm:command.bpm,samples:new Float32Array(loopFrames(this.rate,command.bpm,beats)),levelGain:1},start:command.startFrame,copied:0,peak:0};

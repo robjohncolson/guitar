@@ -8,3 +8,5 @@ The official browser model is shipped as crepe-tiny, without conversion.
 TensorFlow.js — Copyright Google LLC and contributors.
 License: Apache License 2.0; https://www.apache.org/licenses/LICENSE-2.0
 Bundled locally via @tensorflow/tfjs. See TENSORFLOWJS-LICENSE.
+Parts of the bundle are MIT-licensed (@tensorflow/tfjs-layers is "Apache-2.0 AND MIT"; seedrandom and its alea
+port). Every bundled dependency's licence text is in third-party-licenses.md at the site root.

@@ -1,7 +1,7 @@
 export function shell(): void {
   document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <main>
-      <nav class="app-nav" aria-label="Guitar tools"><a href="/">Trainer</a><a href="/play.html?mode=partner">Partner</a><a href="/play.html?mode=looper">Looper</a></nav>
+      <nav class="app-nav" aria-label="Guitar tools"><a href="${import.meta.env.BASE_URL}">Trainer</a><a href="${import.meta.env.BASE_URL}piece.html">Pieces</a><a href="${import.meta.env.BASE_URL}play.html?mode=partner">Partner</a><a href="${import.meta.env.BASE_URL}play.html?mode=looper">Looper</a></nav>
       <header><div><span class="eyebrow">GUITAR · LISTEN & REPLY</span><h1>Practice Partner</h1><p class="intro">Play a loop. I’ll answer on the offbeat.</p></div><button id="enable" class="primary">Start listening</button></header>
       <div class="status"><span id="mic">Mic off</span><span id="model">CREPE loading</span><span id="latency"></span></div>
       <section class="pulse-panel" aria-label="Tempo and listening">

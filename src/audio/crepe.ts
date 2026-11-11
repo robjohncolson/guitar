@@ -24,7 +24,8 @@ export class Crepe {
   async load(): Promise<void> {
     if (!await tf.setBackend('webgl')) throw new Error('WebGL is unavailable');
     await tf.ready();
-    this.model = await tf.loadLayersModel('/models/crepe-tiny/model.json');
+    // BASE_URL keeps the model path right when the site is served from a subpath (GitHub Pages) or a root (Vercel, dev).
+    this.model = await tf.loadLayersModel(`${import.meta.env.BASE_URL}models/crepe-tiny/model.json`);
     if (this.model.inputs[0].shape[1] !== 1024 || this.model.outputs[0].shape[1] !== 360) throw new Error('Unexpected CREPE model shape');
     // Compile WebGL kernels before announcing readiness.
     await this.infer(new Float32Array(1024));

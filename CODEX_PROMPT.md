@@ -43,9 +43,7 @@ This is a greenfield folder. Build the whole v1. Do not ask to shrink scope. Do 
 
 ## Start here
 
-```
-C:\Users\rober\Downloads\Projects\guitar\
-```
+The repository root (this folder).
 
 Already in the folder: `SPEC.md`, this prompt, `AGENTS.md`, `README.md`. Do not delete them. Implement around them.
 

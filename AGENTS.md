@@ -1,6 +1,6 @@
 # Guitar Practice Partner
 
-Local Vite + TypeScript app. Enter BPM, play a repeating idea, and hear three finite Echo or Harmony replies half a beat later. Harmony is the default and falls back to a soft octave when uncertain. The latest product contract is at the top of `SPEC.md`; implementation constraints and phase order are in `CODEX_PROMPT.md`.
+Local Vite + TypeScript app with three pages: Trainer (guitar course, `/`), Pieces (learn a specific piece on piano or guitar, `/piece.html`) and Play (Partner and Looper, `/play.html`). In Partner, enter BPM, play a repeating idea, and hear three finite Echo or Harmony replies half a beat later. Harmony is the default and falls back to a soft octave when uncertain. The latest product contract is at the top of `SPEC.md`; implementation constraints and phase order are in `CODEX_PROMPT.md`.
 
 The new Looper mode records four bars of native-rate mono audio in 4/4 after a one-bar count-in, then loops continuously. Replace waits for a loop boundary and silences the old take during recording. Stop retains the last completed take and releases the microphone; Play restores that take's tempo. One Undo restores the previous take; Clear/reload discard audio. Partner and Looper never play together. Read the current Looper contract in SPEC.md before changing either mode.
 
@@ -8,6 +8,8 @@ Listen continuously for three complete matching cycles, including internal and c
 
 ## Rules
 
+- Pieces (`/piece.html`, `src/piece/`) teaches a specific piece on piano or guitar. Piece files are plain text compiled by `notation.ts`; analysis, curriculum, drills and the guitar arrangement are deterministic code. Committed packs must be `redistributable: yes`; private music goes in git-ignored `src/piece/packs/local/` or the app's local import. Read PIECES.md before adding a piece: transcribe twice (printed and sounding modes), diff with `scripts/piece-check.mjs`, then listen.
+- Piano listening (`listen.ts`, `grade.ts`) is score-informed and must stay honest: heard needs a note's own low partials to rise, including an odd one; not heard needs them quiet (or decaying after a 0.5 s gap) while the attack clearly sounded; octave/twelfth doublings are "can't check"; everything else is unclear and never counts. Attacks need a real rise (three bands: confirmed, unsure, none). Thresholds were set on MAESTRO dev excerpts and frozen; re-measure on held-out real recordings before changing them, and report false confirmation and false contradiction rates.
 - Trainer is now the landing page, with the existing Partner/Looper on the Play page. The approved Trainer contract at the top of SPEC.md allows lessons, fret/string guidance and local progress. Use CREPE for single-note grading, explicitly label rhythm-only chord work, and never grade uncertain input as success or failure. Adaptive tempo changes only between attempts.
 - CREPE is the pitch ear and must actually run as a tfjs Layers model from committed `public/models/` assets. Never substitute YIN as the default.
 - Occupancy is note-on attacks, not ringing energy. Confidence dropouts and octave blips must not invent attacks or rests. Masked app notes must not cut up player sustains.
