@@ -1,5 +1,6 @@
 import { lessonById, lessons, type Lesson } from './curriculum';
 import type { Grade } from './grader';
+import { saveTracked } from '../account/changes';
 export const progressKey='guitar.trainer.v1';
 export interface Skill { bpm:number; best:number; support:0|1|2; clean:number; hard:number; attempts:number; mastered:boolean; due:number; last:number }
 export interface History { date:number; lesson:string; bpm:number; score:number; trusted:boolean }
@@ -22,7 +23,7 @@ export function parseProgress(raw:string|null):Progress {
   return result;
 }
 export function loadProgress():Progress {try{return parseProgress(localStorage.getItem(progressKey));}catch{return parseProgress(null);}}
-export function saveProgress(progress:Progress):boolean {try{localStorage.setItem(progressKey,JSON.stringify(progress));return true;}catch{return false;}}
+export function saveProgress(progress:Progress):boolean {try{saveTracked(progressKey,JSON.stringify(progress));return true;}catch{return false;}}
 /** A recommendation for the NEXT attempt. Never changes an active musical clock. */
 export function advance(skill:Skill,lesson:Lesson,result:Grade,comfortable:boolean,now:number,auto=true,calibrated=true):{skill:Skill;message:string} {
   const next={...skill};

@@ -1,0 +1,27 @@
+.account-nav{margin-left:auto;padding:6px 12px;font-size:12px;border-radius:999px;color:#c8d8a7;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app-nav span+.account-nav{margin-left:12px}
+.account-dialog{max-width:440px;width:calc(100% - 32px);background:#1a201c;color:#e8e9df;border:1px solid #414941;border-radius:14px;padding:26px 26px 20px}
+.account-dialog::backdrop{background:rgba(5,8,6,.7)}
+.account-dialog h2{font-size:22px;font-weight:500;margin:0 0 10px}
+.account-dialog p{color:#c2ccb9;font-size:14px;line-height:1.45}
+.account-dialog label{display:flex;flex-direction:column;gap:6px;font-size:12px;letter-spacing:1px;color:#a1ad9f;margin:12px 0}
+.account-dialog input{padding:10px 12px;border-radius:8px;border:1px solid #596550;background:#131915;color:#e8e9df;font-size:16px;letter-spacing:0}
+.account-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}
+.account-x{position:absolute;right:12px;top:8px;font-size:22px;padding:4px 10px;background:none;border:0}
+.account-dialog .text-button{background:none;border:0;color:#bdcf91;padding:6px 0;text-decoration:underline}
+.account-error{color:#efac81!important;min-height:1em}
+.account-hint,.account-note{font-size:13px!important;color:#9da99b!important}
+.account-status{color:#a8c589!important;font-size:13px!important}
+.account-danger{margin-top:20px;border-top:1px solid #353d35;padding-top:12px;font-size:13px;color:#efac81}
+.account-danger summary{cursor:pointer}
+.account-choices{display:flex;flex-direction:column;gap:10px}
+.account-choices button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left}
+.account-choices span{font-size:12px;opacity:.85}
+.account-banner{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#212823;border:1px solid #596550;border-radius:12px;padding:10px 12px 10px 16px;display:flex;gap:12px;align-items:center;font-size:14px;z-index:20;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.account-banner button{padding:8px 12px}
+.welcome-card{border:1px solid #414941;background:#1a201c;border-radius:12px;padding:16px 20px;margin:0 0 24px;font-size:14px;line-height:1.5;color:#c2ccb9}
+.welcome-card h2{font-size:17px;font-weight:600;margin:0 0 6px;color:#e8e9df}
+.welcome-card ol{margin:6px 0 10px;padding-left:20px}
+.welcome-card button{padding:8px 14px}
+.piece-account{margin-top:14px;border-top:1px solid #353d35;padding-top:10px}
+.piece-account .journal-entry button{margin-left:8px}

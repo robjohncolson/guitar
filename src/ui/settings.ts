@@ -1,6 +1,7 @@
 import type { OutputMode } from '../audio/context';
 import { validBpm } from '../audio/tap-tempo';
 import type { ReplyMode } from '../music/harmony';
+import { saveTracked } from '../account/changes';
 export const settingsKey = 'guitar.practice.v1';
 export interface Settings {
   bpm: number; responsive: boolean; companionMuted: boolean; clickMuted: boolean;
@@ -28,5 +29,5 @@ export function loadSettings(): Settings {
   try { return parseSettings(localStorage.getItem(settingsKey)); } catch { return {...defaults}; }
 }
 export function saveSettings(settings: Settings): void {
-  try { localStorage.setItem(settingsKey,JSON.stringify(settings)); } catch { /* Listening still works when storage is unavailable. */ }
+  try { saveTracked(settingsKey,JSON.stringify(settings)); } catch { /* Listening still works when storage is unavailable. */ }
 }
