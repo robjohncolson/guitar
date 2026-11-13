@@ -34,7 +34,7 @@ const trainerCalibration = (() => { try { const v = JSON.parse(localStorage.getI
 const progress: PieceProgress = (() => { try { return parsePieceProgress(localStorage.getItem(pieceProgressKey), trainerCalibration); } catch { return parsePieceProgress(null, trainerCalibration); } })();
 const audio = new PieceAudio();
 // Browser checks reach the audio engine in development builds only.
-if (import.meta.env.DEV) (window as unknown as { __piece: unknown }).__piece = { audio, exercise: () => exercise, layout: () => keyInput.layout };
+if (import.meta.env.DEV) (window as unknown as { __pieceDev: unknown }).__pieceDev = { audio, exercise: () => exercise, layout: () => keyInput.layout };
 const player = el<HTMLAudioElement>('piece-player'), reduced = matchMedia('(prefers-reduced-motion: reduce)');
 audio.checkPitch = progress.checkPitch;
 let pack: Pack, score: Score, curriculum: Curriculum, arrangement: Arrangement, gUnits: Unit[] = [];
@@ -234,7 +234,7 @@ async function start(kind: 'practice' | 'demo'): Promise<void> {
 function showTake(take: PieceTake): void {
   URL.revokeObjectURL(wavUrl); URL.revokeObjectURL(traceUrl);
   const keys = Boolean(take.presses);
-  traceUrl = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, piece: pack.id, unit: take.unit, instrument, bpm: take.bpm, support: take.support, offset: take.offset, result: take.result, presses: take.presses }, null, 2)], { type: 'application/json' }));
+  traceUrl = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, piece: pack.id, unit: take.unit, instrument, bpm: take.bpm, support: take.support, offset: take.offset, result: take.result, presses: take.presses, interruption: take.interruption }, null, 2)], { type: 'application/json' }));
   // Keys takes have no audio: they replay on the piano voice with the lane instead.
   for (const id of ['piece-player', 'piece-loop', 'piece-download']) el(id).hidden = keys;
   el('piece-review-note').textContent = keys ? 'Your keys replay on the piano sound while the notes scroll. Takes stay in this page.' : 'Playback stops the microphone. Takes stay in this page.';

@@ -17,6 +17,8 @@ export interface PieceTake {
   samples: Float32Array; rate: number; levelGain: number; result?: PieceGrade;
   /** Keys takes: what was pressed, in seconds from the first beat. Such takes have no audio. */
   presses?: KeyPress[];
+  /** Why the take was marked interrupted, if it was. */
+  interruption?: string;
 }
 interface Capture { id: number; from: number; samples: Float32Array; copied: number; ready: boolean }
 
@@ -246,7 +248,7 @@ export class PieceAudio {
   private completeKeys(): void {
     const plan = this.plan!, current = this.current!, presses = this.presses ?? [];
     const result = gradeKeys(current.exercise, current.bpm, presses, this.interrupted);
-    const take: PieceTake = { id: ++this.sequence, exercise: current.exercise, unit: current.unit, bpm: current.bpm, support: plan.support, kind: plan.kind, offset: 0, samples: new Float32Array(0), rate: this.context!.sampleRate, levelGain: 1, result, presses };
+    const take: PieceTake = { id: ++this.sequence, exercise: current.exercise, unit: current.unit, bpm: current.bpm, support: plan.support, kind: plan.kind, offset: 0, samples: new Float32Array(0), rate: this.context!.sampleRate, levelGain: 1, result, presses, interruption: this.why || undefined };
     this.stop(); this.previous = this.take; this.take = take; this.onTake(take);
   }
   private async complete(): Promise<void> {
@@ -278,7 +280,7 @@ export class PieceAudio {
     const length = Math.round((plan.end - plan.playAt) * rate), from = Math.round((plan.playAt + current.offset - capture.from) * rate);
     const samples = capture.samples.slice(Math.max(0, from), Math.max(0, from) + length);
     let peak = 0; for (const v of samples) peak = Math.max(peak, Math.abs(v));
-    const take: PieceTake = { id: capture.id, exercise: current.exercise, unit: current.unit, bpm: current.bpm, support: plan.support, kind: plan.kind, offset: current.offset, samples, rate, levelGain: loopLevelGain(peak), result };
+    const take: PieceTake = { id: capture.id, exercise: current.exercise, unit: current.unit, bpm: current.bpm, support: plan.support, kind: plan.kind, offset: current.offset, samples, rate, levelGain: loopLevelGain(peak), result, interruption: this.why || undefined };
     this.stop(); this.previous = this.take; this.take = take; this.onTake(take);
   }
   async playTake(take = this.take, loop = false): Promise<void> {
