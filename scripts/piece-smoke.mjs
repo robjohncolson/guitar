@@ -72,7 +72,11 @@ try {
     results.push({ scenario, ...trace }); return trace;
   };
   // An answer starts the next take by itself, and Start will not drop an unanswered take: stop the automatic take so each scenario starts its own.
-  const halt = async () => { await until("!document.getElementById('piece-stop').disabled"); await evaluate("document.getElementById('piece-stop').click()"); await until("document.getElementById('piece-stop').disabled && !document.getElementById('piece-start').disabled"); };
+  // A struggling answer may instead offer trouble-spot choices; "Next take as usual" is the old flow.
+  const halt = async () => {
+    await until("(!document.getElementById('piece-choices')?.hidden && !!document.querySelector('#piece-choices button[data-choice=next]')) || !document.getElementById('piece-stop').disabled");
+    if (await evaluate("!document.getElementById('piece-choices')?.hidden && !!document.querySelector('#piece-choices button[data-choice=next]')")) await evaluate("document.querySelector('#piece-choices button[data-choice=next]').click()");
+    await until("!document.getElementById('piece-stop').disabled"); await evaluate("document.getElementById('piece-stop').click()"); await until("document.getElementById('piece-stop').disabled && !document.getElementById('piece-start').disabled"); };
   const answer = async id => { await evaluate(`document.getElementById('${id}').click()`); await halt(); };
   const select = async (id, bpm) => {
     await evaluate(`document.querySelector('[data-unit="${id}"]').click()`);

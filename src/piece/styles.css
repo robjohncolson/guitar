@@ -43,3 +43,4 @@
 .map-legend{display:flex;flex-wrap:wrap;gap:6px 12px;margin:10px 0 4px;font-size:11px;color:#9fb096}.map-legend span{display:inline-flex;align-items:center;gap:5px}.map-legend .map-cell{cursor:default;width:11px;height:11px}
 .map-note{font-size:12px}
 @media(prefers-reduced-motion:reduce){.today-meter i{transition:none}}
+.spot-choices .comfort-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.spot-choices button{max-width:100%;white-space:normal;text-align:left}.spot-choices select{max-width:100%}.spot-hint{margin:6px 0 0}.spot-banner{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:8px 0;padding:8px 10px;border:1px solid #3d5440;border-radius:8px;font-size:13px;color:#d4e0c7;overflow-wrap:anywhere}

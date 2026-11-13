@@ -14,7 +14,8 @@ import { KeyInput, keyLabels, layoutFor, reaches } from './keys';
 import { noteKey, WaitRun } from './wait';
 import { chordSpans, prettyChord } from './analysis';
 import { barAt, keyPerfect, keyReach, keyWindow, type KeyLive, type PieceGrade } from './grade';
-import { noteName, type Score } from './score';
+import { noteName, type Hand, type Score } from './score';
+import { barsText, isSpotId, pickSpot, slowerBpm, spotExercise, spotId, spotOffered, type SpotPick } from './spot';
 import { saveTracked } from '../account/changes';
 import { mountPieceAccount } from '../account/pieces';
 
@@ -36,11 +37,16 @@ const trainerCalibration = (() => { try { const v = JSON.parse(localStorage.getI
 const progress: PieceProgress = (() => { try { return parsePieceProgress(localStorage.getItem(pieceProgressKey), trainerCalibration); } catch { return parsePieceProgress(null, trainerCalibration); } })();
 const audio = new PieceAudio();
 // Browser checks reach the audio engine in development builds only.
-if (import.meta.env.DEV) (window as unknown as { __pieceDev: unknown }).__pieceDev = { audio, exercise: () => exercise, layout: () => keyInput.layout, tiers: () => [...tiers], streak: () => streak, revealing: () => Boolean(reveal), moment: () => Boolean(after), pending: () => Boolean(pending) };
+if (import.meta.env.DEV) (window as unknown as { __pieceDev: unknown }).__pieceDev = { audio, exercise: () => exercise, layout: () => keyInput.layout, tiers: () => [...tiers], streak: () => streak, revealing: () => Boolean(reveal), moment: () => Boolean(after), pending: () => Boolean(pending), spot: () => spot && { id: spot.id, bars: spot.exercise.bars.map(b => b.number), bpm: spot.bpm, clean: spot.clean, hands: spot.hands }, choice: () => choice,
+  take: (result: PieceGrade, bpm?: number) => { const take: PieceTake = { id: Date.now(), exercise, unit: spot ? spot.id : unit.id, bpm: bpm ?? bpmNow(), support: 0, kind: 'practice', offset: progress.offset, samples: new Float32Array(4800), rate: 48000, levelGain: 1, result }; audio.previous = audio.take; audio.take = take; audio.onTake(take); } };
 const player = el<HTMLAudioElement>('piece-player'), reduced = matchMedia('(prefers-reduced-motion: reduce)');
 audio.checkPitch = progress.checkPitch;
 let pack: Pack, score: Score, curriculum: Curriculum, arrangement: Arrangement, gUnits: Unit[] = [];
 let instrument: 'piano' | 'guitar' = progress.selected.instrument, unit: Unit, exercise: Exercise, manualBpm: number | undefined;
+/** A trouble-spot loop: bars of the step played alone, away from the tempo ladder. While it runs, `exercise` is the spot and `unit` stays the step. */
+let spot: { parent: Unit; from: number; to: number; lead: boolean; hands: Hand[]; bpm: number; exercise: Exercise; id: string; clean: number } | undefined;
+let choiceAt = 0;
+let choice: 'offer' | 'pass' | undefined, offer: { pick: SpotPick | 'choose'; bpm: number; carry: string } | undefined;
 let pending: { take: PieceTake; before: UnitProgress; entry: PieceProgress['history'][number] } | undefined, feedback = '', wavUrl = '', traceUrl = '';
 // Computer keyboard and MIDI input: a per-browser preference, kept apart from practice progress.
 const INPUT = 'piece.input.v1';
@@ -96,7 +102,7 @@ const key = (id: string) => progressId(`${pack.id}${instrument === 'guitar' ? '#
 const get = (id: string): UnitProgress | undefined => progress.units[key(id)];
 const current = () => get(unit.id) ?? initialUnit();
 const goal = () => progress.goals[pack.id] ?? score.tempo.bpm;
-const bpmNow = () => manualBpm ?? rungBpm(unit, current());
+const bpmNow = () => spot ? spot.bpm : manualBpm ?? rungBpm(unit, current());
 const active = () => Boolean(wait || audio.plan || audio.busy || audio.playing || !player.paused);
 // Live feedback for keys: which notes have been played (so only they glow) and when each wrong key went down.
 let wait: WaitRun | undefined;
@@ -157,7 +163,7 @@ function stateLabel(u: Unit): string {
 }
 
 function loadPack(id: string): void {
-  audio.stop(); player.pause();
+  audio.stop(); player.pause(); spot = undefined; choice = undefined; offer = undefined;
   const all = packs();
   pack = all.find(p => p.id === id) ?? all[0];
   const compiled = compile(pack.text);
@@ -186,10 +192,11 @@ function paintAbout(): void {
     <h3>Chords</h3><p>${[...counts.entries()].map(([s, n]) => `${escape(prettyChord(s))} <span class="muted">×${n}</span>`).join(' · ')}</p>
     <h3>Guitar accompaniment</h3><p>${arrangement.capo ? `Capo at fret ${arrangement.capo}. ` : 'No capo. '}Bass note on beat 1, then index, middle and ring fingers together, letting the chord ring like the piano's left hand.${arrangement.review.length ? ` Simplified: ${escape(arrangement.review.join(' '))}` : ''}</p><div class="unit-shapes">${arrangement.shapes.map(s => chordBox(s, arrangement.capo)).join('')}</div>`;
 }
+const stepExercise = () => instrument === 'piano' ? exerciseFor(score, unit) : guitarExerciseFor(score, arrangement, unit);
 function selectUnit(id: string): void {
-  audio.stop(); player.pause(); stopWait(); resetLive(); endReveal(); endMoment(false); pending = undefined; manualBpm = undefined;
+  audio.stop(); player.pause(); stopWait(); resetLive(); endReveal(); endMoment(false); pending = undefined; manualBpm = undefined; spot = undefined; choice = undefined; offer = undefined;
   unit = units().find(u => u.id === id) ?? units()[0];
-  exercise = instrument === 'piano' ? exerciseFor(score, unit) : guitarExerciseFor(score, arrangement, unit);
+  exercise = stepExercise();
   progress.selected.unit = unit.id; progress.selected.instrument = instrument;
   const stages = instrument === 'piano' ? STAGES : GUITAR_STAGES;
   el('unit-stage').textContent = `${String(unit.stage + 1).padStart(2, '0')} · ${stages[unit.stage].toUpperCase()}`;
@@ -277,7 +284,7 @@ function otherPart(): XEvent[] {
   if (!el<HTMLInputElement>('piece-backing').checked || audio.mode !== 'headphones') return [];
   if (instrument === 'guitar') return melodyBacking(score, unit.bars);
   const other = unit.hands[0] === 'L' ? 'R' : 'L';
-  return fromBars(score, unit.bars, [other], 'backing', 'backing').events;
+  return fromBars(score, spot ? unit.bars.slice(spot.from, spot.to + 1) : unit.bars, [other], 'backing', 'backing').events;
 }
 /** carry: what the ladder just said about the answered take; it stays readable through the next count-in. */
 async function start(kind: 'practice' | 'demo', carry = ''): Promise<void> {
@@ -286,7 +293,7 @@ async function start(kind: 'practice' | 'demo', carry = ''): Promise<void> {
   // A finished take is kept until it is answered; hearing the demo meanwhile does not drop it.
   if (pending && kind === 'practice' && unit.kind !== 'listen') { feedback = 'First, how did the last take feel? Press ↑ (felt comfortable) or ↓ (needs more room); either starts the next take.'; el(defaultComfort() ? 'piece-comfortable' : 'piece-struggling').focus(); return; }
   player.pause(); el('piece-session').hidden = true; resetLive();
-  if (kind === 'practice') { pending = undefined; el('piece-result').hidden = true; }
+  if (kind === 'practice') { pending = undefined; choice = undefined; offer = undefined; el('piece-result').hidden = true; }
   if (unit.kind === 'listen') {
     feedback = 'Listen through. The notes fall onto the keys as they sound.';
     await audio.start(exercise, unit.id, goal(), 'demo');
@@ -294,12 +301,12 @@ async function start(kind: 'practice' | 'demo', carry = ''): Promise<void> {
     return;
   }
   // New short steps are demonstrated once before the count-in; long sections are not (use Hear it).
-  const demonstrate = kind === 'practice' && !heard.has(unit.id) && !unit.sameAs && exercise.beats <= 24;
+  const demonstrate = !spot && kind === 'practice' && !heard.has(unit.id) && !unit.sameAs && exercise.beats <= 24;
   const said = carry.trim();
   feedback = kind === 'demo' ? 'Listen to the notes and the spaces between them.' : said ? `${said}${/[.!?]$/.test(said) ? '' : '.'} One bar to count in.` : 'One bar to count in. Play as the notes reach the keys.';
   const { mine, auto } = kind === 'practice' ? reachSplit(exercise) : { mine: exercise, auto: [] };
   autoKeys = new Set(auto.flatMap(e => e.notes.map(n => noteKey(e.beat, n.midi))));
-  await audio.start(mine, unit.id, bpmNow(), kind, current().support, progress.offset, demonstrate, kind === 'practice' ? [...otherPart(), ...auto] : []);
+  await audio.start(mine, spot ? spot.id : unit.id, bpmNow(), kind, spot ? 0 : current().support, progress.offset, demonstrate, kind === 'practice' ? [...otherPart(), ...auto] : []);
   if (kind === 'demo' || demonstrate) heard.add(unit.id);
   if (!usingKeys() && audio.deviceKey && progress.calibrated && progress.calibrationKey && progress.calibrationKey !== audio.deviceKey) { progress.calibrated = false; el('piece-calibration-feedback').textContent = 'The audio path changed. Recalibrate to count tempo steps.'; persist(); }
 }
@@ -343,15 +350,19 @@ audio.onTake = take => {
   if (!result) return;
   endMoment(false);
   const keys = Boolean(take.presses), trusted = result.trusted && timed(take), now = Date.now();
-  const entry = { date: now, piece: pack.id, unit: take.unit, bpm: take.bpm, score: result.score, trusted };
-  pending = { take, before: current(), entry };
-  progress.history.push(entry);
-  progress.history = progress.history.slice(-200);
-  // Personal bests for this step at this tempo and input; only trusted, timed takes count.
-  const id = bestKey(key(take.unit), take.bpm, keys), compared = compareTake(progress.bests[id], { score: result.score, timing: result.timing, tight: tightness(result.events, !keys), support: take.support, date: now }, trusted, !keys);
-  if (compared.after) { progress.bests[id] = compared.after; pruneBests(progress.bests); }
+  const wins: string[] = [], isSpot = Boolean(spot && take.unit === spot.id);
+  if (isSpotId(take.unit) && !isSpot) return;
+  if (!isSpot) {
+    const entry = { date: now, piece: pack.id, unit: take.unit, bpm: take.bpm, score: result.score, trusted };
+    pending = { take, before: current(), entry };
+    progress.history.push(entry);
+    progress.history = progress.history.slice(-200);
+    // Personal bests for this step at this tempo and input; only trusted, timed takes count.
+    const id = bestKey(key(take.unit), take.bpm, keys), compared = compareTake(progress.bests[id], { score: result.score, timing: result.timing, tight: tightness(result.events, !keys), support: take.support, date: now }, trusted, !keys);
+    if (compared.after) { progress.bests[id] = compared.after; pruneBests(progress.bests); }
+    wins.push(...compared.wins);
+  }
   const autoCount = take.presses ? autoKeys.size : 0, period = 60 / take.bpm;
-  const wins = [...compared.wins];
   if (keys && trusted) { const k = keyStats(result.events); if (k.run > 1 || k.perfect) wins.push(`Longest on-time run: ${k.run} in a row${k.perfect ? ` · ${k.perfect} note${k.perfect > 1 ? 's' : ''} within ${Math.round(keyPerfect(period) * 1000)} ms of the beat` : ''}.`); }
   const placed = result.events.filter(e => e.mark === 'good').length;
   if (trusted && !wins.length) wins.push(`${placed} of ${result.events.length} attacks on time.`);
@@ -362,11 +373,12 @@ audio.onTake = take => {
   feedback = (!result.trusted ? result.reason : clean ? result.feedback : `One thing to try: ${result.feedback}`)
     + (timed(take) ? '' : ' Timing is an estimate until you calibrate; tempo steps wait for calibration.')
     + (autoCount ? ` ${autoCount} note${autoCount > 1 ? 's' : ''} out of reach of the computer keys ${autoCount > 1 ? 'were' : 'was'} played for you and not graded.` : '');
-  for (const [id, yes] of [['piece-comfortable', defaultComfort()], ['piece-struggling', !defaultComfort()]] as const) {
+  el('piece-comfort-ask').hidden = isSpot; el('piece-comfortable').parentElement!.hidden = isSpot;
+  for (const [id, yes] of isSpot ? [] : [['piece-comfortable', defaultComfort()], ['piece-struggling', !defaultComfort()]] as const) {
     el(id).classList.toggle('primary', yes);
     el(id).innerHTML = `<kbd>${id === 'piece-comfortable' ? '↑' : '↓'}</kbd> ${id === 'piece-comfortable' ? 'Felt comfortable' : 'Needs more room'}${yes ? ' <span class="kbd-or">or <kbd>Space</kbd></span>' : ''}`;
   }
-  el('piece-comfort-ask').textContent = `How did that feel? ↑ felt comfortable · ↓ needs more room · Space answers "${defaultComfort() ? 'felt comfortable' : 'needs more room'}". Your answer, with the score, decides the next tempo and starts the next take.`;
+  if (!isSpot) el('piece-comfort-ask').textContent = `How did that feel? ↑ felt comfortable · ↓ needs more room · Space answers "${defaultComfort() ? 'felt comfortable' : 'needs more room'}". Your answer, with the score, decides the next tempo and starts the next take.`;
   paintToday();
   const notes = result.events.flatMap(e => e.notes), count = (v: string) => notes.filter(n => n.verdict === v).length;
   const marks = result.events.map(e => e.mark), mark = (m: string) => marks.filter(x => x === m).length;
@@ -380,6 +392,10 @@ audio.onTake = take => {
     return `bar ${at.number} beat ${at.beat}: ${e.mark}${e.offset !== undefined && e.mark !== 'good' ? ` (${e.offset > 0 ? '+' : ''}${Math.round(e.offset * 1000)} ms)` : ''}${wrong.length ? `, ${wrong.join(', ')}` : ''}`;
   });
   el('piece-details').textContent = `${problems.join(' · ')}${result.extraNotes.length ? ` · possible extra note${result.extraNotes.length > 1 ? 's' : ''} near ${[...new Set(result.extraNotes.map(x => noteName(x.midi, take.exercise.keySig)))].join(', ')}` : ''}${result.trusted ? '' : ` · ${result.reason}`}${Math.abs(result.tuning) >= 8 ? ` · your piano reads about ${Math.round(result.tuning)} cents from A440; checks allowed for it` : ''}`;
+  const hint = !isSpot && spotOffered(instrument, unit) ? pickSpot(take.exercise, result, timed(take)) : undefined;
+  el('piece-spot-hint').hidden = !hint || hint === 'choose';
+  if (hint && hint !== 'choose') el('piece-spot-hint').textContent = `Practise ${barsText(problemNumbers(unit, hint))}: that is where this take's confirmed problems are.`;
+  if (isSpot) { spot!.clean = trusted && clean ? spot!.clean + 1 : 0; choice = 'pass'; paintChoices(); }
   el('piece-result').hidden = false; persist();
   const beats = result.events.map(e => e.beat), first = Math.min(...beats, 0), last = Math.max(...beats, 0);
   reveal = { start: performance.now(), ms: Math.min(1200, 400 + 45 * result.events.length), first, last, final, celebrate: trusted && result.score >= 0.9 };
@@ -410,7 +426,7 @@ function stepReveal(): void {
 /** Jumps a reveal to its end state: final number, every dot, the callouts, and the small spark for a clean take. */
 function endReveal(): void {
   const r = reveal; if (!r) return;
-  reveal = undefined;
+  reveal = undefined; if (choice) choiceAt = performance.now();
   shown.delete('strip-beat');
   const count = document.getElementById('piece-count'); if (count) count.textContent = `${r.final}%`;
   for (const c of el('piece-strip').querySelectorAll('.later')) c.classList.remove('later');
@@ -452,7 +468,7 @@ function nextTake(comfortable: boolean): AdvanceEvent | undefined {
 function answer(comfortable: boolean): void {
   if (!pending || active() || after) return;
   endReveal();
-  const prior = feedback, before = current(), event = nextTake(comfortable), message = feedback, said = message !== prior ? message : '';
+  const taken = pending?.take, prior = feedback, before = current(), event = nextTake(comfortable), message = feedback, said = message !== prior ? message : '';
   (document.activeElement as HTMLElement | null)?.blur();
   const pct = (f: number) => `${Math.round(f * 100)}%`, last = current().certified[current().certified.length - 1];
   const moment = !event ? undefined
@@ -462,7 +478,11 @@ function answer(comfortable: boolean): void {
           : event.kind === 'certified' ? { title: `Certified at ${pct(last ?? unit.rungs[Math.min(before.rung, unit.rungs.length - 1)])}`, ms: 2200, size: 'medium' as const, next: true }
             : event.kind === 'climb' ? { title: 'Up a step', ms: 1600, size: 'medium' as const, next: true }
               : event.kind === 'fade' ? { title: 'Less help next take', ms: 1200, size: 'small' as const, next: true } : undefined;
-  if (!moment) { void start('practice', said); return; }
+  if (!moment) {
+    const result = taken?.result, pick = result && (!comfortable || (result.trusted && result.score < 0.65)) && spotOffered(instrument, unit) ? pickSpot(taken.exercise, result, timed(taken)) : undefined;
+    if (pick) { choice = 'offer'; offer = { pick, bpm: taken.bpm, carry: said }; paintChoices(); return; }
+    void start('practice', said); return;
+  }
   const sub = event!.overnight && event!.kind !== 'learned' ? `Clean on today's first take. ${message}` : message;
   feedback = `${moment.title}. ${sub}`;
   if (!lively()) { if (moment.next) void start('practice', feedback); return; }
@@ -470,6 +490,62 @@ function answer(comfortable: boolean): void {
   after = { until: performance.now() + moment.ms, next: moment.next, carry: feedback };
 }
 
+const problemNumbers = (u: Unit, p: { from: number; to: number; lead: boolean }) => u.bars.slice(p.from + (p.lead ? 1 : 0), p.to + 1).map(i => score.bars[i].number);
+const barNumber = (u: Unit, position: number) => score.bars[u.bars[position]].number;
+el('piece-details').insertAdjacentHTML('afterend', '<p id="piece-spot-hint" class="muted spot-hint" hidden></p>');
+el('piece-result').insertAdjacentHTML('afterend', '<div id="piece-choices" class="spot-choices" hidden><p id="piece-choices-ask" class="comfort-ask"></p><div id="piece-choices-actions" class="comfort-actions"></div></div>');
+el('piece-feedback').insertAdjacentHTML('afterend', '<div id="piece-spot-banner" class="spot-banner" hidden><span id="piece-spot-text"></span> <button id="piece-spot-back" data-choice="back">Back to the step</button></div>');
+/** The choices after a take: practise a trouble spot or carry on (offer), or what to do after a spot pass. */
+function paintChoices(): void {
+  const actions = el('piece-choices-actions'), button = (what: string, label: string, primary: boolean, keyName = '', off = false) =>
+    `<button data-choice="${what}"${keyName ? ` data-key="${keyName}"` : ''}${primary ? ' class="primary"' : ''}${off ? ' data-off="1"' : ''}>${label}</button>`;
+  const space = '<kbd>Space</kbd> ', up = '<kbd>↑</kbd> ', down = '<kbd>↓</kbd> ';
+  if (choice === 'offer' && offer) {
+    const { pick, bpm } = offer, slower = slowerBpm(unit, bpm);
+    const text = pick === 'choose' ? '' : barsText(problemNumbers(unit, pick));
+    el('piece-choices-ask').textContent = pick === 'choose' ? 'Too much of that take was unclear to pick the bars. Choose the bars to practise.' : 'Practise the trouble spot, or carry on.';
+    const options = (at: number) => unit.bars.map((_, i) => `<option value="${i}"${i === at ? ' selected' : ''}>${barNumber(unit, i)}</option>`).join('');
+    actions.innerHTML = (pick === 'choose' ? `<label class="inline-check">From bar <select id="piece-spot-from">${options(0)}</select></label> <label class="inline-check">to bar <select id="piece-spot-to">${options(1)}</select></label> ` : '')
+      + button('spot', `${space}${pick === 'choose' ? 'Practise these bars' : `Practise ${text}`} at ${slower} BPM`, true, 'Space')
+      + (usingKeys() ? button('wait', `${down}Wait for me${pick === 'choose' ? '' : ` on ${text}`}`, false, 'ArrowDown') : '')
+      + (pick !== 'choose' && unit.hands.length === 2 ? button('hand', `${pick.hand === 'L' ? 'Left' : 'Right'} hand only, ${text}`, false) : '')
+      + button('next', `${up}Next take as usual`, false, 'ArrowUp');
+  } else if (choice === 'pass' && spot) {
+    const slower = slowerBpm(spot.parent, spot.bpm), canSlow = slower < spot.bpm, first = barNumber(spot.parent, 0), last = barNumber(spot.parent, spot.parent.bars.length - 1), twice = spot.clean >= 2;
+    el('piece-choices-ask').textContent = twice ? 'Two clean passes in a row. Put them back in context.' : spot.clean === 1 ? 'Clean pass. One more in a row, then back to the step.' : 'Again until it comes out clean, or slow it down.';
+    const slowBtn = button('slower', `${down}Slower (${slower} BPM)`, false, 'ArrowDown', !canSlow);
+    actions.innerHTML = twice ? button('back', `${space}Back to ${first === last ? `bar ${first}` : `bars ${first}–${last}`}`, true, 'Space') + button('again', `${up}Again`, false, 'ArrowUp') + slowBtn
+      : button('again', `${space}Again`, true, 'Space') + slowBtn + button('back', `${up}Back to the step`, false, 'ArrowUp');
+  }
+  shown.delete('choices:disabled');
+}
+function enterSpot(pick: { from: number; to: number; lead: boolean }, hands: Hand[], bpm: number): void {
+  spot = { parent: unit, from: pick.from, to: pick.to, lead: pick.lead, hands, bpm, exercise: spotExercise(score, unit, pick.from, pick.to, hands), id: spotId(unit.id, pick.from, pick.to, hands), clean: 0 };
+  exercise = spot.exercise; manualBpm = undefined; choice = undefined; offer = undefined;
+  el<HTMLInputElement>('piece-bpm').value = String(bpm); el<HTMLInputElement>('piece-bpm').removeAttribute('aria-invalid'); applyInput();
+}
+function leaveSpot(): void {
+  spot = undefined; choice = undefined; offer = undefined; manualBpm = undefined;
+  exercise = stepExercise(); el<HTMLInputElement>('piece-bpm').value = String(bpmNow()); el<HTMLInputElement>('piece-bpm').removeAttribute('aria-invalid'); applyInput();
+}
+function choose(what: string): void {
+  if (active()) return;
+  if (what === 'back') { if (!spot) return; leaveSpot(); void start('practice'); return; }
+  if (what === 'next') { if (choice !== 'offer' || !offer) return; const carry = offer.carry; choice = undefined; offer = undefined; void start('practice', carry); return; }
+  if (what === 'again' || what === 'slower') {
+    if (!spot) return;
+    if (what === 'slower') { const slower = slowerBpm(spot.parent, spot.bpm); if (slower >= spot.bpm) return; spot.bpm = slower; spot.clean = 0; el<HTMLInputElement>('piece-bpm').value = String(slower); }
+    void start('practice'); return;
+  }
+  if (choice !== 'offer' || !offer) return;
+  const { pick, bpm } = offer, slower = slowerBpm(unit, bpm);
+  const at = pick === 'choose' ? [Number(el<HTMLSelectElement>('piece-spot-from').value), Number(el<HTMLSelectElement>('piece-spot-to').value)].sort((a, b) => a - b) : [];
+  const where = pick === 'choose' ? { from: at[0], to: at[1], lead: false } : pick;
+  if (what === 'spot') { enterSpot(where, unit.hands, slower); void start('practice'); }
+  else if (what === 'wait') { enterSpot(where, unit.hands, slower); startWait(); }
+  else if (what === 'hand' && pick !== 'choose') { enterSpot(where, [pick.hand], slower); void start('practice'); }
+}
+for (const id of ['piece-choices', 'piece-spot-banner']) el(id).onclick = event => { const b = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-choice]'); if (b && !b.disabled) choose(b.dataset.choice!); };
 el<HTMLSelectElement>('piece-select').onchange = () => { progress.selected.unit = ''; loadPack(el<HTMLSelectElement>('piece-select').value); };
 for (const which of ['piano', 'guitar'] as const) el(`inst-${which}`).onclick = () => {
   if (active() || instrument === which) return;
@@ -479,7 +555,7 @@ for (const which of ['piano', 'guitar'] as const) el(`inst-${which}`).onclick = 
 el('piece-start').onclick = () => { void start('practice'); };
 for (const keys of [false, true]) el(keys ? 'input-keys' : 'input-mic').onclick = () => {
   if (active() || inputPrefs.keys === keys) return;
-  inputPrefs.keys = keys; saveInput(); applyInput();
+  inputPrefs.keys = keys; saveInput(); if (spot) leaveSpot(); choice = undefined; offer = undefined; applyInput();
   feedback = keys ? 'Play on the computer keyboard or a MIDI keyboard. Notes are graded from the keys you press; the microphone stays off.' : 'Back to listening through the microphone.';
 };
 el<HTMLInputElement>('piece-midi-sound').checked = inputPrefs.midiSound;
@@ -522,7 +598,9 @@ el<HTMLInputElement>('piece-bpm').oninput = () => {
   const input = el<HTMLInputElement>('piece-bpm'), value = input.valueAsNumber;
   if (active()) { input.value = String(bpmNow()); return; }
   if (!Number.isFinite(value) || value < 20 || value > 240) { input.setAttribute('aria-invalid', 'true'); return; }
-  input.removeAttribute('aria-invalid'); manualBpm = Math.round(value) === rungBpm(unit, current()) ? undefined : Math.round(value);
+  input.removeAttribute('aria-invalid');
+  if (spot) { spot.bpm = Math.round(value); return; }
+  manualBpm = Math.round(value) === rungBpm(unit, current()) ? undefined : Math.round(value);
 };
 el<HTMLInputElement>('piece-goal').onchange = () => {
   const value = Math.round(el<HTMLInputElement>('piece-goal').valueAsNumber);
@@ -600,6 +678,15 @@ window.addEventListener('keydown', event => {
   if (reveal) { endReveal(); if (answerKeys.has(event.code)) swallow(event); return; }
   if (after) { endMoment(event.code !== 'Escape'); if (event.code !== 'Escape') swallow(event); return; }
   const target = event.target instanceof Element ? event.target : null;
+  if (choice && !el('piece-choices').hidden && !active() && !event.ctrlKey && !event.metaKey && !event.altKey && !target?.closest('input, select, textarea, [contenteditable=true]')) {
+    if (answerKeys.has(event.code) && (event.repeat || performance.now() - choiceAt < 350)) { swallow(event); return; }
+    if (event.repeat) { if (event.code.startsWith('Arrow')) event.preventDefault(); return; }
+    if (event.code === 'Space' && target?.closest('button, a, summary, audio')) return;
+    if (!answerKeys.has(event.code)) return;
+    swallow(event);
+    el('piece-choices-actions').querySelector<HTMLButtonElement>(`button[data-key="${event.code}"]:not(:disabled)`)?.click();
+    return;
+  }
   if (!pending || el('piece-result').hidden || active() || event.ctrlKey || event.metaKey || event.altKey || target?.closest('input, select, textarea, [contenteditable=true]')) return;
   if (event.repeat) { if (event.code.startsWith('Arrow')) event.preventDefault(); return; }
   if (event.code === 'Space' && target?.closest('button, a, summary, audio')) return;
@@ -611,7 +698,7 @@ window.addEventListener('keydown', event => {
   if (event.code === 'Escape') { stopWait('Stopped.'); audio.stop(); player.pause(); return; }
   // Space starts a take from anywhere except a control that uses Space itself.
   const target = event.target instanceof Element ? event.target : null;
-  if (event.code === 'Space' && !event.repeat && !target?.closest('button, input, select, textarea, a, summary, audio, [contenteditable=true]') && !active()) {
+  if (event.code === 'Space' && !event.repeat && !target?.closest('button, input, select, textarea, a, summary, audio, [contenteditable=true]') && !active() && !choice) {
     event.preventDefault();
     void start('practice');
   }
@@ -629,10 +716,21 @@ let frameNow = 0, laneSignature = '', laneExercise: Exercise | undefined;
 function paint(): void {
   requestAnimationFrame(paint);
   if (!exercise) return;
-  const plan = audio.plan, now = audio.now, running = active(), p = current();
+  const plan = audio.plan, now = audio.now, running = active(), p = spot ? { ...current(), support: 0 as const } : current();
   frameNow = audio.laneNow;
   disable('piece-stop', !running);
   for (const id of ['piece-start', 'piece-demo', 'piece-calibrate', 'piece-output', 'piece-use-offset', 'piece-next', 'piece-listen', 'piece-select', 'inst-piano', 'inst-guitar', 'piece-goal', 'input-mic', 'input-keys', 'piece-wait', 'piece-bpm']) disable(id, running);
+  const choiceKey = `${choice !== undefined}${running}`;
+  if (shown.get('choices:disabled') !== choiceKey) {
+    shown.set('choices:disabled', choiceKey); { const was = el('piece-choices').hidden; el('piece-choices').hidden = choice === undefined; if (was && !el('piece-choices').hidden) choiceAt = performance.now(); }
+    for (const b of el('piece-choices').querySelectorAll<HTMLButtonElement>('button')) b.disabled = running || b.dataset.off === '1';
+  }
+  disable('piece-spot-back', running);
+  if (spot) {
+    const lead = spot.lead ? barNumber(spot.parent, spot.from) : 0, only = spot.hands.length === 1 ? (spot.hands[0] === 'R' ? ' · right hand only' : ' · left hand only') : '';
+    text('piece-spot-text', `Practising ${barsText(problemNumbers(spot.parent, spot))}${spot.lead ? `, with bar ${lead} to lead in` : ''}, at ${spot.bpm} BPM${only}. Spot practice does not count for tempo steps.`);
+  }
+  if (shown.get('spot:banner') !== String(Boolean(spot))) { shown.set('spot:banner', String(Boolean(spot))); el('piece-spot-banner').hidden = !spot; }
   disable('piece-comfortable', !pending || running); disable('piece-struggling', !pending || running);
   for (const id of ['piece-latest', 'piece-loop']) disable(id, !audio.take || Boolean(plan || audio.busy));
   disable('piece-previous', !audio.previous || Boolean(plan || audio.busy));
@@ -643,7 +741,7 @@ function paint(): void {
   const attention = !usingKeys() && !progress.calibrated; if (shown.get('attention') !== String(attention)) { shown.set('attention', String(attention)); el('piece-calibration').classList.toggle('needs-attention', attention); }
   text('piece-setup-hint', progress.calibrated ? '· calibrated' : '· start here for tempo steps');
   const rung = rungBpm(unit, p), fraction = unit.rungs[Math.min(p.rung, unit.rungs.length - 1)];
-  text('piece-tempo-help', running ? 'Fixed for this take' : manualBpm ? `Free tempo · step is ${rung}` : unit.kind === 'listen' ? 'Goal tempo' : `${Math.round(fraction * 100)}% of ${unit.goalBpm} goal`);
+  text('piece-tempo-help', spot ? 'Spot practice tempo' : running ? 'Fixed for this take' : manualBpm ? `Free tempo · step is ${rung}` : unit.kind === 'listen' ? 'Goal tempo' : `${Math.round(fraction * 100)}% of ${unit.goalBpm} goal`);
   let phase = audio.busy ? audio.analysis || 'Preparing audio…' : audio.playing || !player.paused ? 'Listen or play along' : 'Ready when you are';
   if (plan) {
     const countAt = plan.playAt - plan.beatsPerBar * plan.period;
@@ -662,12 +760,12 @@ function paint(): void {
   if (reveal) stepReveal();
   if (after && performance.now() >= after.until) endMoment(true);
   paintPips(p);
-  const result = !plan && !wait && audio.take?.unit === unit.id ? audio.take.result : undefined, hide = p.support > 0 && unit.kind !== 'listen';
+  const result = !plan && !wait && audio.take?.unit === (spot ? spot.id : unit.id) ? audio.take.result : undefined, hide = p.support > 0 && unit.kind !== 'listen';
   const sweep = reveal && result ? revealBeat : undefined;
   // A lane where nothing moves is drawn again only when something it shows has changed.
   const clockMs = performance.now(), moving = Boolean(plan || wait || sweep !== undefined || laneAnimating() || laneResized() || [...wrong.values()].some(t => clockMs - t < 600));
   const look = { lively: lively(), level: plan?.kind === 'practice' && audio.micActive ? audio.level : undefined };
-  const signature = `${unit.id}|${instrument}|${p.support}|${hide}|${result ? audio.take?.id : ''}|${[...audio.held].join()}|${keyInput.layout.lower},${keyInput.layout.upper}|${usingKeys()}|${reduced.matches}|${look.lively}`;
+  const signature = `${spot ? spot.id : unit.id}|${instrument}|${p.support}|${hide}|${result ? audio.take?.id : ''}|${[...audio.held].join()}|${keyInput.layout.lower},${keyInput.layout.upper}|${usingKeys()}|${reduced.matches}|${look.lively}`;
   if (!moving && laneExercise === exercise && signature === laneSignature) return;
   laneExercise = exercise; laneSignature = signature;
   const lane = el<HTMLCanvasElement>('piece-lane'), shownPlan = plan?.kind === 'calibration' ? undefined : plan;
@@ -687,7 +785,7 @@ function paintPips(p: UnitProgress): void {
     : top ? [0, 0, ''] : [Math.min(2, p.clean), 2, `${Math.min(2, p.clean)} of 2 clean takes toward the next step`];
   const pips = total && !(done && p.learned) ? `<span class="pips${certify ? ' fade' : ''}" title="${label}" aria-label="${label}">${Array.from({ length: total }, (_, i) => `<i class="${i < filled ? 'on' : ''}"></i>`).join('')}</span>` : '';
   const strip = `<span class="rungs" title="Step ${at + 1} of ${rungs.length}" aria-label="Tempo step ${at + 1} of ${rungs.length}">${rungs.map((r, i) => `<i class="${i < at ? 'done' : i === at ? 'now' : ''}${p.certified.some(c => Math.abs(c - r) < 1e-9) ? ' cert' : ''}"></i>`).join('')}</span>`;
-  html('piece-pips', manualBpm ? '' : pips + strip);
+  html('piece-pips', manualBpm || spot ? '' : pips + strip);
 }
 function live(): Parameters<typeof drawKeys>[8] {
   if (wait) return { held: audio.held, labels, hits: wait.hits, auto: autoKeys, wrong, beat: wait.beat, expect: wait.current && wait.current.beat - wait.beat <= 0.5 ? wait.needed : [], message: wait.waiting ? 'Waiting for you: play the glowing keys' : '' };
