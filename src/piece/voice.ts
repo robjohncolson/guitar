@@ -32,6 +32,22 @@ export class PieceVoice {
     return wave;
   }
   play(midi: number, at: number, length: number, level = 0.7, timbre: 'piano' | 'guitar' = 'piano'): void {
+    const { oscillator, gain, t } = this.voice(midi, at, level, timbre);
+    gain.gain.setTargetAtTime(0, t + length, 0.06);
+    oscillator.stop(t + length + 0.4);
+  }
+  /** A note that sounds until the returned release is called (a key held down). */
+  hold(midi: number, level = 0.7, timbre: 'piano' | 'guitar' = 'piano'): () => void {
+    const { oscillator, gain } = this.voice(midi, this.context.currentTime, level, timbre);
+    oscillator.stop(this.context.currentTime + 30);
+    return () => {
+      const t = this.context.currentTime, g = gain.gain as AudioParam & { cancelAndHoldAtTime?: (t: number) => AudioParam };
+      if (g.cancelAndHoldAtTime) g.cancelAndHoldAtTime(t); else { g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); }
+      g.setTargetAtTime(0, t, 0.06);
+      try { oscillator.stop(t + 0.4); } catch { /* ended */ }
+    };
+  }
+  private voice(midi: number, at: number, level: number, timbre: 'piano' | 'guitar'): { oscillator: OscillatorNode; gain: GainNode; t: number } {
     const c = this.context, t = Math.max(c.currentTime, at), oscillator = c.createOscillator(), gain = c.createGain(), filter = c.createBiquadFilter();
     const hz = 440 * 2 ** ((midi - 69) / 12), peak = 0.16 * level * Math.min(1.4, Math.max(0.55, 260 / hz) ** 0.25);
     oscillator.setPeriodicWave(this.wave(timbre)); oscillator.frequency.value = hz;
@@ -40,11 +56,11 @@ export class PieceVoice {
     gain.gain.setValueAtTime(0, t);
     gain.gain.linearRampToValueAtTime(peak, t + 0.006);
     gain.gain.setTargetAtTime(peak * 0.25, t + 0.006, decay);
-    gain.gain.setTargetAtTime(0, t + length, 0.06);
     oscillator.connect(filter).connect(gain).connect(this.out);
-    oscillator.start(t); oscillator.stop(t + length + 0.4);
+    oscillator.start(t);
     this.active.add(oscillator);
     oscillator.onended = () => { this.active.delete(oscillator); oscillator.disconnect(); filter.disconnect(); gain.disconnect(); };
+    return { oscillator, gain, t };
   }
   stop(): void {
     for (const node of this.active) try { node.stop(); } catch { /* already stopped */ }

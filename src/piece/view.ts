@@ -8,7 +8,7 @@ export function pieceShell(): void {
   document.querySelector('#app')!.innerHTML = `<main class="trainer piece">
     <nav class="app-nav" aria-label="Music tools"><a href="${import.meta.env.BASE_URL}">Trainer</a><a href="${import.meta.env.BASE_URL}piece.html" aria-current="page">Pieces</a><a href="${import.meta.env.BASE_URL}play.html?mode=partner">Partner</a><a href="${import.meta.env.BASE_URL}play.html?mode=looper">Looper</a><span>One passage at a time.</span></nav>
     <header class="trainer-header"><div><span id="piece-composer" class="eyebrow"></span><h1 id="piece-title">Learn a piece</h1><p class="intro" id="piece-summary"></p></div><button id="piece-stop" disabled>Stop · Esc</button></header>
-    <div class="piece-controls"><label>Piece <select id="piece-select"></select></label><div class="instrument-toggle" role="group" aria-label="Instrument"><button id="inst-piano" aria-pressed="true">Piano</button><button id="inst-guitar" aria-pressed="false">Guitar accompaniment</button></div></div>
+    <div class="piece-controls"><label>Piece <select id="piece-select"></select></label><div class="instrument-toggle" role="group" aria-label="Instrument"><button id="inst-piano" aria-pressed="true">Piano</button><button id="inst-guitar" aria-pressed="false">Guitar accompaniment</button></div><div class="instrument-toggle" id="input-toggle" role="group" aria-label="Play with"><button id="input-mic" aria-pressed="true">Microphone</button><button id="input-keys" aria-pressed="false">Keyboard · MIDI</button></div></div>
     <div class="trainer-status"><span id="piece-mic">Mic off</span><span id="piece-model"></span><span id="piece-calibration">Timing not calibrated</span><span id="piece-verified"></span></div>
     <section class="lesson-card" aria-labelledby="unit-title">
       <div class="lesson-heading"><div><span id="unit-stage" class="eyebrow"></span><h2 id="unit-title"></h2></div><div class="trainer-tempo"><label for="piece-bpm">BPM</label><input id="piece-bpm" type="number" min="20" max="240" step="1" inputmode="numeric"><span id="piece-tempo-help"></span></div></div>
@@ -31,6 +31,7 @@ export function pieceShell(): void {
         <label>Input processing <select id="piece-output"><option value="headphones">Headphones · clean input</option><option value="speakers">Speakers · echo cancellation</option></select></label>
         <label>Demo &amp; take volume <input id="piece-volume" type="range" min="0" max="1" step=".01" value=".5"><output id="piece-volume-value">50%</output></label>
         <label><input id="piece-click" type="checkbox" checked> Metronome during practice</label>
+        <label><input id="piece-midi-sound" type="checkbox" checked> Sound for MIDI keys (turn off if your keyboard makes its own sound)</label>
         <label><input id="piece-check-pitch" type="checkbox" checked> Piano note checks (turn off for a piano far out of tune)</label>
         <div class="calibration"><p><strong>Measure your sound delay</strong></p><p>Keep the instrument quiet. Hold one headphone earcup close to the microphone so it can hear eight short clicks.</p><button id="piece-calibrate">Calibrate with 8 clicks</button><p id="piece-calibration-feedback" role="status">Practice works without it; calibration lets tempo steps count.</p><label for="piece-offset">Manual input offset (ms)</label><div class="offset-row"><input id="piece-offset" type="number" min="-300" max="500" step="1" value="0"><button id="piece-use-offset">Use this offset</button></div></div>
         <div class="honesty"><p><strong>What the microphone can and cannot tell</strong></p><p>Timing comes from each attack. For piano, a note counts as <em>heard</em> only when its own partials rise at the attack; <em>not heard</em> needs them to stay quiet. Notes doubled an octave or a twelfth above another note have no partials of their own: <em>can't check</em>. Everything else is <em>unclear</em> and counts neither way. Tested on real piano recordings, a played note was called missing or wrong about 2% of the time and an unplayed note was confirmed under 1% of the time. Your room and piano may differ; listen back to your takes.</p><p>For guitar, single plucked strings are checked for pitch; strums are timing only. Fingering, hand position, pedalling, tone and which strings rang stay for you to judge.</p></div>
@@ -62,43 +63,123 @@ function position(ex: Exercise, plan: PiecePlan | undefined, now: number): { bea
   return { beat: (now - plan.playAt) / plan.period, moving: true, playing: now >= plan.playAt && now < plan.end };
 }
 
-/** Falling notes onto a keyboard: left hand blue, right hand green, finger numbers inside. After a take, colours show the verdicts. */
-export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePlan | undefined, now: number, support: number, result: PieceGrade | undefined, reduced: boolean, hideWhilePlaying: boolean): void {
-  const small = canvas.clientWidth < 600, height = small ? 260 : 340, p = prepare(canvas, height), w = Math.max(280, Math.round(canvas.clientWidth));
+type Spark = { x: number; y: number; vx: number; vy: number; life: number; max: number; colour: string; size: number };
+const sparks: Spark[] = [];
+let lastFrame = 0;
+const channels = (hex: string) => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+/** Blend a colour toward white (to = 255) or black (to = 0). */
+const mix = (hex: string, to: number, t: number) => { const c = channels(hex).map(v => Math.round(v + (to - v) * t)); return `#${c.map(v => v.toString(16).padStart(2, '0')).join('')}`; };
+const alpha = (hex: string, a: number) => `rgba(${channels(hex).join(',')},${a})`;
+
+/**
+ * Falling notes onto a keyboard, like a piano video: left hand blue, right hand green, finger numbers at the foot of
+ * each note. A note glows and its key presses down while it sounds. After a take, colours show the verdicts.
+ */
+export interface LiveKeys { held: ReadonlySet<number>; labels?: ReadonlyMap<number, string> }
+const PLAYED = '#e1c48f';
+export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePlan | undefined, now: number, support: number, result: PieceGrade | undefined, reduced: boolean, hideWhilePlaying: boolean, live?: LiveKeys): void {
+  const small = canvas.clientWidth < 600, height = small ? 300 : 440, p = prepare(canvas, height), w = Math.max(280, Math.round(canvas.clientWidth));
+  const clock = performance.now(), dt = lastFrame ? Math.min(0.05, (clock - lastFrame) / 1000) : 0; lastFrame = clock;
   const midis = ex.events.flatMap(e => e.notes.map(n => n.midi));
   let lo = Math.min(...midis) - 2, hi = Math.max(...midis) + 2;
   lo -= ((lo % 12) + 12) % 12; hi += 11 - (((hi % 12) + 12) % 12);
   const whites: number[] = [];
   for (let m = lo; m <= hi; m++) if (!isBlack(m)) whites.push(m);
-  const keyW = w / whites.length, kbH = small ? 44 : 56, hitY = height - kbH;
-  const xOf = (m: number) => { if (!isBlack(m)) return { x: whites.indexOf(m) * keyW, width: keyW }; const left = whites.indexOf(m - 1); return { x: (left + 1) * keyW - keyW * 0.3, width: keyW * 0.6 }; };
-  const { beat, moving, playing } = position(ex, plan, now);
+  const keyW = w / whites.length, kbH = small ? 72 : 104, felt = small ? 5 : 7, kbTop = height - kbH, hitY = kbTop - felt;
+  const xOf = (m: number) => { if (!isBlack(m)) return { x: whites.indexOf(m) * keyW, width: keyW }; const left = whites.indexOf(m - 1); return { x: (left + 1) * keyW - keyW * 0.29, width: keyW * 0.58 }; };
+  const { beat, moving, playing } = position(ex, plan, now), animate = moving && !reduced;
   const visible = Math.max(4, ex.beatsPerBar * (small ? 1.3 : 2)), scale = (hitY - 18) / visible;
-  const yOf = (b: number) => hitY - (b - (moving && !reduced ? beat : 0)) * scale;
+  const yOf = (b: number) => hitY - (b - (animate ? beat : 0)) * scale;
+
+  // Stage: dark gradient, darker lanes under the black keys, faint guides at each C and F.
+  const bg = p.createLinearGradient(0, 0, 0, hitY); bg.addColorStop(0, '#0b0f0d'); bg.addColorStop(1, '#17201b');
+  p.fillStyle = bg; p.fillRect(0, 0, w, hitY);
+  p.fillStyle = 'rgba(0,0,0,.22)';
+  for (let m = lo; m <= hi; m++) if (isBlack(m)) { const { x, width } = xOf(m); p.fillRect(x, 0, width, hitY); }
+  for (const m of whites) if (m % 12 === 0 || m % 12 === 5) { const x = Math.round(xOf(m).x) + 0.5; p.strokeStyle = m % 12 === 0 ? 'rgba(220,235,210,.09)' : 'rgba(220,235,210,.045)'; p.beginPath(); p.moveTo(x, 0); p.lineTo(x, hitY); p.stroke(); }
   // Bar lines and chord names.
   p.font = `${small ? 10 : 11}px Segoe UI`; p.textBaseline = 'middle';
-  for (const bar of ex.bars) { const y = yOf(bar.beat); if (y < 8 || y > hitY) continue; p.strokeStyle = '#2f3d33'; p.beginPath(); p.moveTo(0, y); p.lineTo(w, y); p.stroke(); p.fillStyle = '#7f927b'; p.fillText(`bar ${bar.number}`, 6, y - 7); }
+  for (const bar of ex.bars) { const y = Math.round(yOf(bar.beat)) + 0.5; if (y < 8 || y > hitY) continue; p.strokeStyle = 'rgba(200,216,167,.16)'; p.beginPath(); p.moveTo(0, y); p.lineTo(w, y); p.stroke(); p.fillStyle = '#7f927b'; p.fillText(`bar ${bar.number}`, 6, y - 7); }
   for (const c of ex.chords) { const y = yOf(c.beat); if (y < 8 || y > hitY) continue; p.fillStyle = '#b4c6a2'; p.textAlign = 'right'; p.fillText(c.symbol, w - 6, y - 7); p.textAlign = 'left'; }
+
+  // Notes: white-key notes first so black-key notes sit on top, as the keys do.
   const hide = hideWhilePlaying && playing;
   const verdicts = result ? new Map(result.events.flatMap(e => e.notes.map(n => [`${ex.events[e.index]?.beat}:${n.midi}`, n.verdict]))) : undefined;
-  const sounding = new Set<number>();
-  if (!hide) for (const e of ex.events) for (const n of e.notes) {
+  const sounding = new Map<number, { colour: string; flash: number }>();
+  const notes = hide ? [] : ex.events.flatMap(e => e.notes.map(n => ({ e, n }))).sort((a, b) => Number(isBlack(a.n.midi)) - Number(isBlack(b.n.midi)));
+  for (const { e, n } of notes) {
     const top = yOf(e.beat + n.dur), bottom = yOf(e.beat);
     if (bottom < 0 || top > hitY) continue;
-    if (moving && beat >= e.beat && beat < e.beat + n.dur) sounding.add(n.midi);
-    const { x, width } = xOf(n.midi), verdict = verdicts?.get(`${e.beat}:${n.midi}`);
-    const colour = verdict ? VERDICT[verdict] : HAND[n.hand];
-    p.fillStyle = colour; p.globalAlpha = verdict === 'cannot-check' || verdict === 'unchecked' ? 0.45 : 0.9;
-    const y0 = Math.max(0, top), y1 = Math.min(hitY, bottom - 1);
-    p.beginPath(); p.roundRect(x + 2, y0, Math.max(3, width - 4), Math.max(4, y1 - y0), 4); p.fill(); p.globalAlpha = 1;
-    if (verdict === 'wrong' || verdict === 'not-heard') { p.strokeStyle = '#f2c3a3'; p.lineWidth = 2; p.stroke(); p.lineWidth = 1; }
-    if (n.finger && width > 11 && bottom - Math.max(0, top) > 14) { p.fillStyle = '#172018'; p.font = `bold ${small ? 10 : 12}px Segoe UI`; p.textAlign = 'center'; p.fillText(String(n.finger), x + width / 2, bottom - 9); p.textAlign = 'left'; }
+    const verdict = verdicts?.get(`${e.beat}:${n.midi}`), black = isBlack(n.midi);
+    const base = mix(verdict ? VERDICT[verdict] : HAND[n.hand], 0, black ? 0.2 : 0);
+    const active = moving && beat >= e.beat && beat < e.beat + n.dur;
+    if (active) sounding.set(n.midi, { colour: base, flash: Math.max(0, 1 - (beat - e.beat) * 3) });
+    const { x, width } = xOf(n.midi), nx = x + (black ? 1 : 2), nw = Math.max(3, width - (black ? 2 : 4));
+    const y0 = Math.max(0, top), y1 = Math.min(hitY, bottom - 1), nh = Math.max(4, y1 - y0), r = Math.min(6, nw / 2, nh / 2);
+    const fill = p.createLinearGradient(0, y0, 0, y0 + nh);
+    fill.addColorStop(0, mix(base, 0, 0.28)); fill.addColorStop(1, active ? mix(base, 255, 0.35) : base);
+    p.globalAlpha = verdict === 'cannot-check' || verdict === 'unchecked' ? 0.45 : 1;
+    if (active && animate) { p.shadowColor = base; p.shadowBlur = small ? 12 : 20; }
+    p.fillStyle = fill; p.beginPath(); p.roundRect(nx, y0, nw, nh, r); p.fill();
+    p.shadowBlur = 0;
+    const flagged = verdict === 'wrong' || verdict === 'not-heard';
+    p.strokeStyle = flagged ? '#f2c3a3' : black ? 'rgba(0,0,0,.55)' : alpha(mix(base, 255, 0.5), 0.55);
+    p.lineWidth = flagged ? 2 : 1; p.stroke(); p.lineWidth = 1; p.globalAlpha = 1;
+    if (n.finger && nw > 10 && bottom - y0 > 16) {
+      const radius = Math.min(small ? 7 : 9, nw / 2 - 1), cy = Math.min(hitY, bottom) - radius - 3;
+      p.fillStyle = 'rgba(10,14,12,.5)'; p.beginPath(); p.arc(x + width / 2, cy, radius, 0, Math.PI * 2); p.fill();
+      p.fillStyle = mix(base, 255, 0.65); p.font = `bold ${small ? 10 : 12}px Segoe UI`; p.textAlign = 'center'; p.fillText(String(n.finger), x + width / 2, cy + 0.5); p.textAlign = 'left';
+    }
   }
   if (hide) { p.fillStyle = '#c8d8a7'; p.font = `${small ? 15 : 20}px Segoe UI`; p.textAlign = 'center'; p.fillText(support >= 2 ? 'Carry the pulse.' : 'From memory, or from your music.', w / 2, hitY / 2); p.textAlign = 'left'; }
-  // Keyboard.
-  for (const m of whites) { const { x, width } = xOf(m); p.fillStyle = sounding.has(m) ? '#dfe9cf' : '#e9ece4'; p.fillRect(x + 0.5, hitY, width - 1, kbH); if (m % 12 === 0) { p.fillStyle = '#5d6b5f'; p.font = `${small ? 8 : 9}px Segoe UI`; p.fillText(noteName(m), x + 2, height - 8); } }
-  for (let m = lo; m <= hi; m++) if (isBlack(m)) { const { x, width } = xOf(m); p.fillStyle = sounding.has(m) ? '#7c9a5f' : '#1d221e'; p.fillRect(x, hitY, width, kbH * 0.62); }
-  if (moving && !reduced) { p.strokeStyle = '#d8e4c5'; p.lineWidth = 2; p.beginPath(); p.moveTo(0, hitY); p.lineTo(w, hitY); p.stroke(); p.lineWidth = 1; }
+
+  // Hit line, a glow where each sounding note meets its key, and sparks rising from it.
+  if (animate) {
+    const haze = p.createLinearGradient(0, hitY - 28, 0, hitY); haze.addColorStop(0, 'rgba(216,228,197,0)'); haze.addColorStop(1, 'rgba(216,228,197,.1)');
+    p.fillStyle = haze; p.fillRect(0, hitY - 28, w, 28);
+    p.globalCompositeOperation = 'lighter';
+    for (const [m, { colour, flash }] of sounding) {
+      const { x, width } = xOf(m), cx = x + width / 2, radius = keyW * 1.3 + flash * keyW * 1.4;
+      const glow = p.createRadialGradient(cx, hitY, 0, cx, hitY, radius); glow.addColorStop(0, alpha(colour, 0.5 + flash * 0.4)); glow.addColorStop(1, alpha(colour, 0));
+      p.fillStyle = glow; p.fillRect(cx - radius, hitY - radius, radius * 2, radius + felt);
+      for (let k = (18 + flash * 120) * dt; k > 0; k--) if (k >= 1 || Math.random() < k) sparks.push({ x: cx + (Math.random() - 0.5) * width * 0.8, y: hitY - 1, vx: (Math.random() - 0.5) * 50, vy: -50 - Math.random() * 110 - flash * 80, life: 0, max: 0.35 + Math.random() * 0.5, colour: mix(colour, 255, 0.35), size: 0.8 + Math.random() * (small ? 1.2 : 1.8) });
+    }
+    if (sparks.length > 400) sparks.splice(0, sparks.length - 400);
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i]; s.life += dt; if (s.life >= s.max) { sparks.splice(i, 1); continue; }
+      s.vy += 90 * dt; s.x += s.vx * dt; s.y += s.vy * dt;
+      p.fillStyle = alpha(s.colour, 1 - s.life / s.max); p.beginPath(); p.arc(s.x, s.y, s.size, 0, Math.PI * 2); p.fill();
+    }
+    p.globalCompositeOperation = 'source-over';
+    p.strokeStyle = 'rgba(232,240,220,.85)'; p.lineWidth = 2; p.beginPath(); p.moveTo(0, hitY); p.lineTo(w, hitY); p.stroke(); p.lineWidth = 1;
+  } else sparks.length = 0;
+
+  // Felt strip and keyboard. A sounding key takes its note's colour and sinks a little.
+  const strip = p.createLinearGradient(0, hitY, 0, kbTop); strip.addColorStop(0, '#2b3a30'); strip.addColorStop(1, '#141b16');
+  p.fillStyle = strip; p.fillRect(0, hitY, w, felt);
+  p.fillStyle = '#0a0d0b'; p.fillRect(0, kbTop, w, kbH);
+  for (const m of whites) {
+    const { x, width } = xOf(m), on = live?.held.has(m) ? { colour: PLAYED } : sounding.get(m), dip = on ? 2 : 0;
+    const face = p.createLinearGradient(0, kbTop, 0, height);
+    if (on) { face.addColorStop(0, mix(on.colour, 0, 0.15)); face.addColorStop(1, mix(on.colour, 255, 0.2)); } else { face.addColorStop(0, '#dfe2d8'); face.addColorStop(0.85, '#f4f5ef'); face.addColorStop(1, '#e3e6dc'); }
+    p.fillStyle = face; p.beginPath(); p.roundRect(x + 0.75, kbTop + dip, width - 1.5, kbH - dip - 1, [0, 0, 4, 4]); p.fill();
+    if (m % 12 === 0) { p.fillStyle = on ? '#1d2a20' : '#6d7a6f'; p.font = `${small ? 8 : 10}px Segoe UI`; p.textAlign = 'center'; p.fillText(noteName(m), x + width / 2, height - (small ? 9 : 12)); p.textAlign = 'left'; }
+    const label = live?.labels?.get(m);
+    if (label && width >= 12) { p.fillStyle = on ? '#1d2a20' : '#4f5c51'; p.font = `bold ${small ? 9 : 12}px Segoe UI`; p.textAlign = 'center'; p.fillText(label, x + width / 2, height - (small ? 24 : 32)); p.textAlign = 'left'; }
+  }
+  const bh = kbH * 0.62;
+  for (let m = lo; m <= hi; m++) if (isBlack(m)) {
+    const { x, width } = xOf(m), on = live?.held.has(m) ? { colour: PLAYED } : sounding.get(m), dip = on ? 2 : 0;
+    p.fillStyle = 'rgba(0,0,0,.35)'; p.fillRect(x + 1.5, kbTop, width, bh + 4);
+    const face = p.createLinearGradient(0, kbTop, 0, kbTop + bh);
+    if (on) { face.addColorStop(0, mix(on.colour, 0, 0.35)); face.addColorStop(1, on.colour); } else { face.addColorStop(0, '#0e110f'); face.addColorStop(1, '#2a302c'); }
+    p.fillStyle = face; p.beginPath(); p.roundRect(x, kbTop, width, bh + dip, [0, 0, 3, 3]); p.fill();
+    p.fillStyle = on ? alpha(mix(on.colour, 255, 0.4), 0.8) : 'rgba(255,255,255,.1)'; p.fillRect(x + width * 0.18, kbTop + bh + dip - (small ? 5 : 7), width * 0.64, 2);
+    const label = live?.labels?.get(m);
+    if (label && width >= 9) { p.fillStyle = on ? '#1d2a20' : '#aab5a8'; p.font = `bold ${small ? 8 : 11}px Segoe UI`; p.textAlign = 'center'; p.fillText(label, x + width / 2, kbTop + bh - (small ? 13 : 18)); p.textAlign = 'left'; }
+  }
+  const shade = p.createLinearGradient(0, kbTop, 0, kbTop + 10); shade.addColorStop(0, 'rgba(0,0,0,.4)'); shade.addColorStop(1, 'rgba(0,0,0,0)');
+  p.fillStyle = shade; p.fillRect(0, kbTop, w, 10);
   if (reduced && playing) { p.fillStyle = '#c8d8a7'; p.font = '16px Segoe UI'; p.fillText(`Beat ${Math.floor(beat) % ex.beatsPerBar + 1}`, w - 80, 14); }
 }
 

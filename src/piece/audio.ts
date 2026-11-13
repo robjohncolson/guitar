@@ -6,7 +6,7 @@ import { loopWav } from '../audio/loop-wav';
 import { calibrate, pipOnsets, type Calibration } from '../trainer/calibration';
 import type { Ear } from '../audio/ear';
 import { analyzeTake } from '../trainer/analyze';
-import { gradeAttacks, type PieceGrade } from './grade';
+import { gradeAttacks, gradeKeys, type KeyPress, type PieceGrade } from './grade';
 import { planExercise, type PieceKind, type PiecePlan, type Sound } from './plan';
 import { PieceVoice } from './voice';
 import type { Exercise, XEvent } from './exercise';
@@ -15,6 +15,8 @@ import type { AnalysisRequest } from './analysis.worker';
 export interface PieceTake {
   id: number; exercise: Exercise; unit: string; bpm: number; support: number; kind: PieceKind; offset: number; calibrated?: boolean;
   samples: Float32Array; rate: number; levelGain: number; result?: PieceGrade;
+  /** Keys takes: what was pressed, in seconds from the first beat. Such takes have no audio. */
+  presses?: KeyPress[];
 }
 interface Capture { id: number; from: number; samples: Float32Array; copied: number; ready: boolean }
 
@@ -24,6 +26,12 @@ export class PieceAudio {
   error = ''; busy = false; analysis = ''; level = 0; model = 'not needed';
   plan?: PiecePlan; take?: PieceTake; previous?: PieceTake;
   mode: OutputMode = 'headphones'; volume = 0.5; click = true; deviceKey = ''; checkPitch = true;
+  /** mic: listen to an acoustic instrument. keys: grade the computer keyboard or MIDI presses; no microphone. */
+  input: 'mic' | 'keys' = 'mic';
+  /** Keys held right now, for the lane, and the release for each one that sounds. */
+  readonly held = new Set<number>();
+  private releases = new Map<number, () => void>();
+  private presses?: KeyPress[];
   onTake: (take: PieceTake) => void = () => {};
   onCalibration: (result: Calibration) => void = () => {};
   private voice?: PieceVoice;
@@ -56,7 +64,7 @@ export class PieceAudio {
   }
   stop(): void {
     this.generation++; this.busy = false; this.analysis = ''; this.plan = undefined; this.capture = undefined; this.current = undefined; this.level = 0;
-    this.closeMic(); this.voice?.stop();
+    this.closeMic(); this.voice?.stop(); this.releases.clear(); this.presses = undefined;
     for (const pip of this.pips) try { pip.stop(); } catch { /* ended */ }
     this.pips = [];
     try { this.playback?.stop(); } catch { /* ended */ }
@@ -104,10 +112,12 @@ export class PieceAudio {
         if (!this.model.startsWith('CREPE ready')) throw new Error('CREPE is not ready. Reload to retry; plucked-note checks need the real pitch model.');
         void ear;
       }
-      if (kind !== 'demo' && !await this.microphone(generation)) return;
+      const keys = kind === 'practice' && this.input === 'keys' && exercise.instrument === 'piano';
+      if (kind !== 'demo' && !keys && !await this.microphone(generation)) return;
       this.plan = planExercise(exercise, bpm, this.now + outputDelay(this.context), kind, support, demonstrate, backing);
       this.current = { exercise, unit, bpm, offset }; this.index = 0; this.lastTick = this.now; this.interrupted = false;
-      if (kind !== 'demo') {
+      if (keys) this.presses = [];
+      else if (kind !== 'demo') {
         const plan = this.plan, rate = this.context.sampleRate, from = plan.playAt - (kind === 'calibration' ? 0.25 : 0.5), until = plan.end + 0.75;
         const length = Math.round((until - from) * rate), id = ++this.sequence;
         this.capture = { id, from, samples: new Float32Array(length), copied: 0, ready: false };
@@ -150,7 +160,7 @@ export class PieceAudio {
     }
     if (now < plan.finish) return;
     if (plan.kind === 'demo') { this.plan = undefined; return; }
-    if (!this.capture?.ready && now < plan.end + 2) return;
+    if (!this.presses && !this.capture?.ready && now < plan.end + 2) return;
     void this.complete();
   }
   private analyse(request: Omit<AnalysisRequest, 'id'>): Promise<PieceGrade> {
@@ -171,7 +181,32 @@ export class PieceAudio {
       worker.postMessage({ ...request, id, take: { ...request.take, samples: copy } }, [copy.buffer]);
     });
   }
+  /** A key went down: sound it (unless the instrument makes its own) and, during a keys take, record when on the audio clock. */
+  async keyDown(midi: number, stamp: number, sound: boolean): Promise<void> {
+    this.held.add(midi);
+    if (this.context && this.presses && this.plan) {
+      const t = this.context.currentTime - Math.max(0, performance.now() - stamp) / 1000;
+      if (t >= this.plan.playAt - 0.5 && t <= this.plan.end + 0.5) this.presses.push({ t: t - this.plan.playAt, midi });
+    }
+    if (!sound) return;
+    try { this.context = await enableContext(this.context); } catch { return; }
+    this.voice ??= new PieceVoice(this.context); this.voice.volume = this.volume;
+    if (!this.held.has(midi)) return;
+    this.releases.get(midi)?.();
+    this.releases.set(midi, this.voice.hold(midi, 0.75));
+  }
+  keyUp(midi: number): void {
+    this.held.delete(midi);
+    this.releases.get(midi)?.(); this.releases.delete(midi);
+  }
+  private completeKeys(): void {
+    const plan = this.plan!, current = this.current!, presses = this.presses ?? [];
+    const result = gradeKeys(current.exercise, current.bpm, presses, this.interrupted);
+    const take: PieceTake = { id: ++this.sequence, exercise: current.exercise, unit: current.unit, bpm: current.bpm, support: plan.support, kind: plan.kind, offset: 0, samples: new Float32Array(0), rate: this.context!.sampleRate, levelGain: 1, result, presses };
+    this.stop(); this.previous = this.take; this.take = take; this.onTake(take);
+  }
   private async complete(): Promise<void> {
+    if (this.presses) { this.completeKeys(); return; }
     const capture = this.capture!, plan = this.plan!, current = this.current!, context = this.context!, generation = this.generation;
     this.plan = undefined; this.busy = true; this.analysis = 'Listening back to the take…';
     if (plan.kind === 'calibration') {

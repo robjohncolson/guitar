@@ -161,3 +161,57 @@ export function gradeAttacks(ex: Exercise, bpm: number, attacks: Attack[], take:
   offsets.sort((a, b) => a - b);
   return { trusted: !reason, reason, events, timing, pitch, score: Math.max(0, Math.min(timing, pitch ?? 1)), extras, extraNotes: [], coverage: take.coverage, checked, unclear, cannot: 0, tuning: 0, feedback, offset: offsets.length ? offsets[Math.floor(offsets.length / 2)] : 0 };
 }
+
+export interface KeyPress { t: number; midi: number }
+/**
+ * Computer keys or MIDI: pitches and press times are exact, so every graded note gets a definite verdict.
+ * t is seconds from the first beat. Presses close together form one attack, as a chord does.
+ */
+export function gradeKeys(ex: Exercise, bpm: number, presses: KeyPress[], interrupted = false): PieceGrade {
+  const period = 60 / bpm, graded = ex.events.map((e, index) => ({ e, index })).filter(x => x.e.grade !== 'none');
+  const times = graded.map(x => x.e.beat * period), together = Math.min(0.08, period * 0.25);
+  const groups: { t: number; midis: number[] }[] = [];
+  for (const p of [...presses].sort((a, b) => a.t - b.t)) {
+    const last = groups[groups.length - 1];
+    if (last && p.t - last.t <= together) { if (!last.midis.includes(p.midi)) last.midis.push(p.midi); } else groups.push({ t: p.t, midis: [p.midi] });
+  }
+  const pairs = match(times, groups.map(g => g.t), Math.min(0.4, period * 0.45)), window = Math.min(0.13, period * 0.16);
+  const used = new Set(pairs.values()), extras = groups.length - used.size, extraNotes: PieceGrade['extraNotes'] = [];
+  let inTime = 0, heard = 0, wrongOrMissing = 0;
+  const offsets: number[] = [];
+  const events: EventResult[] = graded.map(({ e, index }, i) => {
+    const j = pairs.get(i);
+    if (j === undefined) return { index, beat: e.beat, mark: 'missed', notes: e.notes.map(n => ({ midi: n.midi, verdict: 'unchecked', reason: 'nothing was played here' })) };
+    const g = groups[j], delta = g.t - times[i], expected = e.notes.map(n => n.midi);
+    offsets.push(delta);
+    if (Math.abs(delta) <= window) inTime++;
+    const stray = g.midis.filter(m => !expected.includes(m));
+    for (const midi of stray) extraNotes.push({ beat: e.beat, midi });
+    const notes: NoteResult[] = e.notes.map(n => {
+      if (g.midis.includes(n.midi)) { heard++; return { midi: n.midi, verdict: 'heard', reason: 'key matched' }; }
+      wrongOrMissing++;
+      const near = stray.slice().sort((a, b) => Math.abs(a - n.midi) - Math.abs(b - n.midi))[0];
+      return near !== undefined && Math.abs(near - n.midi) <= 2 ? { midi: n.midi, verdict: 'wrong', heardAs: near, reason: 'a neighbouring key was played' } : { midi: n.midi, verdict: 'not-heard', reason: 'this key was not played' };
+    });
+    return { index, beat: e.beat, mark: Math.abs(delta) <= window ? 'good' : delta < 0 ? 'early' : 'late', offset: delta, notes };
+  });
+  const count = Math.max(1, graded.length), checked = heard + wrongOrMissing;
+  const timing = Math.max(0, (inTime - extras) / count), pitch = checked ? heard / checked : null;
+  const reason = interrupted ? 'Audio timing was interrupted. This take will not change your progress.'
+    : !presses.length ? 'No keys were pressed during the take. Click the page outside any text box, then try again.' : '';
+  const name = (m: number) => noteName(m, ex.keySig);
+  const wrong = events.flatMap(e => e.notes.filter(n => n.verdict === 'wrong').map(n => ({ e, n })));
+  const silent = events.flatMap(e => e.notes.filter(n => n.verdict === 'not-heard').map(n => ({ e, n })));
+  const missed = events.filter(e => e.mark === 'missed'), late = events.filter(e => e.mark === 'late').length, early = events.filter(e => e.mark === 'early').length;
+  const feedback = reason
+    || (wrong.length ? `At ${where(ex, wrong[0].e.beat)} you played ${name(wrong[0].n.heardAs!)} instead of ${name(wrong[0].n.midi)}.` : '')
+    || (silent.length ? `At ${where(ex, silent[0].e.beat)}, ${name(silent[0].n.midi)} was missing.` : '')
+    || (missed.length ? `Nothing was played at ${where(ex, missed[0].beat)}. Keep counting through held notes and rests.` : '')
+    || (extraNotes.length ? `An extra ${name(extraNotes[0].midi)} at ${where(ex, extraNotes[0].beat)}.` : '')
+    || (extras ? 'There were extra attacks. Play each chord once, together.' : '')
+    || (late > early && late ? 'Several notes came a little late. Look ahead to the next shape during the long notes.' : '')
+    || (early ? 'Some notes came early. Let each held note have its full length.' : '')
+    || 'Every key right and on time.';
+  offsets.sort((a, b) => a - b);
+  return { trusted: !reason, reason, events, timing, pitch, score: Math.max(0, Math.min(timing, pitch ?? 1)), extras, extraNotes, coverage: 1, checked, unclear: 0, cannot: 0, tuning: 0, feedback, offset: offsets.length ? offsets[Math.floor(offsets.length / 2)] : 0 };
+}
