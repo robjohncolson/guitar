@@ -162,7 +162,8 @@ export function gradeAttacks(ex: Exercise, bpm: number, attacks: Attack[], take:
   return { trusted: !reason, reason, events, timing, pitch, score: Math.max(0, Math.min(timing, pitch ?? 1)), extras, extraNotes: [], coverage: take.coverage, checked, unclear, cannot: 0, tuning: 0, feedback, offset: offsets.length ? offsets[Math.floor(offsets.length / 2)] : 0 };
 }
 
-export interface KeyPress { t: number; midi: number }
+/** A key press in seconds from the first beat; dur is how long it was held, when the release was seen. */
+export interface KeyPress { t: number; midi: number; dur?: number }
 /**
  * Computer keys or MIDI: pitches and press times are exact, so every graded note gets a definite verdict.
  * t is seconds from the first beat. Presses close together form one attack, as a chord does.

@@ -32,7 +32,10 @@ const packs = (): Pack[] => [
 ];
 const trainerCalibration = (() => { try { const v = JSON.parse(localStorage.getItem('guitar.trainer.v1') ?? '{}'); return { offset: Number(v.offset) || 0, calibrated: v.calibrated === true, calibrationKey: String(v.calibrationKey ?? '') }; } catch { return undefined; } })();
 const progress: PieceProgress = (() => { try { return parsePieceProgress(localStorage.getItem(pieceProgressKey), trainerCalibration); } catch { return parsePieceProgress(null, trainerCalibration); } })();
-const audio = new PieceAudio(), player = el<HTMLAudioElement>('piece-player'), reduced = matchMedia('(prefers-reduced-motion: reduce)');
+const audio = new PieceAudio();
+// Browser checks reach the audio engine in development builds only.
+if (import.meta.env.DEV) (window as unknown as { __piece: unknown }).__piece = { audio };
+const player = el<HTMLAudioElement>('piece-player'), reduced = matchMedia('(prefers-reduced-motion: reduce)');
 audio.checkPitch = progress.checkPitch;
 let pack: Pack, score: Score, curriculum: Curriculum, arrangement: Arrangement, gUnits: Unit[] = [];
 let instrument: 'piano' | 'guitar' = progress.selected.instrument, unit: Unit, exercise: Exercise, manualBpm: number | undefined;
@@ -209,15 +212,22 @@ async function start(kind: 'practice' | 'demo'): Promise<void> {
 }
 function showTake(take: PieceTake): void {
   URL.revokeObjectURL(wavUrl); URL.revokeObjectURL(traceUrl);
+  const keys = Boolean(take.presses);
+  traceUrl = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, piece: pack.id, unit: take.unit, instrument, bpm: take.bpm, support: take.support, offset: take.offset, result: take.result, presses: take.presses }, null, 2)], { type: 'application/json' }));
+  // Keys takes have no audio: they replay on the piano voice with the lane instead.
+  for (const id of ['piece-player', 'piece-loop', 'piece-download']) el(id).hidden = keys;
+  el('piece-review-note').textContent = keys ? 'Your keys replay on the piano sound while the notes scroll. Takes stay in this page.' : 'Playback stops the microphone. Takes stay in this page.';
+  el<HTMLAnchorElement>('piece-trace').href = traceUrl;
+  el('piece-review').hidden = false; el('piece-take').textContent = `${take.exercise.title} · ${take.bpm} BPM`;
+  if (keys) return;
   wavUrl = URL.createObjectURL(new Blob([audio.wav(take)!], { type: 'audio/wav' }));
-  traceUrl = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, piece: pack.id, unit: take.unit, instrument, bpm: take.bpm, support: take.support, offset: take.offset, result: take.result }, null, 2)], { type: 'application/json' }));
   player.src = wavUrl; el<HTMLAnchorElement>('piece-download').href = wavUrl; el<HTMLAnchorElement>('piece-trace').href = traceUrl;
   el<HTMLAnchorElement>('piece-download').download = `${pack.id}-${take.unit.replace(/[^\w-]+/g, '_')}-${take.bpm}bpm.wav`;
   el('piece-review').hidden = false; el('piece-take').textContent = `${take.exercise.title} · ${take.bpm} BPM`;
 }
 audio.onTake = take => {
   session.takes++; session.seconds += take.presses ? take.exercise.beats * 60 / take.bpm : take.samples.length / take.rate; take.calibrated = timed(take);
-  if (take.presses) el('piece-review').hidden = true; else showTake(take);
+  showTake(take);
   const result = take.result;
   if (!result) return;
   pending = { take, before: current() };
@@ -228,7 +238,7 @@ audio.onTake = take => {
   const marks = result.events.map(e => e.mark), mark = (m: string) => marks.filter(x => x === m).length;
   el('piece-metrics').innerHTML = `<span><strong>${Math.round(result.timing * 100)}%</strong> on time${timed(take) ? '' : ' · estimate'}</span>${result.pitch === null ? `<span>${instrument === 'piano' ? 'Notes mostly unchecked' : 'Timing only'}</span>` : `<span><strong>${Math.round(result.pitch * 100)}%</strong> ${take.presses ? 'right keys' : 'notes heard right'}</span>`}${result.trusted ? '' : '<span>Not scored</span>'}`;
   el('piece-verdicts').innerHTML = [['heard', 'heard', count('heard')], ['wrong', 'wrong or missing', count('wrong') + count('not-heard')], ['unclear', 'unclear', count('unclear')], ['cannot', "can't check", count('cannot-check')], ['missed', 'attacks missed', mark('missed')], ['unsure', 'attacks unsure', mark('unsure')]]
-    .filter(([, , n]) => Number(n) > 0).map(([cls, label, n]) => `<span class="verdict ${cls}">${n} ${label}</span>`).join('');
+    .filter(([, , n]) => Number(n) > 0).map(([cls, label, n]) => `<span class="verdict ${cls}">${n} ${n === 1 ? String(label).replace('attacks', 'attack') : label}</span>`).join('');
   const problems = result.events.filter(e => e.mark !== 'good' || e.notes.some(n => n.verdict === 'wrong' || n.verdict === 'not-heard')).slice(0, 8).map(e => {
     const at = barAt(take.exercise, e.beat), wrong = e.notes.filter(n => n.verdict === 'wrong' || n.verdict === 'not-heard').map(n => n.verdict === 'wrong' ? `${noteName(n.midi, take.exercise.keySig)} ${take.presses ? 'played' : 'sounded'} as ${noteName(n.heardAs!, take.exercise.keySig)}` : `${noteName(n.midi, take.exercise.keySig)} ${take.presses ? 'missing' : 'not heard'}`);
     return `bar ${at.number} beat ${at.beat}: ${e.mark}${e.offset !== undefined && e.mark !== 'good' ? ` (${e.offset > 0 ? '+' : ''}${Math.round(e.offset * 1000)} ms)` : ''}${wrong.length ? `, ${wrong.join(', ')}` : ''}`;
@@ -273,10 +283,16 @@ el('piece-next').onclick = () => { const next = suggestToday({ ...curriculum, un
 el('piece-wait').onclick = startWait;
 el('piece-stop').onclick = () => { stopWait(); audio.stop(); player.pause(); feedback = 'Stopped. Your last completed take is still available below.'; };
 player.onplay = () => audio.stop();
-el('piece-comfortable').onclick = () => nextTake(true);
-el('piece-struggling').onclick = () => nextTake(false);
-el('piece-latest').onclick = () => { if (audio.take) { showTake(audio.take); player.play().catch(e => audio.error = String(e)); } };
-el('piece-previous').onclick = () => { if (audio.previous) { showTake(audio.previous); player.play().catch(e => audio.error = String(e)); } };
+el('piece-comfortable').onclick = () => { nextTake(true); (document.activeElement as HTMLElement | null)?.blur(); };
+el('piece-struggling').onclick = () => { nextTake(false); (document.activeElement as HTMLElement | null)?.blur(); };
+const hear = (take?: PieceTake) => {
+  if (!take) return;
+  showTake(take);
+  if (take.presses) { player.pause(); feedback = 'Your take, replayed. Watch where the notes and your keys part company.'; void audio.replayKeys(take); }
+  else player.play().catch(e => audio.error = String(e));
+};
+el('piece-latest').onclick = () => hear(audio.take);
+el('piece-previous').onclick = () => hear(audio.previous);
 el('piece-loop').onclick = () => { player.pause(); feedback = 'Your take is looping. Play along freely; nothing is graded.'; void audio.playTake(audio.take, true); };
 el('course-list').onclick = event => { const b = (event.target as HTMLElement).closest<HTMLElement>('[data-unit]'); if (b && !active()) selectUnit(b.dataset.unit!); };
 el('today-list').onclick = event => { const b = (event.target as HTMLElement).closest<HTMLElement>('[data-unit]'); if (b && !active()) selectUnit(b.dataset.unit!); };
@@ -352,7 +368,16 @@ window.addEventListener('keydown', event => {
   if (event.code === 'Escape') { stopWait('Stopped.'); audio.stop(); player.pause(); return; }
   // Space starts a take from anywhere except a control that uses Space itself.
   const target = event.target instanceof Element ? event.target : null;
-  if (event.code === 'Space' && !event.repeat && !target?.closest('button, input, select, textarea, a, summary, audio, [contenteditable=true]') && !active()) { event.preventDefault(); void start('practice'); }
+  if (event.code === 'Space' && !event.repeat && !target?.closest('button, input, select, textarea, a, summary, audio, [contenteditable=true]') && !active()) {
+    event.preventDefault();
+    // A take waiting for "how did it feel" is what moves the tempo ladder: offer that answer first rather than drop it.
+    if (pending && !el('piece-result').hidden) {
+      const good = (pending.take.result?.score ?? 0) >= 0.9, button = el(good ? 'piece-comfortable' : 'piece-struggling');
+      button.focus(); feedback = `How did that feel? Space confirms "${button.textContent}", Tab switches, then Space starts the next take.`;
+      return;
+    }
+    void start('practice');
+  }
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden && active()) { audio.stop(); player.pause(); feedback = 'Practice paused while the page was hidden.'; } });
 const timer = window.setInterval(() => audio.tick(), 10);
@@ -394,6 +419,14 @@ function paint(): void {
 }
 function live(): Parameters<typeof drawKeys>[8] {
   if (wait) return { held: audio.held, labels, hits: wait.hits, wrong, beat: wait.beat, expect: wait.current && wait.current.beat - wait.beat <= 0.5 ? wait.needed : [], message: wait.waiting ? 'Waiting for you: play the glowing keys' : '' };
+  // Replaying a keys take: light the keys that were pressed, and fade the notes that were not played right.
+  const replay = audio.replaying;
+  if (replay?.presses && audio.plan) {
+    const t = audio.now - audio.plan.playAt, presses = replay.presses;
+    const heldNow = new Set(presses.filter(x => t >= x.t && t < x.t + (x.dur ?? 0.6)).map(x => x.midi));
+    const right = new Set(replay.result?.events.flatMap(e => e.notes.filter(n => n.verdict === 'heard').map(n => noteKey(e.beat, n.midi))) ?? []);
+    return { held: heldNow, labels, hits: right, wrong };
+  }
   const plan = audio.plan, scoring = plan?.kind === 'practice' && audio.input === 'keys' && audio.now >= plan.playAt - plan.beatsPerBar * plan.period;
   return { held: audio.held, labels, hits: scoring ? hits : undefined, wrong };
 }

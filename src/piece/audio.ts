@@ -32,6 +32,8 @@ export class PieceAudio {
   readonly held = new Set<number>();
   private releases = new Map<number, () => void>();
   private presses?: KeyPress[];
+  /** The keys take being replayed, while it plays. */
+  replaying?: PieceTake;
   onTake: (take: PieceTake) => void = () => {};
   onCalibration: (result: Calibration) => void = () => {};
   private voice?: PieceVoice;
@@ -52,6 +54,8 @@ export class PieceAudio {
   private index = 0;
   private lastTick = 0;
   private interrupted = false;
+  /** Why the current take was marked interrupted, for the note details. */
+  why = '';
   private modules = false;
   get micActive(): boolean { return Boolean(this.stream); }
   get playing(): boolean { return Boolean(this.playback); }
@@ -64,7 +68,7 @@ export class PieceAudio {
   }
   stop(): void {
     this.generation++; this.busy = false; this.analysis = ''; this.plan = undefined; this.capture = undefined; this.current = undefined; this.level = 0;
-    this.closeMic(); this.voice?.stop(); this.releases.clear(); this.presses = undefined;
+    this.closeMic(); this.voice?.stop(); this.releases.clear(); this.presses = undefined; this.replaying = undefined;
     for (const pip of this.pips) try { pip.stop(); } catch { /* ended */ }
     this.pips = [];
     try { this.playback?.stop(); } catch { /* ended */ }
@@ -105,6 +109,7 @@ export class PieceAudio {
     const generation = this.generation;
     try {
       this.context = await enableContext(this.context); if (generation !== this.generation) return;
+      await this.settle(); if (generation !== this.generation) return;
       this.voice ??= new PieceVoice(this.context); this.voice.volume = this.volume;
       const needsPitch = kind === 'practice' && exercise.instrument === 'guitar' && exercise.events.some(e => e.grade === 'pitch');
       if (needsPitch) {
@@ -115,7 +120,7 @@ export class PieceAudio {
       const keys = kind === 'practice' && this.input === 'keys' && exercise.instrument === 'piano';
       if (kind !== 'demo' && !keys && !await this.microphone(generation)) return;
       this.plan = planExercise(exercise, bpm, this.now + outputDelay(this.context), kind, support, demonstrate, backing);
-      this.current = { exercise, unit, bpm, offset }; this.index = 0; this.lastTick = this.now; this.interrupted = false;
+      this.current = { exercise, unit, bpm, offset }; this.index = 0; this.lastTick = this.now; this.interrupted = false; this.why = '';
       if (keys) this.presses = [];
       else if (kind !== 'demo') {
         const plan = this.plan, rate = this.context.sampleRate, from = plan.playAt - (kind === 'calibration' ? 0.25 : 0.5), until = plan.end + 0.75;
@@ -151,15 +156,15 @@ export class PieceAudio {
     const plan = this.plan, context = this.context; if (!plan || !context) return;
     if (context.state !== 'running') { this.error = 'Audio paused. Start again when you are ready.'; this.stop(); return; }
     const now = context.currentTime;
-    if (now - this.lastTick > 0.25) this.interrupted = true;
+    if (now - this.lastTick > 0.25) { this.interrupted = true; this.why ||= `timer gap ${(now - this.lastTick).toFixed(2)} s at ${(now - plan.start).toFixed(2)} s`; }
     this.lastTick = now;
     while (this.index < plan.sounds.length && plan.sounds[this.index].at - outputDelay(context) <= now + 0.12) {
       const event = plan.sounds[this.index++];
-      if (event.at - outputDelay(context) < now - 0.03) { this.interrupted = true; continue; }
+      if (event.at - outputDelay(context) < now - 0.03) { this.interrupted = true; this.why ||= `sound late by ${(now - event.at + outputDelay(context)).toFixed(2)} s at ${(now - plan.start).toFixed(2)} s`; continue; }
       this.sound(event);
     }
     if (now < plan.finish) return;
-    if (plan.kind === 'demo') { this.plan = undefined; return; }
+    if (plan.kind === 'demo') { this.plan = undefined; this.replaying = undefined; return; }
     if (!this.presses && !this.capture?.ready && now < plan.end + 2) return;
     void this.complete();
   }
@@ -181,6 +186,20 @@ export class PieceAudio {
       worker.postMessage({ ...request, id, take: { ...request.take, samples: copy } }, [copy.buffer]);
     });
   }
+  /**
+   * A just-started AudioContext's clock can leap a few hundred milliseconds while the output device opens, which
+   * would mark the first take interrupted. Wait (at most about a second) until it ticks evenly; a warm clock passes at once.
+   */
+  private async settle(): Promise<void> {
+    const context = this.context!;
+    let last = context.currentTime;
+    for (let i = 0; i < 40; i++) {
+      await new Promise(resolve => setTimeout(resolve, 25));
+      const t = context.currentTime;
+      if (t > 0.3 && t - last < 0.1) return;
+      last = t;
+    }
+  }
   /** A key went down: sound it (unless the instrument makes its own) and, during a keys take, record when on the audio clock. */
   async keyDown(midi: number, stamp: number, sound: boolean): Promise<void> {
     this.held.add(midi);
@@ -197,7 +216,23 @@ export class PieceAudio {
   }
   keyUp(midi: number): void {
     this.held.delete(midi);
+    const open = this.presses && this.plan && this.context ? [...this.presses].reverse().find(p => p.midi === midi && p.dur === undefined) : undefined;
+    if (open) open.dur = Math.max(0.05, this.context!.currentTime - this.plan!.playAt - open.t);
     this.releases.get(midi)?.(); this.releases.delete(midi);
+  }
+  /** Replay a keys take on the piano voice while the lane scrolls with it. */
+  async replayKeys(take = this.take): Promise<void> {
+    if (!take?.presses) return;
+    this.stop();
+    const generation = this.generation;
+    this.context = await enableContext(this.context); if (generation !== this.generation) return;
+    await this.settle(); if (generation !== this.generation) return;
+    this.voice ??= new PieceVoice(this.context); this.voice.volume = this.volume;
+    const period = 60 / take.bpm, first = Math.min(0, ...take.presses.map(p => p.t));
+    const start = this.now + outputDelay(this.context) + 0.4 - first, end = start + take.exercise.beats * period;
+    const sounds: Sound[] = take.presses.map(p => ({ at: start + p.t, kind: 'note' as const, midi: p.midi, length: Math.min(6, p.dur ?? 0.6), level: 0.75, timbre: 'piano' as const })).sort((a, b) => a.at - b.at);
+    this.plan = { kind: 'demo', start, playAt: start, end, finish: Math.max(end, ...sounds.map(s => s.at + s.length)) + 0.8, period, support: 0, beatsPerBar: take.exercise.beatsPerBar, sounds };
+    this.index = 0; this.lastTick = this.now; this.interrupted = false; this.why = ''; this.replaying = take;
   }
   private completeKeys(): void {
     const plan = this.plan!, current = this.current!, presses = this.presses ?? [];
