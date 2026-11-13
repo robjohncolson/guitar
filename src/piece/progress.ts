@@ -79,7 +79,7 @@ export const reached = (p: UnitProgress | undefined, fraction: number) => Boolea
  * What one answered take did to the ladder, for the moment shown after it. uncounted: unclear or not calibrated.
  * overnight: a clean take that was this step's first counted take on a new day (it stuck overnight).
  */
-export type AdvanceKind = 'uncounted' | 'hold' | 'climb' | 'fade' | 'certified' | 'learned' | 'review' | 'step-down';
+export type AdvanceKind = 'uncounted' | 'hold' | 'climb' | 'fade' | 'certified' | 'learned' | 'review' | 'step-down' | 'placed';
 export interface AdvanceEvent { kind: AdvanceKind; clean: boolean; overnight: boolean }
 /** Between attempts only. Clean = trusted, 90% or better and comfortable. Two clean takes climb a rung; certification rungs fade support over three. */
 export function advanceUnit(unit: Unit, before: UnitProgress, result: { trusted: boolean; score: number }, comfortable: boolean, now: number, calibrated: boolean): { progress: UnitProgress; message: string; event: AdvanceEvent } {
@@ -125,6 +125,54 @@ function ladder(unit: Unit, before: UnitProgress, result: { trusted: boolean; sc
   }
   if (p.clean >= 2 && !top) { p.clean = 0; p.rung++; return { progress: p, message: `Two clean takes. Next: ${Math.round(unit.rungs[p.rung] * 100)}% of the goal tempo.` }; }
   return { progress: p, message: top ? `Clean at ${topName}.` : 'Clean. One more like that moves the tempo up.' };
+}
+
+/** A step can be placed while it is not learned and not certified at its top tempo step; only steps above its current one are targets. */
+export function canPlace(unit: Unit, p: UnitProgress | undefined, target = unit.rungs.length - 1): boolean {
+  const top = unit.rungs.length - 1;
+  if (unit.sameAs || unit.kind === 'listen' || top < 1 || p?.learned || (p?.certified ?? []).some(c => c >= unit.rungs[top] - 1e-9)) return false;
+  return Math.min(target, top) > (p?.rung ?? 0);
+}
+
+/**
+ * One take started from the placement control, at the target tempo step with notes shown. A clean take (trusted, calibrated,
+ * 90% or better, comfortable) moves the step to the target and counts as its first clean take there; certification and the
+ * two-day rule are untouched. Anything else records nothing: no attempt, no hard take, no step-down.
+ */
+export function placeUnit(unit: Unit, before: UnitProgress, target: number, result: { trusted: boolean; score: number }, comfortable: boolean, now: number, calibrated: boolean, goal = unit.goalBpm): { placed: boolean; progress: UnitProgress; message: string; event: AdvanceEvent } {
+  const t = Math.min(target, unit.rungs.length - 1), stay = { ...before, certified: [...before.certified], days: [...before.days] };
+  const missed = (message: string) => ({ placed: false, progress: stay, message, event: { kind: 'uncounted' as AdvanceKind, clean: false, overnight: false } });
+  if (!canPlace(unit, before, t)) return missed('Already at or past that tempo step. Nothing changed.');
+  const fraction = unit.rungs[t], at = `${Math.round(fraction * 100)}%: ${rungBpm(unit, { ...before, rung: t }, goal)} BPM`;
+  if (!result.trusted) return missed('Not placed. An unclear recording does not count either way; nothing was recorded.');
+  if (!calibrated) return missed('Not placed. Calibrate timing first; nothing was recorded.');
+  if (result.score < 0.9 || !comfortable) return missed(`Not placed at ${at}. Nothing was recorded: practise from the current step, or try a lower one.`);
+  const step = ladder(unit, { ...stay, rung: t, clean: 0, hard: 0, support: 0 }, result, true, now, true);
+  const overnight = before.attempts > 0 && before.last > 0 && dayOf(before.last) !== dayOf(now);
+  const certify = unit.certify.some(c => Math.abs(c - fraction) < 1e-9), next = unit.certify.find(c => c > fraction) ?? unit.rungs[unit.rungs.length - 1];
+  const needed = certify ? 'To certify it: two more clean takes, from memory and then with a click on each bar.'
+    : `One more clean take moves it up. Certifying still needs the takes with fading help at ${Math.round(next * 100)}%.`;
+  return { placed: true, progress: step.progress, message: `Placed at ${at}. ${needed}`, event: { kind: 'placed', clean: true, overnight } };
+}
+
+/**
+ * After a clean placement of a hands-together passage: the one-hand steps for the same bars move to their own highest tempo
+ * step at or below the placed one (one hand stops at 80%). Never higher, never certified, never a learned or certified step.
+ */
+export function placeHands(units: Unit[], placed: Unit, fraction: number, get: (id: string) => UnitProgress | undefined): [string, UnitProgress][] {
+  if (placed.kind !== 'together') return [];
+  const byId = new Map(units.map(u => [u.id, u])), bars = [...new Set(placed.bars)].sort((a, b) => a - b).join(',');
+  const out = new Map<string, UnitProgress>();
+  for (const u of units) {
+    if (u.kind !== 'hand' || [...new Set(u.bars)].sort((a, b) => a - b).join(',') !== bars) continue;
+    const r = u.sameAs ? byId.get(u.sameAs) ?? u : u, p = get(r.id);
+    let t = -1;
+    r.rungs.forEach((f, i) => { if (f <= fraction + 1e-9) t = i; });
+    if (t < 0 || out.has(r.id) || !canPlace(r, p, t)) continue;
+    const base = p ?? initialUnit();
+    out.set(r.id, { ...base, certified: [...base.certified], days: [...base.days], rung: t, clean: 0, hard: 0, support: 0, best: Math.max(base.best, r.rungs[t]), attempts: Math.max(base.attempts, 1) });
+  }
+  return [...out];
 }
 
 export type UnitState = 'new' | 'practising' | 'done' | 'learned' | 'due' | 'covered';

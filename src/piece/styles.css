@@ -15,6 +15,7 @@
 .tempo-pips{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.tempo-pips:empty{display:none}
 .pips{display:inline-flex;gap:4px}.pips i{width:9px;height:9px;border-radius:50%;border:1px solid #8fa486;transition:background .25s}.pips i.on{background:#c8d8a7;border-color:#c8d8a7}.pips.fade i.on{background:#e1c48f;border-color:#e1c48f}
 .rungs{display:inline-flex;gap:2px;align-items:flex-end}.rungs i{width:7px;height:5px;border-radius:1px;background:#33402f}.rungs i.done{background:#7f9471}.rungs i.now{background:#c8d8a7;height:9px}.rungs i.cert{box-shadow:0 -2px 0 #e1c48f}
+.rungs .rung-pick{all:unset;box-sizing:border-box;display:inline-flex;align-items:flex-end;cursor:pointer;padding:8px 3px;margin:-8px -2px;border-radius:3px}.rungs .rung-pick i{outline:1px dashed #8fa486;outline-offset:1px}.rungs .rung-pick.on i{outline:1px solid #e1c48f}.rungs .rung-pick:focus-visible{outline:2px solid #e1c48f}
 .take-callouts{margin:4px 0 8px;transition:opacity .25s,transform .25s}.revealing .take-callouts{opacity:0;transform:translateY(6px)}
 .take-wins{list-style:none;padding:0;margin:0 0 4px}.take-wins li{color:#d8e4c5;font-size:14px;margin:2px 0}.take-wins li:first-child{font-weight:600}.take-fix{margin:4px 0;color:#e7d6bd;font-size:14px}
 .timing-strip svg{display:block;width:100%;max-width:520px;height:auto;background:#141b17;border-radius:6px}.timing-strip .band{fill:rgba(200,216,167,.1)}.timing-strip .beat{stroke:rgba(232,240,220,.35);stroke-width:1}
