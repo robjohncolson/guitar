@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 import { gradeKeys, type KeyPress } from '../src/piece/grade';
 import { toEvents, type Exercise } from '../src/piece/exercise';
 import { baseFor, keyLabels, keyMap } from '../src/piece/keys';
+import { WaitRun } from '../src/piece/wait';
 
 // Two beats of single notes, then a C major chord on beat 3, at 60 BPM (one second per beat).
 const ex: Exercise = {
@@ -47,4 +48,34 @@ it('maps the two computer-key rows to piano pitches from a C', () => {
   const labels = keyLabels(48);
   expect(labels.get(48)).toBe('Z'); expect(labels.get(60)).toBe('Q'); expect(labels.get(66)).toBe('5');
   expect(baseFor([62, 57, 74])).toBe(48);
+});
+
+it('wait mode stops at each attack until its keys are played', () => {
+  const run = new WaitRun(ex, 60);
+  expect(run.beat).toBe(-2);
+  // Other keys long before the notes arrive are ignored, so finding the hand position costs nothing.
+  expect(run.press(65)).toBe('ignored'); expect(run.mistakes).toBe(0);
+  run.step(10);
+  expect(run.beat).toBe(0); expect(run.waiting).toBe(true); expect(run.needed).toEqual([60]);
+  run.step(5); expect(run.beat).toBe(0);
+  expect(run.press(61)).toBe('wrong'); expect(run.mistakes).toBe(1);
+  expect(run.press(60)).toBe('hit'); expect(run.waiting).toBe(false);
+  run.step(1); expect(run.press(62)).toBe('hit');
+  // A chord needs every key; a key pressed up to a beat early counts.
+  run.press(60); run.step(1); run.press(67);
+  expect(run.waiting).toBe(true); expect(run.needed).toEqual([64]);
+  run.press(64); run.step(5);
+  expect(run.done).toBe(true);
+  expect(run.summary()).toMatchObject({ notes: 5, mistakes: 1 });
+});
+
+it('wait mode lets the player lead and catches the lane up', () => {
+  const run = new WaitRun(ex, 60);
+  // Play the first two attacks during the lead-in, before the lane gets there.
+  expect(run.press(60)).toBe('hit'); expect(run.press(62)).toBe('hit');
+  expect(run.current?.beat).toBe(2);
+  let t = 0; while (run.beat < 2 && t < 10) { run.step(0.02); t += 0.02; }
+  // Four beats of lane at 60 BPM would take 4 s at tempo; catching up is much faster.
+  expect(t).toBeLessThan(2);
+  expect(run.waiting).toBe(true);
 });

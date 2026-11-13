@@ -16,7 +16,7 @@ export function pieceShell(): void {
       <div class="practice-state"><span id="piece-phase" role="status">Ready when you are</span><span id="piece-guidance"></span></div>
       <div class="lane-wrap"><canvas id="piece-lane" role="img" aria-label="The notes to play, falling toward the keys" aria-describedby="unit-text"></canvas><div id="lane-help"></div></div>
       <p id="unit-text" class="sr-only"></p><div id="unit-shapes" class="unit-shapes"></div>
-      <div class="trainer-actions"><button id="piece-start" class="primary">Start practice</button><button id="piece-demo">Hear it</button><label class="inline-check"><input type="checkbox" id="piece-backing"> <span id="piece-backing-label">Play the other hand with me</span></label><button id="piece-next">Next in today's plan</button></div>
+      <div class="trainer-actions"><button id="piece-start" class="primary">Start practice</button><button id="piece-demo">Hear it</button><button id="piece-wait" hidden title="The notes stop until you play them. Only the keys are checked, not timing.">Wait for me</button><label class="inline-check"><input type="checkbox" id="piece-backing"> <span id="piece-backing-label">Play the other hand with me</span></label><button id="piece-next">Next in today's plan</button></div>
       <p id="piece-feedback" class="coach" role="status"></p>
       <div id="piece-result" hidden><div id="piece-metrics" class="grade-metrics"></div><div id="piece-verdicts" class="note-verdicts"></div><p id="piece-details" class="muted"></p><div class="comfort-actions"><button id="piece-comfortable" class="primary">Felt comfortable</button><button id="piece-struggling">Needs more room</button></div></div>
       <div id="piece-review" hidden><div class="review-heading"><span>Hear yourself</span><span id="piece-take" class="muted"></span></div><audio id="piece-player" controls></audio><div class="review-actions"><button id="piece-previous">Hear previous take</button><button id="piece-latest">Hear latest take</button><button id="piece-loop">Loop latest · play along</button><a id="piece-download" download="take.wav">Download WAV</a><a id="piece-trace" download="take.json">Note details</a></div><p class="muted">Playback stops the microphone. Takes stay in this page.</p></div>
@@ -39,7 +39,7 @@ export function pieceShell(): void {
       <details id="piece-add"><summary>Add your own piece</summary><p>Pieces are plain-text files (<code>.piece.txt</code>). Give a PDF or photo of sheet music to your AI assistant with <code>PIECES.md</code> from this project; it writes the file and checks it twice. Open it here: it stays in this browser${import.meta.env.VITE_ACCOUNTS !== 'off' ? ' unless you are signed in and choose <em>Save to my account</em> (private to you)' : ' and is never uploaded'}.</p><input type="file" id="piece-file" accept=".txt,text/plain"><div id="piece-file-report" role="status"></div><div id="piece-local-list"></div><div id="piece-account-list"></div></details>
       <details id="piece-journal"><summary>Your practice today</summary><div id="piece-journal-list"></div><button id="piece-finish">Finish this session</button><div id="piece-session" role="status" hidden></div><button id="piece-reset" class="text-button">Reset progress for this piece</button><p id="piece-storage" class="muted">Progress stays in this browser. Audio is never saved automatically.</p></details>
     </div>
-    <footer><span><kbd>Esc</kbd> stop everything</span><span>Listening happens in this browser; nothing is uploaded.</span></footer>
+    <footer><span><kbd>Space</kbd> start practice</span><span><kbd>Esc</kbd> stop everything</span><span>Listening happens in this browser; nothing is uploaded.</span></footer>
   </main>`;
 }
 
@@ -75,8 +75,19 @@ const alpha = (hex: string, a: number) => `rgba(${channels(hex).join(',')},${a})
  * Falling notes onto a keyboard, like a piano video: left hand blue, right hand green, finger numbers at the foot of
  * each note. A note glows and its key presses down while it sounds. After a take, colours show the verdicts.
  */
-export interface LiveKeys { held: ReadonlySet<number>; labels?: ReadonlyMap<number, string> }
-const PLAYED = '#e1c48f';
+/**
+ * Keys and MIDI input on the lane. held: keys down now. labels: computer-key letters. hits: notes the player has
+ * pressed (noteKey), so only those glow and notes that pass unplayed fade. wrong: when each wrong key was pressed
+ * (performance.now ms). expect: keys to press now, pulsing. beat: a lane position that overrides the plan (wait mode).
+ */
+export interface LiveKeys { held: ReadonlySet<number>; labels?: ReadonlyMap<number, string>; hits?: ReadonlySet<string>; wrong?: ReadonlyMap<number, number>; expect?: readonly number[]; beat?: number; message?: string }
+const PLAYED = '#e1c48f', WRONG = '#e07a6a';
+let lastLane = { w: 0, hitY: 0 };
+/** A burst of sparks across the keyboard after a clean take. */
+export function celebrate(): void {
+  const { w, hitY } = lastLane, colours = [HAND.L, HAND.R, PLAYED];
+  for (let i = 0; i < 160; i++) sparks.push({ x: Math.random() * w, y: hitY - 2, vx: (Math.random() - 0.5) * 140, vy: -120 - Math.random() * 260, life: 0, max: 0.8 + Math.random() * 0.9, colour: mix(colours[i % 3], 255, 0.3), size: 1 + Math.random() * 2.2 });
+}
 export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePlan | undefined, now: number, support: number, result: PieceGrade | undefined, reduced: boolean, hideWhilePlaying: boolean, live?: LiveKeys): void {
   const small = canvas.clientWidth < 600, height = small ? 300 : 440, p = prepare(canvas, height), w = Math.max(280, Math.round(canvas.clientWidth));
   const clock = performance.now(), dt = lastFrame ? Math.min(0.05, (clock - lastFrame) / 1000) : 0; lastFrame = clock;
@@ -87,7 +98,8 @@ export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePla
   for (let m = lo; m <= hi; m++) if (!isBlack(m)) whites.push(m);
   const keyW = w / whites.length, kbH = small ? 72 : 104, felt = small ? 5 : 7, kbTop = height - kbH, hitY = kbTop - felt;
   const xOf = (m: number) => { if (!isBlack(m)) return { x: whites.indexOf(m) * keyW, width: keyW }; const left = whites.indexOf(m - 1); return { x: (left + 1) * keyW - keyW * 0.29, width: keyW * 0.58 }; };
-  const { beat, moving, playing } = position(ex, plan, now), animate = moving && !reduced;
+  const { beat, moving, playing } = live?.beat !== undefined ? { beat: live.beat, moving: true, playing: false } : position(ex, plan, now), animate = moving && !reduced;
+  lastLane = { w, hitY };
   const visible = Math.max(4, ex.beatsPerBar * (small ? 1.3 : 2)), scale = (hitY - 18) / visible;
   const yOf = (b: number) => hitY - (b - (animate ? beat : 0)) * scale;
 
@@ -112,13 +124,14 @@ export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePla
     if (bottom < 0 || top > hitY) continue;
     const verdict = verdicts?.get(`${e.beat}:${n.midi}`), black = isBlack(n.midi);
     const base = mix(verdict ? VERDICT[verdict] : HAND[n.hand], 0, black ? 0.2 : 0);
-    const active = moving && beat >= e.beat && beat < e.beat + n.dur;
+    const hit = !live?.hits || live.hits.has(`${e.beat}:${n.midi}`), passed = Boolean(live?.hits) && !hit && moving && beat > e.beat + 0.5;
+    const active = moving && hit && beat >= e.beat && beat < e.beat + n.dur;
     if (active) sounding.set(n.midi, { colour: base, flash: Math.max(0, 1 - (beat - e.beat) * 3) });
     const { x, width } = xOf(n.midi), nx = x + (black ? 1 : 2), nw = Math.max(3, width - (black ? 2 : 4));
     const y0 = Math.max(0, top), y1 = Math.min(hitY, bottom - 1), nh = Math.max(4, y1 - y0), r = Math.min(6, nw / 2, nh / 2);
     const fill = p.createLinearGradient(0, y0, 0, y0 + nh);
     fill.addColorStop(0, mix(base, 0, 0.28)); fill.addColorStop(1, active ? mix(base, 255, 0.35) : base);
-    p.globalAlpha = verdict === 'cannot-check' || verdict === 'unchecked' ? 0.45 : 1;
+    p.globalAlpha = verdict === 'cannot-check' || verdict === 'unchecked' || passed ? 0.4 : 1;
     if (active && animate) { p.shadowColor = base; p.shadowBlur = small ? 12 : 20; }
     p.fillStyle = fill; p.beginPath(); p.roundRect(nx, y0, nw, nh, r); p.fill();
     p.shadowBlur = 0;
@@ -144,36 +157,61 @@ export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePla
       p.fillStyle = glow; p.fillRect(cx - radius, hitY - radius, radius * 2, radius + felt);
       for (let k = (18 + flash * 120) * dt; k > 0; k--) if (k >= 1 || Math.random() < k) sparks.push({ x: cx + (Math.random() - 0.5) * width * 0.8, y: hitY - 1, vx: (Math.random() - 0.5) * 50, vy: -50 - Math.random() * 110 - flash * 80, life: 0, max: 0.35 + Math.random() * 0.5, colour: mix(colour, 255, 0.35), size: 0.8 + Math.random() * (small ? 1.2 : 1.8) });
     }
-    if (sparks.length > 400) sparks.splice(0, sparks.length - 400);
-    for (let i = sparks.length - 1; i >= 0; i--) {
-      const s = sparks[i]; s.life += dt; if (s.life >= s.max) { sparks.splice(i, 1); continue; }
-      s.vy += 90 * dt; s.x += s.vx * dt; s.y += s.vy * dt;
-      p.fillStyle = alpha(s.colour, 1 - s.life / s.max); p.beginPath(); p.arc(s.x, s.y, s.size, 0, Math.PI * 2); p.fill();
-    }
     p.globalCompositeOperation = 'source-over';
     p.strokeStyle = 'rgba(232,240,220,.85)'; p.lineWidth = 2; p.beginPath(); p.moveTo(0, hitY); p.lineTo(w, hitY); p.stroke(); p.lineWidth = 1;
-  } else sparks.length = 0;
+  }
+  // Sparks keep falling after the notes stop, so a celebration can finish; reduced motion shows none.
+  if (reduced) sparks.length = 0;
+  if (sparks.length > 500) sparks.splice(0, sparks.length - 500);
+  p.globalCompositeOperation = 'lighter';
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const s = sparks[i]; s.life += dt; if (s.life >= s.max) { sparks.splice(i, 1); continue; }
+    s.vy += 90 * dt; s.x += s.vx * dt; s.y += s.vy * dt;
+    p.fillStyle = alpha(s.colour, 1 - s.life / s.max); p.beginPath(); p.arc(s.x, s.y, s.size, 0, Math.PI * 2); p.fill();
+  }
+  p.globalCompositeOperation = 'source-over';
+  if (live?.message) {
+    p.font = `${small ? 13 : 15}px Segoe UI`; const tw = p.measureText(live.message).width + 28, th = small ? 28 : 32;
+    p.fillStyle = 'rgba(12,16,14,.85)'; p.strokeStyle = 'rgba(200,216,167,.35)'; p.beginPath(); p.roundRect(w / 2 - tw / 2, 10, tw, th, th / 2); p.fill(); p.stroke();
+    p.fillStyle = '#e8efd9'; p.textAlign = 'center'; p.fillText(live.message, w / 2, 10 + th / 2 + 1); p.textAlign = 'left';
+  }
 
-  // Felt strip and keyboard. A sounding key takes its note's colour and sinks a little.
+  // Keys to press now pulse, so the next move is easy to find.
+  const expect = new Set(live?.expect ?? []), pulse = reduced ? 0.8 : 0.55 + 0.45 * Math.sin(clock / 160);
+  const hint = (m: number, x: number, width: number, h: number) => {
+    if (!expect.has(m)) return;
+    const colour = HAND[ex.events.flatMap(e => e.notes).find(n => n.midi === m)?.hand ?? 'R'];
+    p.beginPath(); p.roundRect(x + 2, kbTop + 2, width - 4, h - 5, 4);
+    p.fillStyle = alpha(colour, 0.35 + 0.35 * pulse); p.fill();
+    p.strokeStyle = alpha(mix(colour, 0, 0.35), pulse); p.lineWidth = 3; p.stroke(); p.lineWidth = 1;
+  };
+  // Felt strip and keyboard. A sounding key takes its note's colour and sinks a little; a wrong key flashes red.
+  const keyColour = (m: number): { colour: string } | undefined => {
+    const wrongAt = live?.wrong?.get(m);
+    if (wrongAt !== undefined && clock - wrongAt < 500) return { colour: WRONG };
+    return sounding.get(m) ?? (live?.held.has(m) ? { colour: PLAYED } : undefined);
+  };
   const strip = p.createLinearGradient(0, hitY, 0, kbTop); strip.addColorStop(0, '#2b3a30'); strip.addColorStop(1, '#141b16');
   p.fillStyle = strip; p.fillRect(0, hitY, w, felt);
   p.fillStyle = '#0a0d0b'; p.fillRect(0, kbTop, w, kbH);
   for (const m of whites) {
-    const { x, width } = xOf(m), on = live?.held.has(m) ? { colour: PLAYED } : sounding.get(m), dip = on ? 2 : 0;
+    const { x, width } = xOf(m), on = keyColour(m), dip = on ? 2 : 0;
     const face = p.createLinearGradient(0, kbTop, 0, height);
     if (on) { face.addColorStop(0, mix(on.colour, 0, 0.15)); face.addColorStop(1, mix(on.colour, 255, 0.2)); } else { face.addColorStop(0, '#dfe2d8'); face.addColorStop(0.85, '#f4f5ef'); face.addColorStop(1, '#e3e6dc'); }
     p.fillStyle = face; p.beginPath(); p.roundRect(x + 0.75, kbTop + dip, width - 1.5, kbH - dip - 1, [0, 0, 4, 4]); p.fill();
+    hint(m, x, width, kbH);
     if (m % 12 === 0) { p.fillStyle = on ? '#1d2a20' : '#6d7a6f'; p.font = `${small ? 8 : 10}px Segoe UI`; p.textAlign = 'center'; p.fillText(noteName(m), x + width / 2, height - (small ? 9 : 12)); p.textAlign = 'left'; }
     const label = live?.labels?.get(m);
     if (label && width >= 12) { p.fillStyle = on ? '#1d2a20' : '#4f5c51'; p.font = `bold ${small ? 9 : 12}px Segoe UI`; p.textAlign = 'center'; p.fillText(label, x + width / 2, height - (small ? 24 : 32)); p.textAlign = 'left'; }
   }
   const bh = kbH * 0.62;
   for (let m = lo; m <= hi; m++) if (isBlack(m)) {
-    const { x, width } = xOf(m), on = live?.held.has(m) ? { colour: PLAYED } : sounding.get(m), dip = on ? 2 : 0;
+    const { x, width } = xOf(m), on = keyColour(m), dip = on ? 2 : 0;
     p.fillStyle = 'rgba(0,0,0,.35)'; p.fillRect(x + 1.5, kbTop, width, bh + 4);
     const face = p.createLinearGradient(0, kbTop, 0, kbTop + bh);
     if (on) { face.addColorStop(0, mix(on.colour, 0, 0.35)); face.addColorStop(1, on.colour); } else { face.addColorStop(0, '#0e110f'); face.addColorStop(1, '#2a302c'); }
     p.fillStyle = face; p.beginPath(); p.roundRect(x, kbTop, width, bh + dip, [0, 0, 3, 3]); p.fill();
+    hint(m, x, width, bh + 4);
     p.fillStyle = on ? alpha(mix(on.colour, 255, 0.4), 0.8) : 'rgba(255,255,255,.1)'; p.fillRect(x + width * 0.18, kbTop + bh + dip - (small ? 5 : 7), width * 0.64, 2);
     const label = live?.labels?.get(m);
     if (label && width >= 9) { p.fillStyle = on ? '#1d2a20' : '#aab5a8'; p.font = `bold ${small ? 8 : 11}px Segoe UI`; p.textAlign = 'center'; p.fillText(label, x + width / 2, kbTop + bh - (small ? 13 : 18)); p.textAlign = 'left'; }

@@ -7,8 +7,9 @@ import { arrange, guitarExerciseFor, guitarUnits, GUITAR_STAGES, melodyBacking, 
 import { fromBars, type Exercise, type XEvent } from './exercise';
 import { advanceUnit, initialUnit, parsePieceProgress, pieceProgressKey, progressId, ready, rungBpm, suggestToday, unitState, type PieceProgress, type UnitProgress } from './progress';
 import { PieceAudio, type PieceTake } from './audio';
-import { chordBox, drawKeys, drawStrings, pieceShell } from './view';
+import { celebrate, chordBox, drawKeys, drawStrings, pieceShell } from './view';
 import { baseFor, KeyInput, keyLabels } from './keys';
+import { noteKey, WaitRun } from './wait';
 import { chordSpans, prettyChord } from './analysis';
 import { barAt } from './grade';
 import { noteName, type Score } from './score';
@@ -42,7 +43,7 @@ const inputPrefs = (() => { try { const v = JSON.parse(localStorage.getItem(INPU
 const saveInput = () => { try { localStorage.setItem(INPUT, JSON.stringify(inputPrefs)); } catch { /* preference lasts for this page */ } };
 let labels = keyLabels(48);
 const keyInput = new KeyInput({
-  down: (midi, stamp, source) => { void audio.keyDown(midi, stamp, source === 'keys' || inputPrefs.midiSound); },
+  down: (midi, stamp, source) => { void audio.keyDown(midi, stamp, source === 'keys' || inputPrefs.midiSound); judgePress(midi); },
   up: midi => audio.keyUp(midi),
 }, () => { labels = keyLabels(keyInput.base); paintLaneHelp(); });
 /** Keys mode applies to piano only; guitar always listens through the microphone. */
@@ -57,6 +58,7 @@ function applyInput(): void {
   el('input-toggle').hidden = instrument !== 'piano';
   if (keys) void keyInput.connectMidi();
   if (exercise) { keyInput.setBase(baseFor(exercise.events.flatMap(e => e.notes.map(n => n.midi)))); labels = keyLabels(keyInput.base); }
+  if (unit) el('piece-wait').hidden = !keys || unit.kind === 'listen';
   paintLaneHelp();
 }
 function paintLaneHelp(): void {
@@ -74,7 +76,35 @@ const get = (id: string): UnitProgress | undefined => progress.units[key(id)];
 const current = () => get(unit.id) ?? initialUnit();
 const goal = () => progress.goals[pack.id] ?? score.tempo.bpm;
 const bpmNow = () => manualBpm ?? rungBpm(unit, current());
-const active = () => Boolean(audio.plan || audio.busy || audio.playing || !player.paused);
+const active = () => Boolean(wait || audio.plan || audio.busy || audio.playing || !player.paused);
+// Live feedback for keys: which notes have been played (so only they glow) and when each wrong key went down.
+let wait: WaitRun | undefined;
+const hits = new Set<string>(), wrong = new Map<number, number>();
+let lastFrame = 0;
+/** Judge a key press as it happens: in wait mode it moves the lane on; in a timed take it lights the note it played. */
+function judgePress(midi: number): void {
+  if (wait) { if (wait.press(midi) === 'wrong') wrong.set(midi, performance.now()); return; }
+  const plan = audio.plan;
+  if (!plan || plan.kind !== 'practice' || audio.input !== 'keys') return;
+  const beat = (audio.now - plan.playAt) / plan.period, reach = Math.min(0.4 / plan.period, 0.45);
+  if (beat < -reach || beat > exercise.beats + reach) return;
+  const event = exercise.events.find(e => Math.abs(e.beat - beat) <= reach && e.notes.some(n => n.midi === midi) && !hits.has(noteKey(e.beat, midi)));
+  if (event) hits.add(noteKey(event.beat, midi)); else wrong.set(midi, performance.now());
+}
+function startWait(): void {
+  if (active() || !usingKeys() || unit.kind === 'listen') return;
+  player.pause(); pending = undefined; for (const id of ['piece-result', 'piece-session']) el(id).hidden = true;
+  hits.clear(); wrong.clear(); wait = new WaitRun(exercise, bpmNow()); lastFrame = 0;
+  feedback = 'Wait for me: the notes stop at the keys until you play them. Take your time; only the keys are checked.';
+}
+function stopWait(message?: string): void { if (!wait) return; wait = undefined; if (message) feedback = message; }
+function finishWait(run: WaitRun): void {
+  const { notes, mistakes, seconds } = run.summary();
+  wait = undefined; session.seconds += seconds;
+  feedback = mistakes === 0 ? `All ${notes} notes, no wrong keys, in ${Math.round(seconds)} s. Try it again, or play it in time with Start practice.`
+    : `All ${notes} notes in ${Math.round(seconds)} s, with ${mistakes} wrong key${mistakes > 1 ? 's' : ''} on the way. Once there are none, play it in time with Start practice.`;
+  if (mistakes === 0) celebrate();
+}
 function persist(): void {
   try { saveTracked(pieceProgressKey, JSON.stringify(progress)); el('piece-storage').textContent = 'Progress stays in this browser. Audio is never saved automatically.'; }
   catch { el('piece-storage').textContent = 'Storage is unavailable: progress will last only for this page.'; }
@@ -118,7 +148,7 @@ function paintAbout(): void {
     <h3>Guitar accompaniment</h3><p>${arrangement.capo ? `Capo at fret ${arrangement.capo}. ` : 'No capo. '}Bass note on beat 1, then index, middle and ring fingers together, letting the chord ring like the piano's left hand.${arrangement.review.length ? ` Simplified: ${escape(arrangement.review.join(' '))}` : ''}</p><div class="unit-shapes">${arrangement.shapes.map(s => chordBox(s, arrangement.capo)).join('')}</div>`;
 }
 function selectUnit(id: string): void {
-  audio.stop(); player.pause(); pending = undefined; manualBpm = undefined;
+  audio.stop(); player.pause(); stopWait(); hits.clear(); wrong.clear(); pending = undefined; manualBpm = undefined;
   unit = units().find(u => u.id === id) ?? units()[0];
   exercise = instrument === 'piano' ? exerciseFor(score, unit) : guitarExerciseFor(score, arrangement, unit);
   progress.selected.unit = unit.id; progress.selected.instrument = instrument;
@@ -133,6 +163,7 @@ function selectUnit(id: string): void {
   const backing = el<HTMLInputElement>('piece-backing');
   const other = instrument === 'guitar' ? ['section', 'performance'].includes(unit.kind) : unit.hands.length === 1 && unit.bars.length > 0 && unit.kind !== 'drill';
   backing.parentElement!.hidden = !other; backing.checked = other && instrument === 'guitar';
+  el('piece-wait').hidden = !usingKeys() || unit.kind === 'listen';
   el('piece-backing-label').textContent = instrument === 'guitar' ? 'Play the melody with me (headphones)' : 'Play the other hand with me (headphones)';
   el<HTMLInputElement>('piece-bpm').value = String(bpmNow());
   el('piece-start').textContent = unit.kind === 'listen' ? 'Listen' : 'Start practice';
@@ -162,7 +193,7 @@ function otherPart(): XEvent[] {
 }
 async function start(kind: 'practice' | 'demo'): Promise<void> {
   if (el('piece-bpm').getAttribute('aria-invalid') === 'true') return;
-  player.pause(); pending = undefined; el('piece-result').hidden = true; el('piece-session').hidden = true;
+  player.pause(); pending = undefined; el('piece-result').hidden = true; el('piece-session').hidden = true; hits.clear(); wrong.clear();
   if (unit.kind === 'listen') {
     feedback = 'Listen through. The notes fall onto the keys as they sound.';
     await audio.start(exercise, unit.id, goal(), 'demo');
@@ -204,6 +235,7 @@ audio.onTake = take => {
   });
   el('piece-details').textContent = `${problems.join(' · ')}${result.extraNotes.length ? ` · possible extra note${result.extraNotes.length > 1 ? 's' : ''} near ${[...new Set(result.extraNotes.map(x => noteName(x.midi, take.exercise.keySig)))].join(', ')}` : ''}${result.trusted ? '' : ` · ${result.reason}`}${Math.abs(result.tuning) >= 8 ? ` · your piano reads about ${Math.round(result.tuning)} cents from A440; checks allowed for it` : ''}`;
   el('piece-result').hidden = false; persist();
+  if (result.trusted && result.score >= 0.9) celebrate();
 };
 audio.onCalibration = result => {
   el('piece-calibration-feedback').textContent = result.message; feedback = result.message;
@@ -238,7 +270,8 @@ el<HTMLInputElement>('piece-midi-sound').onchange = () => { inputPrefs.midiSound
 el('piece-demo').onclick = () => { void start('demo'); };
 el('piece-listen').onclick = () => { const listen = curriculum.units.find(u => u.kind === 'listen')!; audio.stop(); void audio.start(exerciseFor(score, listen), 'listen', goal(), 'demo'); feedback = repeats(score) ? 'The whole piece, with the repeats.' : 'The whole piece.'; };
 el('piece-next').onclick = () => { const next = suggestToday({ ...curriculum, units: units() }, get, Date.now()).find(p => p.unit.id !== unit.id); if (next) selectUnit(next.unit.id); };
-el('piece-stop').onclick = () => { audio.stop(); player.pause(); feedback = 'Stopped. Your last completed take is still available below.'; };
+el('piece-wait').onclick = startWait;
+el('piece-stop').onclick = () => { stopWait(); audio.stop(); player.pause(); feedback = 'Stopped. Your last completed take is still available below.'; };
 player.onplay = () => audio.stop();
 el('piece-comfortable').onclick = () => nextTake(true);
 el('piece-struggling').onclick = () => nextTake(false);
@@ -315,7 +348,12 @@ el('piece-reset').onclick = () => {
   persist(); selectUnit(unit.id); feedback = 'Progress for this piece cleared. Calibration is kept.';
 };
 navigator.mediaDevices?.addEventListener('devicechange', () => { progress.calibrated = false; persist(); el('piece-calibration-feedback').textContent = 'Audio devices changed. Recalibrate timing.'; });
-window.addEventListener('keydown', event => { if (event.code === 'Escape') { audio.stop(); player.pause(); } });
+window.addEventListener('keydown', event => {
+  if (event.code === 'Escape') { stopWait('Stopped.'); audio.stop(); player.pause(); return; }
+  // Space starts a take from anywhere except a control that uses Space itself.
+  const target = event.target instanceof Element ? event.target : null;
+  if (event.code === 'Space' && !event.repeat && !target?.closest('button, input, select, textarea, a, summary, audio, [contenteditable=true]') && !active()) { event.preventDefault(); void start('practice'); }
+});
 document.addEventListener('visibilitychange', () => { if (document.hidden && active()) { audio.stop(); player.pause(); feedback = 'Practice paused while the page was hidden.'; } });
 const timer = window.setInterval(() => audio.tick(), 10);
 window.addEventListener('pagehide', () => { clearInterval(timer); audio.dispose(); player.pause(); URL.revokeObjectURL(wavUrl); URL.revokeObjectURL(traceUrl); });
@@ -325,7 +363,7 @@ function paint(): void {
   if (!exercise) return;
   const plan = audio.plan, now = audio.now, running = active(), p = current();
   el<HTMLButtonElement>('piece-stop').disabled = !running;
-  for (const id of ['piece-start', 'piece-demo', 'piece-calibrate', 'piece-output', 'piece-use-offset', 'piece-next', 'piece-listen', 'piece-select', 'inst-piano', 'inst-guitar', 'piece-goal', 'input-mic', 'input-keys']) el<HTMLButtonElement>(id).disabled = running;
+  for (const id of ['piece-start', 'piece-demo', 'piece-calibrate', 'piece-output', 'piece-use-offset', 'piece-next', 'piece-listen', 'piece-select', 'inst-piano', 'inst-guitar', 'piece-goal', 'input-mic', 'input-keys', 'piece-wait']) el<HTMLButtonElement>(id).disabled = running;
   el<HTMLInputElement>('piece-bpm').disabled = running;
   el<HTMLButtonElement>('piece-comfortable').disabled = el<HTMLButtonElement>('piece-struggling').disabled = !pending || running;
   for (const id of ['piece-latest', 'piece-loop']) el<HTMLButtonElement>(id).disabled = !audio.take || Boolean(plan || audio.busy);
@@ -342,11 +380,22 @@ function paint(): void {
     const countAt = plan.playAt - plan.beatsPerBar * plan.period;
     phase = plan.kind === 'calibration' ? 'Measuring sound delay…' : plan.kind === 'demo' || now < countAt ? 'Listen' : now < plan.playAt ? `Count in · ${Math.min(plan.beatsPerBar, Math.max(1, Math.ceil((plan.playAt - now) / plan.period)))}` : now < plan.end ? `Play · bar ${barAt(exercise, (now - plan.playAt) / plan.period).number}` : 'Listening to the ending…';
   }
+  const clock = performance.now(), dt = lastFrame ? Math.min(0.25, (clock - lastFrame) / 1000) : 0; lastFrame = clock;
+  if (wait) {
+    wait.step(dt);
+    phase = `Wait for me · bar ${barAt(exercise, Math.max(0, wait.beat)).number}`;
+    if (wait.done) finishWait(wait);
+  }
   el('piece-phase').textContent = phase;
   el('piece-guidance').textContent = unit.kind === 'listen' ? '' : ['Notes shown', 'From memory', 'Click on each bar'][p.support] ?? '';
   el('piece-feedback').textContent = audio.error || feedback;
   const result = !plan && audio.take?.unit === unit.id ? audio.take.result : undefined, hide = p.support > 0 && unit.kind !== 'listen';
-  (instrument === 'piano' ? drawKeys : drawStrings)(el<HTMLCanvasElement>('piece-lane'), exercise, plan?.kind === 'calibration' ? undefined : plan, now, p.support, result, reduced.matches, hide, usingKeys() ? { held: audio.held, labels } : undefined);
+  (instrument === 'piano' ? drawKeys : drawStrings)(el<HTMLCanvasElement>('piece-lane'), exercise, plan?.kind === 'calibration' ? undefined : plan, now, p.support, result, reduced.matches, hide, usingKeys() ? live() : undefined);
+}
+function live(): Parameters<typeof drawKeys>[8] {
+  if (wait) return { held: audio.held, labels, hits: wait.hits, wrong, beat: wait.beat, expect: wait.current && wait.current.beat - wait.beat <= 0.5 ? wait.needed : [], message: wait.waiting ? 'Waiting for you: play the glowing keys' : '' };
+  const plan = audio.plan, scoring = plan?.kind === 'practice' && audio.input === 'keys' && audio.now >= plan.playAt - plan.beatsPerBar * plan.period;
+  return { held: audio.held, labels, hits: scoring ? hits : undefined, wrong };
 }
 paintLocal();
 loadPack(progress.selected.piece || packs()[0].id);
