@@ -80,7 +80,7 @@ const alpha = (hex: string, a: number) => `rgba(${channels(hex).join(',')},${a})
  * pressed (noteKey), so only those glow and notes that pass unplayed fade. wrong: when each wrong key was pressed
  * (performance.now ms). expect: keys to press now, pulsing. beat: a lane position that overrides the plan (wait mode).
  */
-export interface LiveKeys { held: ReadonlySet<number>; labels?: ReadonlyMap<number, string>; hits?: ReadonlySet<string>; wrong?: ReadonlyMap<number, number>; expect?: readonly number[]; beat?: number; message?: string }
+export interface LiveKeys { held: ReadonlySet<number>; labels?: ReadonlyMap<number, string>; hits?: ReadonlySet<string>; auto?: ReadonlySet<string>; wrong?: ReadonlyMap<number, number>; expect?: readonly number[]; beat?: number; message?: string }
 const PLAYED = '#e1c48f', WRONG = '#e07a6a';
 let lastLane = { w: 0, hitY: 0 };
 /** A burst of sparks across the keyboard after a clean take. */
@@ -116,7 +116,7 @@ export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePla
 
   // Notes: white-key notes first so black-key notes sit on top, as the keys do.
   const hide = hideWhilePlaying && playing;
-  const verdicts = result ? new Map(result.events.flatMap(e => e.notes.map(n => [`${ex.events[e.index]?.beat}:${n.midi}`, n.verdict]))) : undefined;
+  const verdicts = result ? new Map(result.events.flatMap(e => e.notes.map(n => [`${e.beat}:${n.midi}`, n.verdict]))) : undefined;
   const sounding = new Map<number, { colour: string; flash: number }>();
   const notes = hide ? [] : ex.events.flatMap(e => e.notes.map(n => ({ e, n }))).sort((a, b) => Number(isBlack(a.n.midi)) - Number(isBlack(b.n.midi)));
   for (const { e, n } of notes) {
@@ -131,14 +131,15 @@ export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePla
     const y0 = Math.max(0, top), y1 = Math.min(hitY, bottom - 1), nh = Math.max(4, y1 - y0), r = Math.min(6, nw / 2, nh / 2);
     const fill = p.createLinearGradient(0, y0, 0, y0 + nh);
     fill.addColorStop(0, mix(base, 0, 0.28)); fill.addColorStop(1, active ? mix(base, 255, 0.35) : base);
-    p.globalAlpha = verdict === 'cannot-check' || verdict === 'unchecked' || passed ? 0.4 : 1;
+    const auto = live?.auto?.has(`${e.beat}:${n.midi}`);
+    p.globalAlpha = verdict === 'cannot-check' || verdict === 'unchecked' || passed ? 0.4 : auto ? 0.5 : 1;
     if (active && animate) { p.shadowColor = base; p.shadowBlur = small ? 12 : 20; }
     p.fillStyle = fill; p.beginPath(); p.roundRect(nx, y0, nw, nh, r); p.fill();
     p.shadowBlur = 0;
     const flagged = verdict === 'wrong' || verdict === 'not-heard';
     p.strokeStyle = flagged ? '#f2c3a3' : black ? 'rgba(0,0,0,.55)' : alpha(mix(base, 255, 0.5), 0.55);
     p.lineWidth = flagged ? 2 : 1; p.stroke(); p.lineWidth = 1; p.globalAlpha = 1;
-    if (n.finger && nw > 10 && bottom - y0 > 16) {
+    if (n.finger && !auto && nw > 10 && bottom - y0 > 16) {
       const radius = Math.min(small ? 7 : 9, nw / 2 - 1), cy = Math.min(hitY, bottom) - radius - 3;
       p.fillStyle = 'rgba(10,14,12,.5)'; p.beginPath(); p.arc(x + width / 2, cy, radius, 0, Math.PI * 2); p.fill();
       p.fillStyle = mix(base, 255, 0.65); p.font = `bold ${small ? 10 : 12}px Segoe UI`; p.textAlign = 'center'; p.fillText(String(n.finger), x + width / 2, cy + 0.5); p.textAlign = 'left';

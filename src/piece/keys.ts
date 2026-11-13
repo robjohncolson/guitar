@@ -7,29 +7,46 @@ const UPPER = ['KeyQ', 'Digit2', 'KeyW', 'Digit3', 'KeyE', 'KeyR', 'Digit5', 'Ke
 const SYMBOL: Record<string, string> = { Comma: ',', Period: '.', Semicolon: ';', Slash: '/', BracketLeft: '[', BracketRight: ']', Equal: '=' };
 export const keyLabel = (code: string) => SYMBOL[code] ?? code.replace(/^Key|^Digit/, '');
 
-/** The bottom row starts at base (a C); the top row starts an octave higher. */
-export function keyMap(base: number): Map<string, number> {
+/**
+ * Where each row starts, both on a C. Usually an octave apart, one run of about 2½ octaves; when the music spreads
+ * wider (a bass note under a chord), the rows split so each sits where the notes are.
+ */
+export interface KeyLayout { lower: number; upper: number }
+export const reaches = (l: KeyLayout, midi: number) => (midi >= l.lower && midi < l.lower + LOWER.length) || (midi >= l.upper && midi < l.upper + UPPER.length);
+export function keyMap(l: KeyLayout): Map<string, number> {
   const map = new Map<string, number>();
-  LOWER.forEach((code, i) => map.set(code, base + i));
-  UPPER.forEach((code, i) => map.set(code, base + 12 + i));
+  LOWER.forEach((code, i) => map.set(code, l.lower + i));
+  UPPER.forEach((code, i) => map.set(code, l.upper + i));
   return map;
 }
-/** One letter per playable pitch, for the lane: the bottom row below the top row's first C, the top row from there. */
-export function keyLabels(base: number): Map<number, string> {
+/** One letter per playable pitch, for the lane; where the rows overlap, the top row's letter. */
+export function keyLabels(l: KeyLayout): Map<number, string> {
   const labels = new Map<number, string>();
-  LOWER.forEach((code, i) => { if (i < 12) labels.set(base + i, keyLabel(code)); });
-  UPPER.forEach((code, i) => labels.set(base + 12 + i, keyLabel(code)));
+  LOWER.forEach((code, i) => labels.set(l.lower + i, keyLabel(code)));
+  UPPER.forEach((code, i) => labels.set(l.upper + i, keyLabel(code)));
   return labels;
 }
-/** The C at or below the lowest note, so a one-hand passage usually fits on the two rows without shifting. */
-export const baseFor = (midis: number[]) => Math.floor(Math.min(...midis) / 12) * 12;
+/**
+ * The row positions that reach the most of these notes (one entry per note played). Ties go to rows an octave
+ * apart, then to the higher bottom row, so the bottom row starts at the lowest notes rather than below them.
+ */
+export function layoutFor(midis: number[]): KeyLayout {
+  if (!midis.length) return { lower: 48, upper: 60 };
+  const lo = Math.floor(Math.min(...midis) / 12) * 12, hi = Math.floor(Math.max(...midis) / 12) * 12;
+  let best = { layout: { lower: lo, upper: lo + 12 }, covered: -1, gap: Infinity };
+  for (let lower = lo - 12; lower <= hi; lower += 12) for (let upper = lower + 12; upper <= hi + 12; upper += 12) {
+    const layout = { lower, upper }, covered = midis.filter(m => reaches(layout, m)).length, gap = upper - lower;
+    if (covered > best.covered || (covered === best.covered && (gap < best.gap || (gap === best.gap && lower > best.layout.lower)))) best = { layout, covered, gap };
+  }
+  return best.layout;
+}
 
 export interface KeyHandlers { down(midi: number, stamp: number, source: 'keys' | 'midi'): void; up(midi: number): void }
 
 /** Listens to the computer keyboard and to every MIDI input while enabled. Stamps are performance.now() milliseconds. */
 export class KeyInput {
-  enabled = false; base = 48; midiDevices = 0; midiError = '';
-  private map = keyMap(48);
+  enabled = false; layout: KeyLayout = { lower: 48, upper: 60 }; midiDevices = 0; midiError = '';
+  private map = keyMap(this.layout);
   private down = new Map<string, number>();
   private access?: MIDIAccess;
   constructor(private handlers: KeyHandlers, private onOctave: () => void = () => {}) {
@@ -37,7 +54,10 @@ export class KeyInput {
     window.addEventListener('keyup', e => this.keyup(e));
     window.addEventListener('blur', () => this.releaseAll());
   }
-  setBase(base: number): void { this.releaseAll(); this.base = Math.max(12, Math.min(96, base)); this.map = keyMap(this.base); }
+  setLayout(layout: KeyLayout): void {
+    const shift = Math.max(12 - layout.lower, Math.min(0, 96 - layout.upper));
+    this.releaseAll(); this.layout = { lower: layout.lower + shift, upper: layout.upper + shift }; this.map = keyMap(this.layout);
+  }
   releaseAll(): void { for (const midi of this.down.values()) this.handlers.up(midi); this.down.clear(); }
   private typing(e: KeyboardEvent): boolean {
     const t = e.target;
@@ -45,7 +65,7 @@ export class KeyInput {
   }
   private keydown(e: KeyboardEvent): void {
     if (!this.enabled || this.typing(e)) return;
-    if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); if (!e.repeat) { this.setBase(this.base + (e.code === 'ArrowLeft' ? -12 : 12)); this.onOctave(); } return; }
+    if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); if (!e.repeat) { const step = e.code === 'ArrowLeft' ? -12 : 12; this.setLayout({ lower: this.layout.lower + step, upper: this.layout.upper + step }); this.onOctave(); } return; }
     const midi = this.map.get(e.code);
     if (midi === undefined) return;
     e.preventDefault();

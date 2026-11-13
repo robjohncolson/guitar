@@ -8,7 +8,7 @@ import { fromBars, type Exercise, type XEvent } from './exercise';
 import { advanceUnit, initialUnit, parsePieceProgress, pieceProgressKey, progressId, ready, rungBpm, suggestToday, unitState, type PieceProgress, type UnitProgress } from './progress';
 import { PieceAudio, type PieceTake } from './audio';
 import { celebrate, chordBox, drawKeys, drawStrings, pieceShell } from './view';
-import { baseFor, KeyInput, keyLabels } from './keys';
+import { KeyInput, keyLabels, layoutFor, reaches } from './keys';
 import { noteKey, WaitRun } from './wait';
 import { chordSpans, prettyChord } from './analysis';
 import { barAt } from './grade';
@@ -34,7 +34,7 @@ const trainerCalibration = (() => { try { const v = JSON.parse(localStorage.getI
 const progress: PieceProgress = (() => { try { return parsePieceProgress(localStorage.getItem(pieceProgressKey), trainerCalibration); } catch { return parsePieceProgress(null, trainerCalibration); } })();
 const audio = new PieceAudio();
 // Browser checks reach the audio engine in development builds only.
-if (import.meta.env.DEV) (window as unknown as { __piece: unknown }).__piece = { audio };
+if (import.meta.env.DEV) (window as unknown as { __piece: unknown }).__piece = { audio, exercise: () => exercise, layout: () => keyInput.layout };
 const player = el<HTMLAudioElement>('piece-player'), reduced = matchMedia('(prefers-reduced-motion: reduce)');
 audio.checkPitch = progress.checkPitch;
 let pack: Pack, score: Score, curriculum: Curriculum, arrangement: Arrangement, gUnits: Unit[] = [];
@@ -44,11 +44,11 @@ let pending: { take: PieceTake; before: UnitProgress } | undefined, feedback = '
 const INPUT = 'piece.input.v1';
 const inputPrefs = (() => { try { const v = JSON.parse(localStorage.getItem(INPUT) ?? '{}'); return { keys: v.keys === true, midiSound: v.midiSound !== false }; } catch { return { keys: false, midiSound: true }; } })();
 const saveInput = () => { try { localStorage.setItem(INPUT, JSON.stringify(inputPrefs)); } catch { /* preference lasts for this page */ } };
-let labels = keyLabels(48);
+let labels = keyLabels({ lower: 48, upper: 60 });
 const keyInput = new KeyInput({
   down: (midi, stamp, source) => { void audio.keyDown(midi, stamp, source === 'keys' || inputPrefs.midiSound); judgePress(midi); },
   up: midi => audio.keyUp(midi),
-}, () => { labels = keyLabels(keyInput.base); paintLaneHelp(); });
+}, () => { labels = keyLabels(keyInput.layout); paintLaneHelp(); });
 /** Keys mode applies to piano only; guitar always listens through the microphone. */
 const usingKeys = () => inputPrefs.keys && instrument === 'piano';
 /** Key presses need no sound-delay calibration: their timing is measured on the audio clock directly. */
@@ -60,15 +60,30 @@ function applyInput(): void {
   el('input-mic').setAttribute('aria-pressed', String(!inputPrefs.keys)); el('input-keys').setAttribute('aria-pressed', String(inputPrefs.keys));
   el('input-toggle').hidden = instrument !== 'piano';
   if (keys) void keyInput.connectMidi();
-  if (exercise) { keyInput.setBase(baseFor(exercise.events.flatMap(e => e.notes.map(n => n.midi)))); labels = keyLabels(keyInput.base); }
+  if (exercise) { keyInput.setLayout(layoutFor(exercise.events.flatMap(e => e.notes.map(n => n.midi)))); labels = keyLabels(keyInput.layout); }
   if (unit) el('piece-wait').hidden = !keys || unit.kind === 'listen';
   paintLaneHelp();
 }
+/**
+ * With computer keys, notes the two rows cannot reach are played by the app and left out of grading; with a MIDI
+ * keyboard (or the microphone) every note is the player's.
+ */
+function reachSplit(ex: Exercise): { mine: Exercise; auto: XEvent[] } {
+  if (!usingKeys() || keyInput.midiDevices) return { mine: ex, auto: [] };
+  const can = (m: number) => reaches(keyInput.layout, m);
+  return {
+    mine: { ...ex, events: ex.events.map(e => ({ ...e, notes: e.notes.filter(n => can(n.midi)) })).filter(e => e.notes.length) },
+    auto: ex.events.map(e => ({ ...e, notes: e.notes.filter(n => !can(n.midi)) })).filter(e => e.notes.length),
+  };
+}
+/** Notes the app plays in this take or wait run, as lane keys; and the wait run's notes still to sound. */
+let autoKeys = new Set<string>(), autoQueue: XEvent[] = [];
 function paintLaneHelp(): void {
   if (!exercise) return;
+  const out = reachSplit(exercise).auto.reduce((n, e) => n + e.notes.length, 0);
   const midi = keyInput.midiDevices ? `${keyInput.midiDevices} MIDI input${keyInput.midiDevices > 1 ? 's' : ''} connected` : keyInput.midiError || 'no MIDI keyboard connected';
   el('lane-help').textContent = instrument === 'piano'
-    ? `Left hand blue · right hand green · numbers are suggested fingers${usingKeys() ? ` · your keys light amber · letters are computer keys (Z row and Q row), left/right arrows change octave · ${midi}` : ''}`
+    ? `Left hand blue · right hand green · numbers are suggested fingers${usingKeys() ? ` · your keys light amber · letters are computer keys (Z row and Q row), left/right arrows change octave · ${midi}${out ? ` · ${out} note${out > 1 ? 's' : ''} out of reach of the keys (dimmed) will be played for you` : ''}` : ''}`
     : `Thin string at the top · numbers are frets${exercise.capo ? ` from the capo at ${exercise.capo}` : ''} · brackets are strums or pinches`;
 }
 const heard = new Set<string>(), session = { takes: 0, seconds: 0, notes: [] as string[] };
@@ -97,7 +112,11 @@ function judgePress(midi: number): void {
 function startWait(): void {
   if (active() || !usingKeys() || unit.kind === 'listen') return;
   player.pause(); pending = undefined; for (const id of ['piece-result', 'piece-session']) el(id).hidden = true;
-  hits.clear(); wrong.clear(); wait = new WaitRun(exercise, bpmNow()); lastFrame = 0;
+  hits.clear(); wrong.clear(); lastFrame = 0;
+  const { mine, auto } = reachSplit(exercise);
+  wait = new WaitRun(mine, bpmNow()); autoQueue = auto; autoKeys = new Set(auto.flatMap(e => e.notes.map(n => noteKey(e.beat, n.midi))));
+  for (const k of autoKeys) wait.hits.add(k);
+  void audio.prepare();
   feedback = 'Wait for me: the notes stop at the keys until you play them. Take your time; only the keys are checked.';
 }
 function stopWait(message?: string): void { if (!wait) return; wait = undefined; if (message) feedback = message; }
@@ -206,7 +225,9 @@ async function start(kind: 'practice' | 'demo'): Promise<void> {
   // New short steps are demonstrated once before the count-in; long sections are not (use Hear it).
   const demonstrate = kind === 'practice' && !heard.has(unit.id) && !unit.sameAs && exercise.beats <= 24;
   feedback = kind === 'demo' ? 'Listen to the notes and the spaces between them.' : 'One bar to count in. Play as the notes reach the keys.';
-  await audio.start(exercise, unit.id, bpmNow(), kind, current().support, progress.offset, demonstrate, kind === 'practice' ? otherPart() : []);
+  const { mine, auto } = kind === 'practice' ? reachSplit(exercise) : { mine: exercise, auto: [] };
+  autoKeys = new Set(auto.flatMap(e => e.notes.map(n => noteKey(e.beat, n.midi)))); for (const k of autoKeys) hits.add(k);
+  await audio.start(mine, unit.id, bpmNow(), kind, current().support, progress.offset, demonstrate, kind === 'practice' ? [...otherPart(), ...auto] : []);
   if (kind === 'demo' || demonstrate) heard.add(unit.id);
   if (!usingKeys() && audio.deviceKey && progress.calibrated && progress.calibrationKey && progress.calibrationKey !== audio.deviceKey) { progress.calibrated = false; el('piece-calibration-feedback').textContent = 'The audio path changed. Recalibrate to count tempo steps.'; persist(); }
 }
@@ -233,7 +254,9 @@ audio.onTake = take => {
   pending = { take, before: current() };
   progress.history.push({ date: Date.now(), piece: pack.id, unit: take.unit, bpm: take.bpm, score: result.score, trusted: result.trusted && timed(take) });
   progress.history = progress.history.slice(-200);
-  feedback = result.feedback + (timed(take) ? '' : ' Timing is an estimate until you calibrate; tempo steps wait for calibration.');
+  const autoCount = take.presses ? autoKeys.size : 0;
+  feedback = result.feedback + (timed(take) ? '' : ' Timing is an estimate until you calibrate; tempo steps wait for calibration.')
+    + (autoCount ? ` ${autoCount} note${autoCount > 1 ? 's' : ''} out of reach of the computer keys ${autoCount > 1 ? 'were' : 'was'} played for you and not graded.` : '');
   const notes = result.events.flatMap(e => e.notes), count = (v: string) => notes.filter(n => n.verdict === v).length;
   const marks = result.events.map(e => e.mark), mark = (m: string) => marks.filter(x => x === m).length;
   el('piece-metrics').innerHTML = `<span><strong>${Math.round(result.timing * 100)}%</strong> on time${timed(take) ? '' : ' · estimate'}</span>${result.pitch === null ? `<span>${instrument === 'piano' ? 'Notes mostly unchecked' : 'Timing only'}</span>` : `<span><strong>${Math.round(result.pitch * 100)}%</strong> ${take.presses ? 'right keys' : 'notes heard right'}</span>`}${result.trusted ? '' : '<span>Not scored</span>'}`;
@@ -408,6 +431,7 @@ function paint(): void {
   const clock = performance.now(), dt = lastFrame ? Math.min(0.25, (clock - lastFrame) / 1000) : 0; lastFrame = clock;
   if (wait) {
     wait.step(dt);
+    while (autoQueue.length && autoQueue[0].beat <= wait.beat + 1e-6) { const e = autoQueue.shift()!; for (const n of e.notes) audio.playNote(n.midi, n.dur * 60 / wait.bpm); }
     phase = `Wait for me · bar ${barAt(exercise, Math.max(0, wait.beat)).number}`;
     if (wait.done) finishWait(wait);
   }
@@ -418,17 +442,18 @@ function paint(): void {
   (instrument === 'piano' ? drawKeys : drawStrings)(el<HTMLCanvasElement>('piece-lane'), exercise, plan?.kind === 'calibration' ? undefined : plan, now, p.support, result, reduced.matches, hide, usingKeys() ? live() : undefined);
 }
 function live(): Parameters<typeof drawKeys>[8] {
-  if (wait) return { held: audio.held, labels, hits: wait.hits, wrong, beat: wait.beat, expect: wait.current && wait.current.beat - wait.beat <= 0.5 ? wait.needed : [], message: wait.waiting ? 'Waiting for you: play the glowing keys' : '' };
+  if (wait) return { held: audio.held, labels, hits: wait.hits, auto: autoKeys, wrong, beat: wait.beat, expect: wait.current && wait.current.beat - wait.beat <= 0.5 ? wait.needed : [], message: wait.waiting ? 'Waiting for you: play the glowing keys' : '' };
   // Replaying a keys take: light the keys that were pressed, and fade the notes that were not played right.
   const replay = audio.replaying;
   if (replay?.presses && audio.plan) {
     const t = audio.now - audio.plan.playAt, presses = replay.presses;
     const heldNow = new Set(presses.filter(x => t >= x.t && t < x.t + (x.dur ?? 0.6)).map(x => x.midi));
     const right = new Set(replay.result?.events.flatMap(e => e.notes.filter(n => n.verdict === 'heard').map(n => noteKey(e.beat, n.midi))) ?? []);
-    return { held: heldNow, labels, hits: right, wrong };
+    for (const k of autoKeys) right.add(k);
+    return { held: heldNow, labels, hits: right, auto: autoKeys, wrong };
   }
   const plan = audio.plan, scoring = plan?.kind === 'practice' && audio.input === 'keys' && audio.now >= plan.playAt - plan.beatsPerBar * plan.period;
-  return { held: audio.held, labels, hits: scoring ? hits : undefined, wrong };
+  return { held: audio.held, labels, hits: scoring ? hits : undefined, auto: scoring ? autoKeys : undefined, wrong };
 }
 paintLocal();
 loadPack(progress.selected.piece || packs()[0].id);

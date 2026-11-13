@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { gradeKeys, type KeyPress } from '../src/piece/grade';
 import { toEvents, type Exercise } from '../src/piece/exercise';
-import { baseFor, keyLabels, keyMap } from '../src/piece/keys';
+import { keyLabels, keyMap, layoutFor, reaches } from '../src/piece/keys';
 import { WaitRun } from '../src/piece/wait';
 
 // Two beats of single notes, then a C major chord on beat 3, at 60 BPM (one second per beat).
@@ -42,12 +42,24 @@ it('does not score a take with no key presses', () => {
 });
 
 it('maps the two computer-key rows to piano pitches from a C', () => {
-  const map = keyMap(48);
+  const map = keyMap({ lower: 48, upper: 60 });
   expect(map.get('KeyZ')).toBe(48); expect(map.get('KeyS')).toBe(49); expect(map.get('KeyM')).toBe(59);
   expect(map.get('KeyQ')).toBe(60); expect(map.get('Digit2')).toBe(61); expect(map.get('BracketRight')).toBe(79);
-  const labels = keyLabels(48);
+  const labels = keyLabels({ lower: 48, upper: 60 });
   expect(labels.get(48)).toBe('Z'); expect(labels.get(60)).toBe('Q'); expect(labels.get(66)).toBe('5');
-  expect(baseFor([62, 57, 74])).toBe(48);
+});
+
+it('places the rows where the notes are', () => {
+  // A one-octave scale from D4: the bottom row starts at its C, as a player would expect.
+  expect(layoutFor([62, 64, 66, 67, 69, 71, 73, 74])).toEqual({ lower: 60, upper: 72 });
+  // A left-hand waltz: bass B1-E2 on beat 1, chords around D3-F#4 after. Split rows reach every note.
+  const waltz = [35, 50, 54, 57, 40, 52, 55, 59, 38, 54, 57, 62, 33, 52, 55, 64, 66];
+  const split = layoutFor(waltz);
+  expect(waltz.every(m => reaches(split, m))).toBe(true);
+  expect(split.upper - split.lower).toBeGreaterThan(12);
+  // Too wide for two rows: the most notes are reached, and the rest are left for the app to play.
+  const wide = [26, 50, 54, 57, 74, 76, 78, 79, 81];
+  expect(wide.filter(m => reaches(layoutFor(wide), m)).length).toBe(8);
 });
 
 it('wait mode stops at each attack until its keys are played', () => {

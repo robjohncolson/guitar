@@ -214,6 +214,15 @@ export class PieceAudio {
     this.releases.get(midi)?.();
     this.releases.set(midi, this.voice.hold(midi, 0.75));
   }
+  /** Ready the voice ahead of time (a click is a user gesture), so notes the app plays sound at once. */
+  async prepare(): Promise<void> {
+    this.context = await enableContext(this.context);
+    this.voice ??= new PieceVoice(this.context); this.voice.volume = this.volume;
+  }
+  /** One note now, for notes played on the player's behalf. */
+  playNote(midi: number, length: number): void {
+    if (this.context && this.voice) this.voice.play(midi, this.context.currentTime, Math.min(6, Math.max(0.15, length)), 0.5);
+  }
   keyUp(midi: number): void {
     this.held.delete(midi);
     const open = this.presses && this.plan && this.context ? [...this.presses].reverse().find(p => p.midi === midi && p.dur === undefined) : undefined;
