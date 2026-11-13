@@ -6,7 +6,8 @@ import { loopWav } from '../audio/loop-wav';
 import { calibrate, pipOnsets, type Calibration } from '../trainer/calibration';
 import type { Ear } from '../audio/ear';
 import { analyzeTake } from '../trainer/analyze';
-import { gradeAttacks, gradeKeys, type KeyPress, type PieceGrade } from './grade';
+import { gradeAttacks, gradeKeys, judgeKeys, type KeyJudgement, type KeyPress, type PieceGrade } from './grade';
+import { AudioClock } from './clock';
 import { planExercise, type PieceKind, type PiecePlan, type Sound } from './plan';
 import { PieceVoice } from './voice';
 import type { Exercise, XEvent } from './exercise';
@@ -38,6 +39,8 @@ export class PieceAudio {
   replaying?: PieceTake;
   onTake: (take: PieceTake) => void = () => {};
   onCalibration: (result: Calibration) => void = () => {};
+  /** A demo or listen that played to its end (not stopped). */
+  onDemoEnd: (plan: PiecePlan) => void = () => {};
   private voice?: PieceVoice;
   private ear?: Ear;
   private earLoading?: Promise<Ear>;
@@ -62,6 +65,12 @@ export class PieceAudio {
   get micActive(): boolean { return Boolean(this.stream); }
   get playing(): boolean { return Boolean(this.playback); }
   get now(): number { return this.context?.currentTime ?? 0; }
+  private clock = new AudioClock();
+  /** The audio clock read smoothly between audio callbacks, for the lane: same timeline as now. */
+  get laneNow(): number { return this.clock.at(this.context); }
+  /** During a keys take: the presses so far, judged by the same rules as the final grade. */
+  judge(): KeyJudgement | undefined { return this.presses && this.current ? judgeKeys(this.current.exercise, this.current.bpm, this.presses) : undefined; }
+  get pressCount(): number { return this.presses?.length ?? 0; }
   private closeMic(): void {
     this.source?.disconnect(); this.source = undefined;
     this.stream?.getTracks().forEach(track => track.stop()); this.stream = undefined;
@@ -166,7 +175,7 @@ export class PieceAudio {
       this.sound(event);
     }
     if (now < plan.finish) return;
-    if (plan.kind === 'demo') { this.plan = undefined; this.replaying = undefined; return; }
+    if (plan.kind === 'demo') { this.plan = undefined; this.replaying = undefined; this.onDemoEnd(plan); return; }
     if (!this.presses && !this.capture?.ready && now < plan.end + 2) return;
     void this.complete();
   }
@@ -206,12 +215,15 @@ export class PieceAudio {
   async keyDown(midi: number, stamp: number, sound: boolean): Promise<void> {
     this.held.add(midi);
     if (this.context && this.presses && this.plan) {
-      const t = this.context.currentTime - Math.max(0, performance.now() - stamp) / 1000;
+      const t = this.clock.at(this.context, stamp);
       if (t >= this.plan.playAt - 0.5 && t <= this.plan.end + 0.5) this.presses.push({ t: t - this.plan.playAt, midi });
     }
     if (!sound) return;
-    try { this.context = await enableContext(this.context); } catch { return; }
-    this.voice ??= new PieceVoice(this.context); this.voice.volume = this.volume;
+    // A warm context sounds at once; only a cold one waits to resume.
+    if (this.context?.state !== 'running' || !this.voice) {
+      try { this.context = await enableContext(this.context); } catch { return; }
+      this.voice ??= new PieceVoice(this.context); this.voice.volume = this.volume;
+    }
     if (!this.held.has(midi)) return;
     this.releases.get(midi)?.();
     this.releases.set(midi, this.voice.hold(midi, 0.75));
@@ -219,7 +231,7 @@ export class PieceAudio {
   /** Ready the voice ahead of time (a click is a user gesture), so notes the app plays sound at once. */
   async prepare(): Promise<void> {
     this.context = await enableContext(this.context);
-    this.voice ??= new PieceVoice(this.context); this.voice.volume = this.volume;
+    this.voice ??= new PieceVoice(this.context); this.voice.volume = this.volume; this.voice.warm();
   }
   /** One note now, for notes played on the player's behalf. */
   playNote(midi: number, length: number): void {

@@ -21,6 +21,8 @@ export class PieceVoice {
     this.active.add(oscillator);
     oscillator.onended = () => { this.active.delete(oscillator); oscillator.disconnect(); gain.disconnect(); };
   }
+  /** Build both waves ahead of the first note. */
+  warm(): void { this.wave('piano'); this.wave('guitar'); }
   set volume(value: number) { this.out.gain.setTargetAtTime(Math.max(0, Math.min(1, value)), this.context.currentTime, 0.02); }
   private wave(timbre: 'piano' | 'guitar'): PeriodicWave {
     let wave = this.waves.get(timbre);

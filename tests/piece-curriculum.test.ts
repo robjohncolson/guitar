@@ -127,8 +127,9 @@ it('calls a unit learned after certifying the goal tempo on two days, then sched
 
 it('plans a short session and survives corrupt saves', () => {
   const plan = suggestToday(curriculum, () => undefined, Date.UTC(2026, 10, 11));
-  expect(plan.map(p => p.reason)).toEqual(['Warm up in the key', 'Hear it before you start', 'Next step', 'Next step']);
-  expect(plan[0].unit.kind).toBe('drill');
+  // One phrase at a time: hear it, the chord it needs, then the music itself (see piece-plan.test.ts). Drills wait for day two.
+  expect(plan.map(p => p.slot)).toEqual(['listen', 'chord', 'phrase', 'phrase']);
+  expect(plan.some(p => p.unit.kind === 'drill')).toBe(false);
   const parsed = parsePieceProgress(JSON.stringify({ version: 1, offset: 9, units: { 'g|chord:D': { rung: 999, best: 'x', days: ['2026-11-11', 'bad'] } }, history: [{ unit: 'x', date: 1, bpm: 60, score: 4 }] }));
   expect(parsed.offset).toBe(0.5);
   expect(parsed.units['g|chord:D']).toMatchObject({ rung: 20, best: 0, days: ['2026-11-11'] });

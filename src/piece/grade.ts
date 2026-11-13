@@ -5,7 +5,7 @@ import { noteName } from './score';
 /** Grading of one take: timing per attack, plus per-note evidence where the instrument and the mic allow it. */
 export interface NoteResult { midi: number; verdict: NoteVerdict | 'unchecked'; heardAs?: number; reason: string }
 /** unsure: sound rose here but no clear attack was found, so timing is not judged either way. */
-export interface EventResult { index: number; beat: number; mark: 'good' | 'early' | 'late' | 'missed' | 'unsure'; offset?: number; notes: NoteResult[] }
+export interface EventResult { index: number; beat: number; mark: 'good' | 'early' | 'late' | 'missed' | 'unsure'; offset?: number; notes: NoteResult[]; /** Keys takes only: the timing tier; perfect is information and scores as good. */ tier?: KeyTier }
 export interface PieceGrade {
   trusted: boolean; reason: string; events: EventResult[]; timing: number; pitch: number | null; score: number;
   extras: number; extraNotes: { beat: number; midi: number }[]; coverage: number;
@@ -164,19 +164,63 @@ export function gradeAttacks(ex: Exercise, bpm: number, attacks: Attack[], take:
 
 /** A key press in seconds from the first beat; dur is how long it was held, when the release was seen. */
 export interface KeyPress { t: number; midi: number; dur?: number }
+
+/*
+ * Key timing rules, shared by the live lane and the final grade so the two can never disagree. All in seconds.
+ * reach: how far a press may be from a note and still be matched to it. window: on time. perfect: an extra,
+ * tighter tier shown as information only; it never changes a score. together: presses this close form one attack.
+ */
+export const keyReach = (period: number) => Math.min(0.4, period * 0.45);
+export const keyWindow = (period: number) => Math.min(0.13, period * 0.16);
+export const keyPerfect = (period: number) => Math.min(0.045, keyWindow(period) / 2);
+export const keyTogether = (period: number) => Math.min(0.08, period * 0.25);
+export type KeyTier = 'perfect' | 'good' | 'early' | 'late';
+/** A matched attack's tier; perfect and good both count as on time. */
+export const keyTier = (delta: number, period: number): KeyTier =>
+  Math.abs(delta) <= keyPerfect(period) ? 'perfect' : Math.abs(delta) <= keyWindow(period) ? 'good' : delta < 0 ? 'early' : 'late';
+/** Presses grouped into attacks, in time order: an attack is timed by its first press. presses lists indices into the input. */
+export function groupPresses(presses: readonly KeyPress[], period: number): { t: number; midis: number[]; presses: number[] }[] {
+  const together = keyTogether(period), groups: { t: number; midis: number[]; presses: number[] }[] = [];
+  const order = presses.map((p, i) => ({ p, i })).sort((a, b) => a.p.t - b.p.t);
+  for (const { p, i } of order) {
+    const last = groups[groups.length - 1];
+    if (last && p.t - last.t <= together) { if (!last.midis.includes(p.midi)) last.midis.push(p.midi); last.presses.push(i); } else groups.push({ t: p.t, midis: [p.midi], presses: [i] });
+  }
+  return groups;
+}
+function alignKeys(ex: Exercise, bpm: number, presses: readonly KeyPress[]) {
+  const period = 60 / bpm, graded = ex.events.map((e, index) => ({ e, index })).filter(x => x.e.grade !== 'none');
+  const times = graded.map(x => x.e.beat * period), groups = groupPresses(presses, period);
+  return { period, graded, times, groups, pairs: match(times, groups.map(g => g.t), keyReach(period)), window: keyWindow(period) };
+}
+/** The live view of a keys take so far: each played note's tier (by noteKey) and the presses that hit no expected note. */
+export type KeyLive = KeyTier | 'played';
+export interface KeyJudgement { notes: Map<string, KeyLive>; wrong: Set<number> }
+/**
+ * Judges the presses so far with exactly the alignment and rules gradeKeys uses, so the lane shows what the grade
+ * will say. While the take runs (settled false), a match another note or attack could still claim shows as 'played'
+ * and earns no reward; that is the rule that keeps the lane from ever being more generous than the grade. Only a later
+ * press within reach of an already-judged note can re-align it, and the lane then updates on that press.
+ */
+export function judgeKeys(ex: Exercise, bpm: number, presses: readonly KeyPress[], settled = false): KeyJudgement {
+  const { period, graded, times, groups, pairs } = alignKeys(ex, bpm, presses), reach = keyReach(period), notes = new Map<string, KeyLive>(), right = new Set<number>();
+  graded.forEach(({ e }, i) => {
+    const j = pairs.get(i); if (j === undefined) return;
+    const g = groups[j], judged = keyTier(g.t - times[i], period);
+    // A match that could still move (another note or attack within reach) is shown as played, never as on time, until it is the only reading.
+    const open = times.some((t, k) => k !== i && Math.abs(t - times[i]) <= reach && Math.abs(g.t - t) <= reach) || groups.some((h, k) => k !== j && Math.abs(h.t - times[i]) <= reach);
+    const tier: KeyLive = open && !settled ? 'played' : judged;
+    for (const n of e.notes) if (g.midis.includes(n.midi)) notes.set(`${e.beat}:${n.midi}`, tier);
+    for (const k of g.presses) if (e.notes.some(n => n.midi === presses[k].midi)) right.add(k);
+  });
+  return { notes, wrong: new Set(presses.map((_, k) => k).filter(k => !right.has(k))) };
+}
 /**
  * Computer keys or MIDI: pitches and press times are exact, so every graded note gets a definite verdict.
  * t is seconds from the first beat. Presses close together form one attack, as a chord does.
  */
 export function gradeKeys(ex: Exercise, bpm: number, presses: KeyPress[], interrupted = false): PieceGrade {
-  const period = 60 / bpm, graded = ex.events.map((e, index) => ({ e, index })).filter(x => x.e.grade !== 'none');
-  const times = graded.map(x => x.e.beat * period), together = Math.min(0.08, period * 0.25);
-  const groups: { t: number; midis: number[] }[] = [];
-  for (const p of [...presses].sort((a, b) => a.t - b.t)) {
-    const last = groups[groups.length - 1];
-    if (last && p.t - last.t <= together) { if (!last.midis.includes(p.midi)) last.midis.push(p.midi); } else groups.push({ t: p.t, midis: [p.midi] });
-  }
-  const pairs = match(times, groups.map(g => g.t), Math.min(0.4, period * 0.45)), window = Math.min(0.13, period * 0.16);
+  const { period, graded, times, groups, pairs, window } = alignKeys(ex, bpm, presses);
   const used = new Set(pairs.values()), extras = groups.length - used.size, extraNotes: PieceGrade['extraNotes'] = [];
   let inTime = 0, heard = 0, wrongOrMissing = 0;
   const offsets: number[] = [];
@@ -194,7 +238,7 @@ export function gradeKeys(ex: Exercise, bpm: number, presses: KeyPress[], interr
       const near = stray.slice().sort((a, b) => Math.abs(a - n.midi) - Math.abs(b - n.midi))[0];
       return near !== undefined && Math.abs(near - n.midi) <= 2 ? { midi: n.midi, verdict: 'wrong', heardAs: near, reason: 'a neighbouring key was played' } : { midi: n.midi, verdict: 'not-heard', reason: 'this key was not played' };
     });
-    return { index, beat: e.beat, mark: Math.abs(delta) <= window ? 'good' : delta < 0 ? 'early' : 'late', offset: delta, notes };
+    return { index, beat: e.beat, mark: Math.abs(delta) <= window ? 'good' : delta < 0 ? 'early' : 'late', offset: delta, notes, tier: keyTier(delta, period) };
   });
   const count = Math.max(1, graded.length), checked = heard + wrongOrMissing;
   const timing = Math.max(0, (inTime - extras) / count), pitch = checked ? heard / checked : null;

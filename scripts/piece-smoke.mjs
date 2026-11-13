@@ -71,6 +71,9 @@ try {
     assert.equal(await evaluate("__piece.tracks.every(t => t.readyState === 'ended')"), true, 'Mic stayed open after a take');
     results.push({ scenario, ...trace }); return trace;
   };
+  // An answer starts the next take by itself, and Start will not drop an unanswered take: stop the automatic take so each scenario starts its own.
+  const halt = async () => { await until("!document.getElementById('piece-stop').disabled"); await evaluate("document.getElementById('piece-stop').click()"); await until("document.getElementById('piece-stop').disabled && !document.getElementById('piece-start').disabled"); };
+  const answer = async id => { await evaluate(`document.getElementById('${id}').click()`); await halt(); };
   const select = async (id, bpm) => {
     await evaluate(`document.querySelector('[data-unit="${id}"]').click()`);
     if (bpm) await evaluate(`{ const b = document.getElementById('piece-bpm'); b.value = '${bpm}'; b.dispatchEvent(new Event('input')); }`);
@@ -88,14 +91,17 @@ try {
   assert.ok(verdicts.filter(v => v === 'heard').length >= 10);
   await evaluate("document.getElementById('piece-comfortable').click()");
   await until("/Free tempo/.test(document.getElementById('piece-feedback').textContent)");
+  await halt();
   const wrong = await take('wrong');
   const target = wrong.result.events.find(e => e.beat === 10).notes.find(n => n.midi === 61);
   await pause(150);
   console.log(JSON.stringify({ phase: 'wrong chord tone', verdict: target.verdict, heardAs: target.heardAs, feedback: await evaluate("document.getElementById('piece-feedback').textContent") }));
   assert.notEqual(target.verdict, 'heard', 'A wrong note was confirmed');
+  await answer('piece-struggling');
   const silent = await take('silence');
   console.log(JSON.stringify({ phase: 'silence', marks: silent.result.events.map(e => e.mark), score: silent.result.score }));
   assert.ok(silent.result.events.every(e => e.mark === 'missed')); assert.equal(silent.result.score, 0);
+  await answer('piece-struggling');
   // At the tempo step itself (50% of 66 = 33 BPM) a clean, comfortable take counts toward the ladder.
   await evaluate(`{ const b = document.getElementById('piece-bpm'); b.value = '33'; b.dispatchEvent(new Event('input')); __piece.period = 60 / 33; }`);
   const step = await take('clean');
@@ -105,6 +111,7 @@ try {
   await pause(100);
   const p1 = await evaluate("JSON.parse(localStorage.getItem('piece.trainer.v1')).units['gymnopedie-1|L:1-4']");
   console.log(JSON.stringify({ phase: 'ladder', progress: p1, feedback: await evaluate("document.getElementById('piece-feedback').textContent") }));
+  await halt();
   assert.equal(p1.attempts, 1); assert.equal(p1.best, 0.5);
   await browser.screenshot('smoke-artifacts/piece-piano.png');
   // Guitar: a muted strum pattern graded by timing only, then a shape with each string's pitch checked by real CREPE.
