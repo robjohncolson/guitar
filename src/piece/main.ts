@@ -44,7 +44,8 @@ let instrument: 'piano' | 'guitar' = progress.selected.instrument, unit: Unit, e
 let pending: { take: PieceTake; before: UnitProgress; entry: PieceProgress['history'][number] } | undefined, feedback = '', wavUrl = '', traceUrl = '';
 // Computer keyboard and MIDI input: a per-browser preference, kept apart from practice progress.
 const INPUT = 'piece.input.v1';
-const inputPrefs = (() => { try { const v = JSON.parse(localStorage.getItem(INPUT) ?? '{}'); return { keys: v.keys === true, midiSound: v.midiSound !== false, calm: v.calm === true }; } catch { return { keys: false, midiSound: true, calm: false }; } })();
+const inputPrefs = (() => { try { const v = JSON.parse(localStorage.getItem(INPUT) ?? '{}'); return { keys: v.keys === true, midiSound: v.midiSound !== false, calm: v.calm === true, piano: v.piano === 'simple' ? 'simple' as const : 'grand' as const }; } catch { return { keys: false, midiSound: true, calm: false, piano: 'grand' as const }; } })();
+audio.piano = inputPrefs.piano;
 const saveInput = () => { try { localStorage.setItem(INPUT, JSON.stringify(inputPrefs)); } catch { /* preference lasts for this page */ } };
 let labels = keyLabels({ lower: 48, upper: 60 });
 const keyInput = new KeyInput({
@@ -131,13 +132,13 @@ function startWait(): void {
   const { mine, auto } = reachSplit(exercise);
   wait = new WaitRun(mine, bpmNow()); autoQueue = auto; autoKeys = new Set(auto.flatMap(e => e.notes.map(n => noteKey(e.beat, n.midi))));
   for (const k of autoKeys) wait.hits.add(k);
-  void audio.prepare();
+  void audio.prepare().then(() => audio.lockPiano(), () => {});
   feedback = 'Wait for me: the notes stop at the keys until you play them. Take your time; only the keys are checked.';
 }
-function stopWait(message?: string): void { if (!wait) return; wait = undefined; if (message) feedback = message; }
+function stopWait(message?: string): void { if (!wait) return; wait = undefined; audio.lockPiano(false); if (message) feedback = message; }
 function finishWait(run: WaitRun): void {
   const { notes, mistakes, seconds } = run.summary();
-  wait = undefined; session.seconds += seconds; progress.log = logDay(progress.log, Date.now(), { seconds }); persist(); paintToday();
+  wait = undefined; audio.lockPiano(false); session.seconds += seconds; progress.log = logDay(progress.log, Date.now(), { seconds }); persist(); paintToday();
   feedback = mistakes === 0 ? `All ${notes} notes, no wrong keys, in ${Math.round(seconds)} s. Try it again, or play it in time with Start practice.`
     : `All ${notes} notes in ${Math.round(seconds)} s, with ${mistakes} wrong key${mistakes > 1 ? 's' : ''} on the way. Once there are none, play it in time with Start practice.`;
   if (mistakes === 0) celebrate();
@@ -162,6 +163,7 @@ function loadPack(id: string): void {
   const compiled = compile(pack.text);
   if (!compiled.score) { el('piece-feedback').textContent = `This piece file has errors: ${compiled.diagnostics.slice(0, 3).map(d => `line ${d.line}: ${d.message}`).join(' ')}`; return; }
   score = compiled.score;
+  { const midis = score.notes.map(n => n.midi); if (midis.length) audio.pianoRange = [Math.min(...midis), Math.max(...midis)]; }
   curriculum = buildCurriculum(score, goal());
   arrangement = arrange(score);
   gUnits = guitarUnits(score, arrangement, goal());
@@ -492,6 +494,8 @@ paintEffects();
 // Start the audio clock and voice on the first gesture, so the first note and the first take do not wait for them.
 const warm = () => { window.removeEventListener('pointerdown', warm, true); window.removeEventListener('keydown', warm, true); void audio.prepare().catch(() => {}); };
 window.addEventListener('pointerdown', warm, true); window.addEventListener('keydown', warm, true);
+el<HTMLSelectElement>('piece-piano').value = inputPrefs.piano;
+el<HTMLSelectElement>('piece-piano').onchange = () => { inputPrefs.piano = el<HTMLSelectElement>('piece-piano').value === 'simple' ? 'simple' : 'grand'; audio.piano = inputPrefs.piano; saveInput(); };
 el<HTMLInputElement>('piece-midi-sound').onchange = () => { inputPrefs.midiSound = el<HTMLInputElement>('piece-midi-sound').checked; saveInput(); };
 el('piece-demo').onclick = () => { void start('demo'); };
 el('piece-listen').onclick = () => { const listen = curriculum.units.find(u => u.kind === 'listen')!; audio.stop(); void audio.start(exerciseFor(score, listen), 'listen', goal(), 'demo').then(() => { listenPlan = audio.plan; }); feedback = repeats(score) ? 'The whole piece, with the repeats.' : 'The whole piece.'; };
@@ -632,6 +636,7 @@ function paint(): void {
   disable('piece-comfortable', !pending || running); disable('piece-struggling', !pending || running);
   for (const id of ['piece-latest', 'piece-loop']) disable(id, !audio.take || Boolean(plan || audio.busy));
   disable('piece-previous', !audio.previous || Boolean(plan || audio.busy));
+  text('piece-piano-status', { '': '', loading: 'Loading piano…', failed: 'Grand piano could not load; using the simple piano.' }[audio.pianoStatus]);
   text('piece-mic', usingKeys() ? `Keys${keyInput.midiDevices ? ' · MIDI' : ''} · mic off` : audio.busy ? audio.analysis ? 'Mic off · listening back' : 'Preparing audio' : audio.micActive ? `Mic listening${audio.level > 0.9 ? ' · too loud' : ''}` : 'Mic off');
   text('piece-model', instrument === 'guitar' && exercise.events.some(e => e.grade === 'pitch') ? (audio.model === 'not needed' ? 'CREPE loads for plucked-note checks' : audio.model) : 'Piano listening: on this device');
   text('piece-calibration', usingKeys() ? 'Key timing needs no calibration' : progress.calibrated ? `Timing offset ${Math.round(progress.offset * 1000)} ms` : 'Timing not calibrated');

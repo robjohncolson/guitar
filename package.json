@@ -11,7 +11,11 @@
     "build": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json && vite build",
     "test": "vitest run",
     "preview": "vite preview",
-    "vendor:crepe": "node scripts/vendor-crepe.mjs"
+    "vendor:crepe": "node scripts/vendor-crepe.mjs",
+    "vendor:piano": "node scripts/vendor-piano-samples.mjs",
+    "check:piano": "node scripts/check-piano-samples.mjs",
+    "check:piano-voice": "node scripts/piano-voice-check.mjs",
+    "check:piano-realtime": "node scripts/piano-realtime-check.mjs"
   },
   "dependencies": {
     "@tensorflow/tfjs": "4.22.0",

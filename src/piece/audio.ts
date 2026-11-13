@@ -10,6 +10,7 @@ import { gradeAttacks, gradeKeys, judgeKeys, type KeyJudgement, type KeyPress, t
 import { AudioClock } from './clock';
 import { planExercise, type PieceKind, type PiecePlan, type Sound } from './plan';
 import { PieceVoice } from './voice';
+import { PianoSampler } from './sampler';
 import type { Exercise, XEvent } from './exercise';
 import type { AnalysisRequest } from './analysis.worker';
 
@@ -31,6 +32,10 @@ export class PieceAudio {
   mode: OutputMode = 'headphones'; volume = 0.5; click = true; deviceKey = ''; checkPitch = true;
   /** mic: listen to an acoustic instrument. keys: grade the computer keyboard or MIDI presses; no microphone. */
   input: 'mic' | 'keys' = 'mic';
+  /** Piano sound: the sampled grand, or the simple built-in voice. A take keeps the sound it started with. */
+  piano: 'grand' | 'simple' = 'grand';
+  /** Lowest and highest note of the current piece, for choosing which recordings to load. */
+  pianoRange: [number, number] = [48, 72];
   /** Keys held right now, for the lane, and the release for each one that sounds. */
   readonly held = new Set<number>();
   private releases = new Map<number, () => void>();
@@ -42,6 +47,8 @@ export class PieceAudio {
   /** A demo or listen that played to its end (not stopped). */
   onDemoEnd: (plan: PiecePlan) => void = () => {};
   private voice?: PieceVoice;
+  private sampler?: PianoSampler;
+  private locked?: boolean;
   private ear?: Ear;
   private earLoading?: Promise<Ear>;
   private worker?: Worker;
@@ -62,6 +69,8 @@ export class PieceAudio {
   /** Why the current take was marked interrupted, for the note details. */
   why = '';
   private modules = false;
+  /** '' when fine or simple; loading while recordings are on their way; failed when the grand piano could not load. */
+  get pianoStatus(): '' | 'loading' | 'failed' { return this.piano !== 'grand' || !this.sampler ? '' : this.sampler.failed && !this.sampler.ready(...this.pianoRange) ? 'failed' : this.sampler.loading ? 'loading' : ''; }
   get micActive(): boolean { return Boolean(this.stream); }
   get playing(): boolean { return Boolean(this.playback); }
   get now(): number { return this.context?.currentTime ?? 0; }
@@ -79,7 +88,7 @@ export class PieceAudio {
   }
   stop(): void {
     this.generation++; this.busy = false; this.analysis = ''; this.plan = undefined; this.capture = undefined; this.current = undefined; this.level = 0;
-    this.closeMic(); this.voice?.stop(); this.releases.clear(); this.presses = undefined; this.replaying = undefined;
+    this.closeMic(); this.voice?.stop(); this.sampler?.stop(); this.locked = undefined; this.releases.clear(); this.presses = undefined; this.replaying = undefined;
     for (const pip of this.pips) try { pip.stop(); } catch { /* ended */ }
     this.pips = [];
     try { this.playback?.stop(); } catch { /* ended */ }
@@ -121,7 +130,7 @@ export class PieceAudio {
     try {
       this.context = await enableContext(this.context); if (generation !== this.generation) return;
       await this.settle(); if (generation !== this.generation) return;
-      this.voice ??= new PieceVoice(this.context); this.voice.volume = this.volume;
+      this.make(); this.lockPiano();
       const needsPitch = kind === 'practice' && exercise.instrument === 'guitar' && exercise.events.some(e => e.grade === 'pitch');
       if (needsPitch) {
         const ear = await this.loadEar(); if (generation !== this.generation) return;
@@ -143,6 +152,17 @@ export class PieceAudio {
     } catch (error) { if (generation === this.generation) { this.stop(); this.error = error instanceof Error ? error.message : String(error); } }
     finally { if (generation === this.generation) this.busy = false; }
   }
+  private make(): void {
+    const context = this.context!;
+    this.voice ??= new PieceVoice(context); this.voice.volume = this.volume;
+    this.sampler ??= new PianoSampler(context, this.voice.out);
+    if (this.piano === 'grand') this.loadPiano();
+  }
+  /** Start fetching the recordings for the piece's range (never awaited: a take does not wait for them). */
+  private loadPiano(): void { const [lo, hi] = this.pianoRange; void this.sampler?.load(lo - 3, hi + 3).catch(() => {}); }
+  /** Fix the piano sound for the take or Wait for me run about to begin; stop() clears it. */
+  lockPiano(on = true): void { this.locked = on ? this.piano === 'grand' && Boolean(this.sampler?.ready(...this.pianoRange)) : undefined; }
+  private grand(): boolean { return this.locked ?? (this.piano === 'grand' && Boolean(this.sampler?.ready(...this.pianoRange))); }
   private receive(event: LoopEvent): void {
     const capture = this.capture; if (!capture) return;
     if (event.type === 'error') { this.error = event.message; this.stop(); return; }
@@ -157,7 +177,11 @@ export class PieceAudio {
   private sound(event: Sound): void {
     const context = this.context!, at = event.at - outputDelay(context);
     if (event.kind === 'click') { if (this.click || event.at < this.plan!.playAt) this.voice!.click(at, Boolean(event.accent), event.level ?? 1); return; }
-    if (event.kind === 'note') { this.voice!.play(event.midi!, at, event.length, event.level ?? 0.7, event.timbre); return; }
+    if (event.kind === 'note') {
+      const level = event.level ?? 0.7;
+      if (event.timbre !== 'guitar' && this.grand() && this.sampler!.play(event.midi!, at, event.length, level)) return;
+      this.voice!.play(event.midi!, at, event.length, level, event.timbre); return;
+    }
     const oscillator = context.createOscillator(), gain = context.createGain(); oscillator.frequency.value = 1000;
     gain.gain.setValueAtTime(0, at); gain.gain.linearRampToValueAtTime(0.25, at + 0.001); gain.gain.linearRampToValueAtTime(0, at + 0.009);
     oscillator.connect(gain).connect(context.destination); oscillator.start(at); oscillator.stop(at + 0.011); this.pips.push(oscillator);
@@ -222,20 +246,22 @@ export class PieceAudio {
     // A warm context sounds at once; only a cold one waits to resume.
     if (this.context?.state !== 'running' || !this.voice) {
       try { this.context = await enableContext(this.context); } catch { return; }
-      this.voice ??= new PieceVoice(this.context); this.voice.volume = this.volume;
+      this.make();
     }
     if (!this.held.has(midi)) return;
     this.releases.get(midi)?.();
-    this.releases.set(midi, this.voice.hold(midi, 0.75));
+    this.releases.set(midi, (this.grand() ? this.sampler!.hold(midi, 0.75) : undefined) ?? this.voice!.hold(midi, 0.75));
   }
   /** Ready the voice ahead of time (a click is a user gesture), so notes the app plays sound at once. */
   async prepare(): Promise<void> {
     this.context = await enableContext(this.context);
-    this.voice ??= new PieceVoice(this.context); this.voice.volume = this.volume; this.voice.warm();
+    this.make(); this.voice!.warm();
   }
   /** One note now, for notes played on the player's behalf. */
   playNote(midi: number, length: number): void {
-    if (this.context && this.voice) this.voice.play(midi, this.context.currentTime, Math.min(6, Math.max(0.15, length)), 0.5);
+    if (!this.context || !this.voice) return;
+    const now = this.context.currentTime, long = Math.min(6, Math.max(0.15, length));
+    if (!(this.grand() && this.sampler!.play(midi, now, long, 0.5))) this.voice.play(midi, now, long, 0.5);
   }
   keyUp(midi: number): void {
     this.held.delete(midi);
@@ -250,7 +276,7 @@ export class PieceAudio {
     const generation = this.generation;
     this.context = await enableContext(this.context); if (generation !== this.generation) return;
     await this.settle(); if (generation !== this.generation) return;
-    this.voice ??= new PieceVoice(this.context); this.voice.volume = this.volume;
+    this.make(); this.lockPiano();
     const period = 60 / take.bpm, first = Math.min(0, ...take.presses.map(p => p.t));
     const start = this.now + outputDelay(this.context) + 0.4 - first, end = start + take.exercise.beats * period;
     const sounds: Sound[] = take.presses.map(p => ({ at: start + p.t, kind: 'note' as const, midi: p.midi, length: Math.min(6, p.dur ?? 0.6), level: 0.75, timbre: 'piano' as const })).sort((a, b) => a.at - b.at);
