@@ -9,7 +9,7 @@ import { advanceUnit, canPlace, dayOf, initialUnit, logDay, parsePieceProgress, 
 import { pieceMap } from './map';
 import { bestKey, compareTake, keyStats, pruneBests, tightness, timingSummary } from './bests';
 import { PieceAudio, type PieceTake } from './audio';
-import { celebrate, chordBox, clearMoment, drawKeys, drawStrings, handColour, keyHit, laneAnimating, laneResized, pieceShell, showMoment } from './view';
+import { celebrate, chordBox, clearMoment, drawKeys, drawStrings, handColour, keyHit, laneAnimating, laneResized, lightProbe, pieceShell, showMoment } from './view';
 import { KeyInput, keyLabels, layoutFor, reaches } from './keys';
 import { noteKey, WaitRun } from './wait';
 import { chordSpans, prettyChord } from './analysis';
@@ -37,7 +37,7 @@ const trainerCalibration = (() => { try { const v = JSON.parse(localStorage.getI
 const progress: PieceProgress = (() => { try { return parsePieceProgress(localStorage.getItem(pieceProgressKey), trainerCalibration); } catch { return parsePieceProgress(null, trainerCalibration); } })();
 const audio = new PieceAudio();
 // Browser checks reach the audio engine in development builds only.
-if (import.meta.env.DEV) (window as unknown as { __pieceDev: unknown }).__pieceDev = { audio, exercise: () => exercise, layout: () => keyInput.layout, tiers: () => [...tiers], streak: () => streak, revealing: () => Boolean(reveal), moment: () => Boolean(after), pending: () => Boolean(pending), spot: () => spot && { id: spot.id, bars: spot.exercise.bars.map(b => b.number), bpm: spot.bpm, clean: spot.clean, hands: spot.hands }, choice: () => choice,
+if (import.meta.env.DEV) (window as unknown as { __pieceDev: unknown }).__pieceDev = { audio, light: () => lightProbe(), exercise: () => exercise, layout: () => keyInput.layout, tiers: () => [...tiers], streak: () => streak, revealing: () => Boolean(reveal), moment: () => Boolean(after), pending: () => Boolean(pending), spot: () => spot && { id: spot.id, bars: spot.exercise.bars.map(b => b.number), bpm: spot.bpm, clean: spot.clean, hands: spot.hands }, choice: () => choice,
   take: (result: PieceGrade, bpm?: number) => { const take: PieceTake = { id: Date.now(), exercise, unit: spot ? spot.id : unit.id, bpm: bpm ?? bpmNow(), support: 0, kind: 'practice', offset: progress.offset, samples: new Float32Array(4800), rate: 48000, levelGain: 1, result }; audio.previous = audio.take; audio.take = take; audio.onTake(take); } };
 const player = el<HTMLAudioElement>('piece-player'), reduced = matchMedia('(prefers-reduced-motion: reduce)');
 audio.checkPitch = progress.checkPitch;
@@ -805,7 +805,7 @@ function paint(): void {
   const sweep = reveal && result ? revealBeat : undefined;
   // A lane where nothing moves is drawn again only when something it shows has changed.
   const clockMs = performance.now(), moving = Boolean(plan || wait || sweep !== undefined || laneAnimating() || laneResized() || [...wrong.values()].some(t => clockMs - t < 600));
-  const look = { lively: lively(), level: plan?.kind === 'practice' && audio.micActive ? audio.level : undefined };
+  const look = { lively: lively(), level: plan?.kind === 'practice' && audio.micActive ? audio.level : undefined, quiet: Boolean(plan) && (plan!.kind !== 'practice' || audio.input !== 'keys') };
   const signature = `${spot ? spot.id : unit.id}|${instrument}|${p.support}|${hide}|${result ? audio.take?.id : ''}|${[...audio.held].join()}|${keyInput.layout.lower},${keyInput.layout.upper}|${usingKeys()}|${reduced.matches}|${look.lively}`;
   if (!moving && laneExercise === exercise && signature === laneSignature) return;
   laneExercise = exercise; laneSignature = signature;

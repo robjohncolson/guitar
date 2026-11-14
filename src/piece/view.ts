@@ -3,6 +3,8 @@ import type { Exercise } from './exercise';
 import type { PiecePlan } from './plan';
 import type { KeyLive, PieceGrade } from './grade';
 import { fretList, type Shape } from './guitar';
+import { GRAVITY, celebration, hitBurst, isEmpty, lightFrame, newFrame, particle, pruneBursts, revealBurst, rgb, type Burst, type LightFrame, type LightInput, type Particle, type Rect, type Rgb } from './light';
+import { glLight, type LightLayer } from './lightgl';
 
 export function pieceShell(): void {
   document.querySelector('#app')!.innerHTML = `<main class="trainer piece">
@@ -86,8 +88,7 @@ function position(ex: Exercise, plan: PiecePlan | undefined, now: number): { bea
   return { beat: (now - plan.playAt) / plan.period, moving: true, playing: now >= plan.playAt && now < plan.end };
 }
 
-type Spark = { x: number; y: number; vx: number; vy: number; life: number; max: number; colour: string; size: number };
-const sparks: Spark[] = [];
+const bursts: Burst[] = [];
 let lastFrame = 0;
 const channels = (hex: string) => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
 const mixed = new Map<string, string>(), alphas = new Map<string, string>();
@@ -117,6 +118,49 @@ function glow(colour: string): HTMLCanvasElement {
   }
   return s;
 }
+// Colours cross between the light list (0..1 channels) and canvas strings; both ways are memoised per colour.
+const hexes = new WeakMap<Rgb, string>(), rgbs = new Map<string, Rgb>();
+const hexOf = (c: Rgb) => { let v = hexes.get(c); if (!v) { v = `#${c.map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('')}`; hexes.set(c, v); } return v; };
+const rgbOf = (hex: string) => { let v = rgbs.get(hex); if (!v) { v = rgb(hex); rgbs.set(hex, v); } return v; };
+const scratch: Particle = { x: 0, y: 0, vx: 0, vy: 0, life: 0, size: 0 };
+/**
+ * The 2D stand-in for the WebGL light layer: the same frame, drawn additively. It is drawn under the felt and keys,
+ * which cover anything below the clip, so it needs no clip of its own. Nothing at all happens while there is no light.
+ */
+function drawLight2d(p: CanvasRenderingContext2D, f: LightFrame): void {
+  if (isEmpty(f)) return;
+  p.globalCompositeOperation = 'lighter';
+  for (const s of f.shapes) {
+    const hex = hexOf(s.colour);
+    if (s.kind === 'glow') { p.globalAlpha = s.a; p.drawImage(glow(hex), s.x, s.y, s.w, s.h); }
+    else if (s.kind === 'ring') { p.strokeStyle = alpha(hex, s.a); p.lineWidth = 2; p.beginPath(); p.arc(s.x + s.w / 2, s.y + s.h / 2, s.w / 2, Math.PI, 2 * Math.PI); p.stroke(); }
+    else if (s.kind === 'band') { p.globalAlpha = s.a; p.fillStyle = gradient(p, `lb${hex}`, 0, 1, [[0, alpha(hex, 0)], [1, alpha(hex, 1)]]); p.save(); p.translate(0, s.y); p.scale(1, s.h); p.fillRect(s.x, 0, s.w, 1); p.restore(); }
+    else { p.globalAlpha = s.a; p.fillStyle = hex; p.fillRect(s.x, s.y + s.h / 2 - 1, s.w, 2); }
+  }
+  for (const b of f.bursts) {
+    if (f.now < b.at) continue;
+    const hex = hexOf(b.colour), t = (f.now - b.at) / 1000;
+    if (!b.soft) p.fillStyle = hex;
+    for (let i = 0; i < b.count; i++) {
+      const q = particle(b, i, scratch);
+      if (t >= q.life) continue;
+      const x = q.x + q.vx * t, y = q.y + q.vy * t + GRAVITY * t * t / 2, a = 1 - t / q.life, r = q.size;
+      if (b.soft) { p.globalAlpha = 0.5 * a; p.drawImage(glow(hex), x - r, y - r, 2 * r, 2 * r); }
+      else { p.globalAlpha = a; p.fillRect(x - r, y - r, 2 * r, 2 * r); }
+    }
+  }
+  p.globalAlpha = 1; p.globalCompositeOperation = 'source-over';
+}
+// The light is drawn by a WebGL overlay when one can be made, else by drawLight2d; never both in one frame.
+let layer: LightLayer | undefined, layerTried = false, lastLight: LightFrame | undefined;
+const EMPTY_LIGHT: LightFrame = newFrame();
+// One frame, one input and a pool of judged-key entries, reused every frame so the lane allocates nothing for its light.
+const frame = newFrame(), lightIn: LightInput = { now: 0, lively: false, quiet: false, inTake: false, w: 0, hitY: 0, effects: [], bursts: [], warm: 0, haze: 0, pulse: 0 };
+/** Development check: which backend drew the last frame and how much light it held. */
+export function lightProbe(): { backend: 'gl' | '2d'; shapes: number; particles: number; alpha: number } {
+  const f = lastLight;
+  return { backend: layer?.ready() ? 'gl' : '2d', shapes: f?.shapes.length ?? 0, particles: f ? f.bursts.reduce((n, b) => n + (f.now >= b.at ? b.count : 0), 0) : 0, alpha: layer ? layer.alpha() : 0 };
+}
 
 /**
  * Keys and MIDI input on the lane. held: keys down now. labels: computer-key letters. tiers: during a timed keys take,
@@ -126,7 +170,8 @@ function glow(colour: string): HTMLCanvasElement {
  */
 export interface LiveKeys { held: ReadonlySet<number>; labels?: ReadonlyMap<number, string>; tiers?: ReadonlyMap<string, KeyLive>; hits?: ReadonlySet<string>; auto?: ReadonlySet<string>; wrong?: ReadonlyMap<number, number>; expect?: readonly number[]; beat?: number; message?: string; streak?: number }
 /** lively: flashes, pops and sparks; calm: colour changes only. level: microphone level, for a neutral ring that is no verdict. */
-export interface LaneLook { lively: boolean; level?: number }
+/** quiet: a microphone take or a demo is playing, so no reward light at all. */
+export interface LaneLook { lively: boolean; level?: number; quiet?: boolean }
 const PLAYED = '#e1c48f', WRONG = '#b98a80';
 let lastLane = { w: 0, hitY: 0 }, look: LaneLook = { lively: true }, haze = 28, revealed = -Infinity;
 /**
@@ -135,17 +180,12 @@ let lastLane = { w: 0, hitY: 0 }, look: LaneLook = { lively: true }, haze = 28, 
  */
 export function celebrate(size: 'small' | 'medium' | 'big' = 'small'): void {
   if (!look.lively) return;
-  burst(size === 'small' ? 160 : 240);
-  if (size === 'big') { setTimeout(() => burst(200), 700); setTimeout(() => burst(160), 1500); }
-}
-function burst(count: number): void {
-  if (!look.lively) return;
-  const { w, hitY } = lastLane, colours = [HAND.L, HAND.R, PLAYED];
-  for (let i = 0; i < count; i++) sparks.push({ x: Math.random() * w, y: hitY - 2, vx: (Math.random() - 0.5) * 140, vy: -120 - Math.random() * 260, life: 0, max: 0.8 + Math.random() * 0.9, colour: mix(colours[i % 3], 255, 0.3), size: 1 + Math.random() * 2.2 });
+  bursts.push(...celebration(performance.now(), size, lastLane.w, lastLane.hitY, [HAND.L, HAND.R, PLAYED].map(c => rgb(c))));
 }
 /** A confirmed live judgement of one key, for its brief flash, pop, ring or early/late tick. Only keys/MIDI takes call this. */
 type Effect = { midi: number; tier: KeyLive; colour: string; at: number; burst: boolean };
-const effects: Effect[] = [];
+type LightFx = { cx: number; width: number; tier: string; colour: Rgb; at: number };
+const effects: Effect[] = [], lightFx: LightFx[] = [], fxPool: LightFx[] = [];
 export function keyHit(midi: number, tier: KeyLive, colour: string): void {
   effects.push({ midi, tier, colour, at: performance.now(), burst: false });
   if (effects.length > 24) effects.shift();
@@ -154,16 +194,24 @@ export function keyHit(midi: number, tier: KeyLive, colour: string): void {
 let moment: { title: string; sub: string; at: number; ms: number; big: boolean } | undefined;
 export function showMoment(title: string, sub: string, ms: number, big: boolean): void { moment = { title, sub, at: performance.now(), ms, big }; }
 export function clearMoment(): void { moment = undefined; }
+let momentBox: Rect | undefined;
+/** The banner's box, from the same numbers it is drawn with; leaves the title font set. */
+function momentGeom(p: CanvasRenderingContext2D, m: NonNullable<typeof moment>, w: number, h: number, small: boolean, motion: boolean, age: number) {
+  // Fades in over 180 ms and out over the last 300 ms; with no motion it simply stands.
+  const a = motion ? Math.min(1, age / 180, (m.ms - age) / 300) : 1, rise = motion ? 8 * (1 - ease(Math.min(1, age / 300))) : 0;
+  const size = (small ? 18 : 24) + (m.big ? 4 : 0), subSize = small ? 12 : 14, cy = h * 0.4 + rise;
+  p.font = `${subSize}px Segoe UI`; const subW = p.measureText(m.sub).width;
+  p.font = `600 ${size}px Segoe UI`; const tw = Math.min(w - 16, Math.max(p.measureText(m.title).width, subW) + 48), th = size + (m.sub ? subSize + 30 : 22);
+  return { a, size, subSize, cy, tw, th, box: { x: w / 2 - tw / 2, y: cy - th / 2, w: tw, h: th } };
+}
 function drawMoment(p: CanvasRenderingContext2D, w: number, h: number, small: boolean, motion: boolean): void {
+  momentBox = undefined;
   if (!moment) return;
   const age = performance.now() - moment.at;
   if (age > moment.ms) { moment = undefined; return; }
-  // Fades in over 180 ms and out over the last 300 ms; with no motion it simply stands.
-  const a = motion ? Math.min(1, age / 180, (moment.ms - age) / 300) : 1, rise = motion ? 8 * (1 - ease(Math.min(1, age / 300))) : 0;
-  const size = (small ? 18 : 24) + (moment.big ? 4 : 0), subSize = small ? 12 : 14, cy = h * 0.4 + rise;
+  const { a, size, subSize, cy, tw, th, box } = momentGeom(p, moment, w, h, small, motion, age);
+  momentBox = box;
   p.globalAlpha = Math.max(0, a);
-  p.font = `${subSize}px Segoe UI`; const subW = p.measureText(moment.sub).width;
-  p.font = `600 ${size}px Segoe UI`; const tw = Math.min(w - 16, Math.max(p.measureText(moment.title).width, subW) + 48), th = size + (moment.sub ? subSize + 30 : 22);
   p.fillStyle = 'rgba(12,16,14,.9)'; p.strokeStyle = moment.big ? 'rgba(225,196,143,.75)' : 'rgba(200,216,167,.45)'; p.lineWidth = moment.big ? 2 : 1;
   p.beginPath(); p.roundRect(w / 2 - tw / 2, cy - th / 2, tw, th, 12); p.fill(); p.stroke(); p.lineWidth = 1;
   p.textAlign = 'center'; p.textBaseline = 'middle'; p.fillStyle = moment.big ? '#f0dcb0' : '#e8efd9';
@@ -172,7 +220,7 @@ function drawMoment(p: CanvasRenderingContext2D, w: number, h: number, small: bo
   p.textAlign = 'left'; p.globalAlpha = 1;
 }
 /** Whether the lane still has something moving on its own (sparks, a flash fading, a banner), so a static lane must keep drawing. */
-export const laneAnimating = () => sparks.length > 0 || effects.length > 0 || Math.abs(haze - 28) > 0.5 || moment !== undefined;
+export const laneAnimating = () => bursts.length > 0 || effects.length > 0 || Math.abs(haze - 28) > 0.5 || moment !== undefined;
 const ease = (t: number) => 1 - (1 - t) * (1 - t);
 type Note = Exercise['events'][number]['notes'][number];
 const ranges = new WeakMap<Exercise, { lo: number; hi: number; whites: number[]; hand: Map<number, 'L' | 'R'>; sorted: { e: Exercise['events'][number]; n: Note }[] }>();
@@ -201,6 +249,13 @@ export const handColour = (ex: Exercise, midi: number) => HAND[rangeOf(ex).hand.
  */
 export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePlan | undefined, now: number, support: number, result: PieceGrade | undefined, reduced: boolean, hideWhilePlaying: boolean, live?: LiveKeys, lookNow: LaneLook = { lively: !reduced }, reveal?: number): void {
   look = { ...lookNow, lively: lookNow.lively && !reduced };
+  if (!layerTried) {
+    layerTried = true;
+    const mode = new URLSearchParams(location.search).get('light');
+    if (mode !== '2d') layer = glLight(canvas.parentElement!, () => { if (layer) layer.canvas.hidden = true; layer = undefined; }, mode === 'gl');
+  }
+  // Until its shaders are ready the layer draws nothing and the 2D light stands in.
+  const gl = layer?.ready() ? layer : undefined;
   const lively = look.lively, w = Math.max(280, Math.round(widthOf(canvas))), small = w < 600, height = small ? 300 : 440, p = prepare(canvas, height);
   const clock = performance.now(), dt = lastFrame ? Math.min(0.05, (clock - lastFrame) / 1000) : 0; lastFrame = clock;
   const { lo, hi, whites, sorted } = rangeOf(ex);
@@ -244,7 +299,7 @@ export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePla
     p.globalAlpha = verdict === 'cannot-check' || verdict === 'unchecked' || passed ? 0.4 : auto ? 0.5 : 1;
     // A note just reached by the reveal swells a little and, when it was on time with the right key, sheds a few sparks.
     const fresh = reveal !== undefined && verdict ? reveal - e.beat : Infinity, swell = lively && fresh < 0.6 ? 1 + 0.12 * Math.sin(Math.PI * fresh / 0.6) : 1;
-    if (lively && onTime?.has(e.beat) && e.beat > revealed && e.beat <= reveal!) for (let k = 0; k < 6; k++) sparks.push({ x: nx + Math.random() * nw, y: bottom - 2, vx: (Math.random() - 0.5) * 50, vy: -40 - Math.random() * 120, life: 0, max: 0.3 + Math.random() * 0.4, colour: mix(base, 255, 0.35), size: 0.8 + Math.random() * 1.4 });
+    if (lively && onTime?.has(e.beat) && e.beat > revealed && e.beat <= reveal!) bursts.push(revealBurst(clock, nx, nw, bottom - 2, rgbOf(base)));
     const sx = nx - nw * (swell - 1) / 2, sw = nw * swell;
     p.fillStyle = active || swell > 1.02 ? mix(base, 255, 0.2) : base; p.beginPath(); p.roundRect(sx, y0, sw, nh, r); p.fill();
     if (nh > 10) { p.fillStyle = 'rgba(0,0,0,.18)'; p.fillRect(nx + 1, y0 + 1, nw - 2, Math.min(6, nh / 3)); }
@@ -263,51 +318,42 @@ export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePla
   // Hit line: a haze that a run of on-time keys warms a little, a small pulse on each beat, and (microphone) a level ring.
   const streak = live?.streak ?? 0, target = lively ? (streak >= 30 ? 64 : streak >= 20 ? 52 : streak >= 10 ? 40 : 28) : 28;
   haze += (target - haze) * Math.min(1, dt * (target > haze ? 6 : 4));
+  const warm = animate ? Math.min(1, (haze - 28) / 36) : 0;
+  // The beat cue: the line itself brightens for a moment on each beat, count-in included. Nothing larger flashes.
+  const beatPulse = animate && live?.beat === undefined && plan ? Math.max(0, 1 - (beat - Math.floor(beat)) / 0.18) : 0;
   if (animate) {
-    const warm = Math.min(1, (haze - 28) / 36);
     p.fillStyle = gradient(p, `haze${hitY}`, hitY - 28, hitY, [[0, 'rgba(216,228,197,0)'], [1, 'rgba(216,228,197,.1)']]); p.fillRect(0, hitY - 28, w, 28);
-    if (warm > 0.01) { p.globalAlpha = warm; p.fillStyle = gradient(p, `warm${hitY}`, hitY - 64, hitY, [[0, 'rgba(225,196,143,0)'], [1, 'rgba(225,196,143,.12)']]); p.fillRect(0, hitY - haze, w, haze); p.globalAlpha = 1; }
     if (look.level !== undefined) { p.fillStyle = alpha('#d8e4c5', 0.04 + 0.22 * Math.min(1, look.level)); p.fillRect(0, hitY - 4, w, 8); }
-    // The beat cue: the line itself brightens for a moment on each beat, count-in included. Nothing larger flashes.
-    const pulse = live?.beat === undefined && plan ? Math.max(0, 1 - (beat - Math.floor(beat)) / 0.18) : 0;
-    p.strokeStyle = alpha('#e8f0dc', 0.6 + 0.35 * pulse); p.lineWidth = 2 + (lively ? pulse : 0); p.beginPath(); p.moveTo(0, hitY); p.lineTo(w, hitY); p.stroke(); p.lineWidth = 1;
+    p.strokeStyle = alpha('#e8f0dc', 0.6 + 0.35 * beatPulse); p.lineWidth = 2; p.beginPath(); p.moveTo(0, hitY); p.lineTo(w, hitY); p.stroke(); p.lineWidth = 1;
   }
-  // Reward: a brief flash, pop and ring for confirmed on-time keys; a small tick for early or late. Lively only.
+  // Reward: a pop for confirmed on-time keys and a small tick for early or late. Lively only. The light itself comes from lightFrame.
   const pops = new Map<number, number>();
-  if (!lively) effects.length = 0;
-  p.globalCompositeOperation = 'lighter';
+  if (!lively) { effects.length = 0; bursts.length = 0; }
+  lightFx.length = 0;
   for (let i = effects.length - 1; i >= 0; i--) {
     const f = effects[i], age = clock - f.at, { x, width } = xOf(f.midi), cx = x + width / 2;
     if (age > 800) { effects.splice(i, 1); continue; }
     if (f.tier === 'perfect' || f.tier === 'good') {
-      if (!f.burst) {
-        f.burst = true;
-        for (let k = f.tier === 'perfect' ? 12 : 5; k > 0; k--) sparks.push({ x: cx + (Math.random() - 0.5) * width * 0.8, y: hitY - 1, vx: (Math.random() - 0.5) * 60, vy: -50 - Math.random() * 190, life: 0, max: 0.35 + Math.random() * 0.5, colour: mix(f.colour, 255, 0.35), size: 0.8 + Math.random() * (small ? 1.2 : 1.8) });
-      }
-      if (age < 200) { const fw = width + 14; p.globalAlpha = (f.tier === 'perfect' ? 1 : 0.6) * (1 - ease(age / 200)); p.drawImage(glow(mix(f.colour, 255, 0.8)), cx - fw / 2, hitY - fw / 2, fw, fw); p.globalAlpha = 1; }
+      if (!f.burst) { f.burst = true; bursts.push(...hitBurst(clock, f.tier, cx, width, hitY - 1, rgbOf(f.colour), small)); }
+      const fx = fxPool[lightFx.length] ?? (fxPool[lightFx.length] = { cx: 0, width: 0, tier: '', colour: rgbOf(f.colour), at: 0 });
+      fx.cx = cx; fx.width = width; fx.tier = f.tier; fx.colour = rgbOf(f.colour); fx.at = f.at; lightFx.push(fx);
       if (age < 100) pops.set(f.midi, 1 + 0.08 * Math.sin(Math.PI * age / 100));
-      if (f.tier === 'perfect' && age < 280) { const t = age / 280; p.strokeStyle = alpha(mix(f.colour, 255, 0.5), 0.6 * (1 - t)); p.lineWidth = 2; p.beginPath(); p.arc(cx, hitY, width * (0.5 + 0.3 * ease(t)), Math.PI, 2 * Math.PI); p.stroke(); p.lineWidth = 1; }
     } else if (f.tier === 'early' || f.tier === 'late') {
       const dir = f.tier === 'early' ? -1 : 1, tx = cx + dir * (width / 2 + 5), ty = hitY - 10;
-      p.globalCompositeOperation = 'source-over'; p.strokeStyle = alpha(OFF_TIME, 1 - age / 800); p.lineWidth = 2;
-      p.beginPath(); p.moveTo(tx - dir * 3, ty - 4); p.lineTo(tx + dir, ty); p.lineTo(tx - dir * 3, ty + 4); p.stroke(); p.lineWidth = 1; p.globalCompositeOperation = 'lighter';
+      p.strokeStyle = alpha(OFF_TIME, 1 - age / 800); p.lineWidth = 2;
+      p.beginPath(); p.moveTo(tx - dir * 3, ty - 4); p.lineTo(tx + dir, ty); p.lineTo(tx - dir * 3, ty + 4); p.stroke(); p.lineWidth = 1;
     } else effects.splice(i, 1);
   }
-  p.globalCompositeOperation = 'source-over';
-  // Sparks keep falling after the notes stop, so a celebration can finish; the calm look shows none.
-  if (!lively) sparks.length = 0;
-  const cap = plan || live?.beat !== undefined ? 150 : 500;
-  if (sparks.length > cap) sparks.splice(0, sparks.length - cap);
-  p.globalCompositeOperation = 'lighter';
-  for (let i = sparks.length - 1; i >= 0; i--) {
-    const s = sparks[i]; s.life += dt; if (s.life >= s.max) { sparks.splice(i, 1); continue; }
-    s.vy += 90 * dt; s.x += s.vx * dt; s.y += s.vy * dt;
-    p.fillStyle = alpha(s.colour, 1 - s.life / s.max); p.fillRect(s.x - s.size, s.y - s.size, s.size * 2, s.size * 2);
-  }
-  p.globalCompositeOperation = 'source-over';
+  pruneBursts(bursts, clock);
+  const li = lightIn;
+  li.now = clock; li.lively = lively; li.quiet = look.quiet === true; li.inTake = Boolean(plan) || live?.beat !== undefined; li.w = w; li.hitY = hitY;
+  li.effects = lightFx; li.bursts = bursts; li.warm = warm; li.haze = haze; li.pulse = lively && animate ? beatPulse : 0; li.sweepY = lively && reveal !== undefined ? yOf(reveal) : undefined;
+  lightFrame(li, frame);
+  lastLight = frame;
+  if (!gl) drawLight2d(p, frame);
   if (live?.message) {
-    p.font = `${small ? 13 : 15}px Segoe UI`; const tw = p.measureText(live.message).width + 28, th = small ? 28 : 32;
-    p.fillStyle = 'rgba(12,16,14,.85)'; p.strokeStyle = 'rgba(200,216,167,.35)'; p.beginPath(); p.roundRect(w / 2 - tw / 2, 10, tw, th, th / 2); p.fill(); p.stroke();
+    const { x: bx, w: tw, h: th } = pillBox(p, live.message, w, small);
+    p.fillStyle = 'rgba(12,16,14,.85)'; p.strokeStyle = 'rgba(200,216,167,.35)'; p.beginPath(); p.roundRect(bx, 10, tw, th, th / 2); p.fill(); p.stroke();
     p.fillStyle = '#e8efd9'; p.textAlign = 'center'; p.fillText(live.message, w / 2, 10 + th / 2 + 1); p.textAlign = 'left';
   }
 
@@ -351,11 +397,23 @@ export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePla
   p.fillStyle = gradient(p, `shade${kbTop}`, kbTop, kbTop + 10, [[0, 'rgba(0,0,0,.4)'], [1, 'rgba(0,0,0,0)']]); p.fillRect(0, kbTop, w, 10);
   if (reduced && playing) { p.fillStyle = '#c8d8a7'; p.font = '16px Segoe UI'; p.fillText(`Beat ${Math.floor(beat) % ex.beatsPerBar + 1}`, w - 80, 14); }
   drawMoment(p, w, hitY, small, lively);
+  if (gl) {
+    if (live?.message) frame.keepOut.push(pillBox(p, live.message, w, small));
+    if (momentBox) frame.keepOut.push(momentBox);
+    gl.draw(frame, w, height);
+  }
+}
+/** The live message pill's box, from the numbers it is drawn with; leaves the pill font set. */
+function pillBox(p: CanvasRenderingContext2D, message: string, w: number, small: boolean): Rect {
+  p.font = `${small ? 13 : 15}px Segoe UI`; const tw = p.measureText(message).width + 28;
+  return { x: w / 2 - tw / 2, y: 10, w: tw, h: small ? 28 : 32 };
 }
 
 /** Guitar: thin string on top, fret numbers on the strings, strums as a bracket with its direction. */
 export function drawStrings(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePlan | undefined, now: number, support: number, result: PieceGrade | undefined, reduced: boolean, hideWhilePlaying: boolean, reveal?: number, lively = !reduced): void {
   const w = Math.max(280, Math.round(widthOf(canvas))), small = w < 600, height = small ? 230 : 300, p = prepare(canvas, height);
+  // The guitar lane has no light: clear anything left from the keys lane.
+  bursts.length = 0; lastLight = EMPTY_LIGHT; layer?.draw(EMPTY_LIGHT, w, height);
   const row = (height - 70) / 6, yOf = (string: number) => 40 + (string - 1) * row, hit = small ? 80 : 150, scale = small ? 70 : 120;
   const { beat, moving, playing } = position(ex, plan, now), origin = moving && !reduced ? beat : 0;
   const xOf = (b: number) => (moving && !reduced ? hit : 70) + (b - origin) * (moving && !reduced ? scale : (w - 90) / Math.max(4, Math.min(ex.beats, small ? 6 : 12)));
