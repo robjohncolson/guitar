@@ -1,0 +1,1001 @@
+<!doctype html>
+<html lang="en" data-view="desktop" data-state="ready">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pieces redesign mockup</title>
+<style>
+/* Tokens */
+:root {
+  --bg: #131715; --card: #19211c; --raised: #1f2a23; --line: #3a493c;
+  --ink: #e8e9df; --muted: #a4ada1; --lime: #c8d8a7; --gold: #e1c48f; --amber: #e1ad88; --hand-l: #8fb9d9;
+  --outline: #8fa486; --dim: #8f998c; --dim-fill: #4c5a44; --on-lime: #131715; --ok: #86d29a;
+  --page: #0a0d0b; --lane-top: #0b0f0d; --lane-bot: #17201b;
+  --seg-gap: 6px;
+}
+
+/* Base */
+*, *::before, *::after { box-sizing: border-box; }
+html { color-scheme: dark; background: var(--page); }
+body { margin: 0; background: var(--page); color: var(--ink); font: 400 16px/1.4 "Segoe UI", system-ui, sans-serif; -webkit-text-size-adjust: 100%; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+[hidden] { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.page { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Mockup controls strip (not part of the product) */
+.mock { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 4px 8px; padding: 3px 8px; border: 1px dashed #4b5b4d; border-radius: 10px; font-size: 12px; line-height: 16px; color: #9aa598; }
+.mock-tag { font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #b7c2b3; }
+.mock-states { display: flex; flex-wrap: wrap; gap: 0 2px; flex: 1 1 0; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.mock-states a { display: block; padding: 3px 7px; border: 1px dashed transparent; border-radius: 8px; color: #c4cebf; text-decoration: none; white-space: nowrap; }
+.mock-states a[aria-current="page"] { border-color: var(--lime); color: var(--lime); background: rgba(200,216,167,.08); }
+.mock-switches { display: flex; align-items: center; gap: 10px; }
+.mock-seg { display: flex; border: 1px dashed #4b5b4d; border-radius: 8px; overflow: hidden; }
+.mock-seg button { min-height: 22px; padding: 2px 10px; border: 0; background: transparent; font-size: 12px; color: #c4cebf; }
+.mock-seg button[aria-pressed="true"] { background: rgba(200,216,167,.14); color: var(--lime); }
+.mock-calm { display: flex; align-items: center; gap: 6px; color: #c4cebf; }
+.mock-calm input { appearance: none; position: relative; width: 30px; height: 18px; margin: 0; border: 1px solid #5a6b5c; border-radius: 9px; background: #151c17; cursor: pointer; }
+.mock-calm input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #9aa598; transition: transform .15s; }
+.mock-calm input:checked { border-color: var(--lime); background: rgba(200,216,167,.2); }
+.mock-calm input:checked::after { background: var(--lime); transform: translateX(12px); }
+.mock-note { flex: 1 0 100%; margin: 0; white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
+@media (max-width: 560px) {
+  .mock { gap: 0 8px; padding: 2px 6px; }
+  .mock-tag, .mock-seg { display: none; }
+  .mock-states { flex: 1 1 100%; }
+  .mock-states a { padding: 2px 6px; }
+  .mock-note { order: 3; flex: 1 1 0; min-width: 0; }
+  .mock-switches { order: 4; }
+}
+
+/* Frame: layout follows the frame width, not the window */
+.frame { container: frame / inline-size; flex: 1 1 auto; min-height: 0; width: 100%; max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; position: relative; background: var(--bg); }
+html[data-view="phone"] .frame { width: 390px; max-width: 100%; }
+.app { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
+@media (min-width: 700px) { .frame { border: 1px solid var(--line); border-radius: 18px; overflow: hidden; margin-bottom: 8px; } }
+
+/* Buttons and chips */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border: 1px solid var(--outline); border-radius: 14px; background: var(--raised); color: var(--ink); font-size: 16px; font-weight: 600; line-height: 1.2; text-align: center; }
+.btn-primary { min-height: 56px; border: 0; border-radius: 16px; background: var(--lime); color: var(--on-lime); font-size: 18px; font-weight: 700; box-shadow: 0 0 0 1px rgba(200,216,167,.55), 0 0 26px rgba(200,216,167,.28); }
+.btn-primary kbd { min-width: 0; padding: 1px 8px; border-color: rgba(19,23,21,.5); background: rgba(19,23,21,.1); color: var(--on-lime); font-size: 13px; }
+.btn-stop { min-height: 56px; border: 2px solid var(--lime); border-radius: 16px; background: transparent; color: var(--lime); font-size: 18px; font-weight: 700; }
+.link-btn { min-height: 44px; padding: 0 8px; border: 0; border-radius: 10px; background: none; color: var(--lime); font-size: 15px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.icon-btn { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 14px; background: transparent; color: var(--ink); }
+.chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.chip .long { display: none; }
+.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px rgba(134,210,154,.22); }
+.dot.warn { width: 14px; height: 13px; border-radius: 0; background: var(--amber); box-shadow: none; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+
+/* Account nav row */
+.app-nav { flex: none; display: flex; align-items: center; height: 28px; padding: 0 8px; background: var(--bg); font-size: 13px; }
+.app-nav a { display: inline-flex; align-items: center; min-height: 44px; margin: -8px 0; padding: 0 8px; color: var(--muted); text-decoration: none; }
+.app-nav a[aria-current="page"] { color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-color: var(--lime); text-decoration-thickness: 2px; text-underline-offset: 5px; }
+.signin { display: inline-flex; align-items: center; min-height: 44px; margin: -8px 0 -8px auto; padding: 0 4px; border: 0; background: none; }
+.signin span { display: inline-flex; align-items: center; height: 22px; padding: 0 10px; border: 1px solid var(--outline); border-radius: 11px; font-size: 13px; font-weight: 600; color: var(--ink); }
+
+/* Top bar */
+.topbar { flex: none; display: flex; align-items: center; gap: 4px; min-height: 46px; padding: 0 10px 0 4px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.brand { flex: 1 1 auto; min-width: 0; line-height: 1.15; }
+.brand h1 { margin: 0; font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand p { margin: 0; font-size: 12px; color: var(--muted); }
+.chip-today { padding: 0 10px; }
+.chip-status { min-width: 44px; justify-content: center; padding: 0 12px; }
+.chip-status.warn { border-color: var(--amber); color: var(--amber); }
+
+/* HUD */
+.hud { position: relative; flex: none; padding: 3px 16px 4px; background: var(--card); border-bottom: 1px solid var(--line); }
+.eyebrow { margin: 0; font-size: 12px; line-height: 14px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--lime); }
+.passage-row { display: flex; align-items: center; gap: 2px; min-height: 28px; }
+.passage { margin: 0; font-size: 24px; line-height: 28px; font-weight: 600; }
+.about-step > summary { display: grid; place-items: center; width: 44px; height: 44px; margin: -8px 0; border-radius: 14px; list-style: none; cursor: pointer; color: var(--muted); }
+.about-step > summary::-webkit-details-marker { display: none; }
+.about-step[open] > summary { color: var(--lime); }
+.about-body { position: absolute; z-index: 6; left: 16px; top: 46px; width: min(340px, calc(100% - 32px)); padding: 10px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--raised); box-shadow: 0 12px 28px rgba(0,0,0,.45); }
+.about-body p { margin: 0; font-size: 14px; line-height: 1.4; }
+.about-body p + p { margin-top: 6px; color: var(--muted); }
+.hud-caption { display: none; margin: 0; overflow: hidden; font-size: 13px; line-height: 16px; color: var(--muted); white-space: nowrap; text-overflow: ellipsis; }
+
+.readout { position: relative; display: flex; align-items: center; gap: 12px; min-height: 60px; margin-top: 3px; }
+.bpm-num { display: block; min-width: 82px; font-size: 72px; line-height: 60px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; color: var(--lime); text-shadow: 0 0 30px rgba(200,216,167,.32); }
+.bpm-side { display: grid; gap: 4px; justify-items: start; min-width: 0; }
+.side-row { display: flex; align-items: center; gap: 10px; height: 28px; }
+.bpm-unit { font-size: 14px; font-weight: 700; letter-spacing: .12em; color: var(--muted); }
+.pencil { margin: -8px -4px; color: var(--muted); }
+.free-tag { padding: 1px 10px; border: 1px solid var(--amber); border-radius: 12px; font-size: 13px; font-weight: 700; color: var(--amber); }
+.goal-row { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.goal-chip { display: inline-block; padding: 3px 12px; border: 1px solid rgba(225,196,143,.5); border-radius: 12px; background: rgba(225,196,143,.08); font-size: 14px; font-weight: 600; color: var(--gold); }
+.goal-sub { font-size: 13px; color: var(--muted); }
+html[data-state="free"] .bpm-num { color: var(--amber); text-shadow: 0 0 30px rgba(225,173,136,.30); }
+
+/* Free-tempo popover */
+.popover { position: absolute; z-index: 7; left: 0; top: calc(100% + 4px); width: min(320px, 100%); padding: 12px 14px; border: 1px solid var(--amber); border-radius: 14px; background: var(--raised); box-shadow: 0 14px 30px rgba(0,0,0,.5); }
+.popover p { margin: 8px 0 0; font-size: 14px; }
+.stepper { display: flex; align-items: center; gap: 10px; }
+.stepper button { width: 44px; height: 44px; border: 1px solid var(--outline); border-radius: 12px; background: var(--card); font-size: 22px; line-height: 1; }
+.stepper output { min-width: 56px; text-align: center; font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--amber); }
+.popover .btn { margin-top: 8px; width: 100%; }
+
+/* Ladder: ahead segments are buttons while placement is possible */
+.ladder { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--seg-gap); margin-top: 4px; padding: 1px 0; }
+.seg { position: relative; grid-row: 1; display: grid; place-items: center; height: 44px; padding: 0; border: 1.5px solid var(--outline); border-radius: 12px; background: transparent; font: 600 16px/1 "Segoe UI", system-ui, sans-serif; font-variant-numeric: tabular-nums; color: var(--muted); }
+button.seg { cursor: pointer; }
+.seg.passed { border-color: var(--lime); background: var(--lime); color: var(--on-lime); }
+.seg.target { border: 2px solid var(--gold); color: var(--ink); }
+.gem { position: absolute; top: -6px; right: -5px; width: 13px; height: 13px; }
+.ladder-now { position: relative; z-index: 2; grid-row: 1; display: grid; place-items: center; margin: -1px -5px; border: 2px solid var(--lime); border-radius: 14px; background: var(--raised); box-shadow: 0 0 16px rgba(200,216,167,.28); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--lime); pointer-events: none; }
+.ladder-now .gem { top: -7px; right: -6px; }
+.ladder.dim .seg { border-color: #5b6a58; color: var(--dim); }
+.ladder.dim .seg.passed { border-color: var(--dim-fill); background: var(--dim-fill); color: var(--ink); }
+.ladder.dim .ladder-now { border-color: #6f8069; background: var(--card); color: var(--dim); box-shadow: none; }
+
+/* Pips */
+.pips-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; margin-top: 2px; min-height: 24px; }
+.pips { display: flex; align-items: center; gap: 8px; }
+.pip { display: grid; place-items: center; width: 22px; height: 22px; border: 2px solid var(--outline); border-radius: 50%; }
+.pip.on { border-color: var(--lime); background: var(--lime); }
+.pip.on::after { content: ""; width: 5px; height: 9px; margin-top: -2px; border: solid var(--on-lime); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.pip.now { border-color: var(--lime); box-shadow: 0 0 0 3px rgba(200,216,167,.25); }
+.pips.dim .pip { border-color: #5b6a58; }
+.pips-row.dim .pips-caption { color: var(--dim); }
+.pip-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.pips-caption { font-size: 13px; color: var(--muted); }
+.about-body .about-cap { color: var(--ink); }
+.about-body .about-sub { color: var(--muted); }
+
+/* Lane header row and lane */
+.lane-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 24px; margin: 2px 0; padding: 0 16px; }
+.phase-chip { flex: none; display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border: 1px solid rgba(200,216,167,.35); border-radius: 12px; background: var(--card); font-size: 13px; font-weight: 600; color: var(--lime); }
+.lane-help { min-width: 0; margin: 0; overflow: hidden; font-size: 12px; text-align: right; color: var(--muted); white-space: nowrap; text-overflow: ellipsis; }
+.lane { position: relative; flex: 1 1 clamp(180px, calc(100dvh - 500px), 300px); min-height: 180px; max-height: 300px; overflow: hidden; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: linear-gradient(#0b0f0d, #17201b); }
+.lane-svg { position: absolute; inset: 0; }
+.lane-svg svg { display: block; width: 100%; height: 100%; }
+.banner-up { position: absolute; z-index: 2; top: 10px; left: 50%; translate: -50% 0; padding: 4px 14px; border-radius: 12px; background: var(--gold); color: var(--on-lime); font-size: 13px; font-weight: 700; }
+.lane-pill { position: absolute; z-index: 2; top: 10px; left: 50%; translate: -50% 0; width: max-content; max-width: calc(100% - 16px); padding: 6px 14px; border: 1px solid var(--lime); border-radius: 14px; background: rgba(11,15,13,.95); font-size: 13px; font-weight: 600; color: var(--lime); }
+
+/* NOTICE: errors and non-take messages, one sentence and at most one button */
+.notice { flex: none; display: flex; align-items: center; gap: 10px; margin: 6px 16px 0; padding: 8px 8px 8px 12px; border: 1px solid rgba(200,216,167,.35); border-radius: 14px; background: var(--card); font-size: 15px; line-height: 1.35; }
+.notice.warn { border-color: var(--amber); }
+.notice .dot { flex: none; }
+.notice p { flex: 1 1 auto; min-width: 0; margin: 0; }
+.notice .btn { flex: none; padding: 0 12px; font-size: 14px; }
+
+/* NEXT TAKE and LAST TAKE; on phones NEXT TAKE and the actions form one sticky block */
+.dock { flex: none; margin-top: auto; }
+.loop { display: grid; gap: 6px; padding: 6px 16px; }
+.next-card { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+.next-head { display: flex; align-items: center; padding: 3px 14px; border-bottom: 1px solid rgba(225,196,143,.35); }
+.next-label { font-size: 12px; font-weight: 700; letter-spacing: .16em; color: var(--gold); }
+.next-text { margin: 0; padding: 4px 14px 6px; font-size: 17px; line-height: 1.35; }
+.next-sub { margin: 0; padding: 0 14px 8px; font-size: 14px; line-height: 1.35; color: var(--muted); }
+.next-text:has(+ .next-sub:not([hidden])) { padding-bottom: 2px; }
+.next-actions { padding: 0 14px 8px; }
+.next-actions .btn { width: 100%; }
+.last-chip { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 10px; min-height: 36px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); font-size: 14px; }
+.last-chip .k { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.last-chip.empty { background: transparent; color: var(--muted); }
+.last-chip.grey { background: transparent; color: var(--dim); }
+.last-chip.grey .k { color: var(--dim); }
+.last-chip.in-hud { min-height: 28px; margin-top: 3px; padding: 3px 10px; gap: 2px 8px; font-size: 13px; }
+.last-chip.in-hud .k { letter-spacing: .06em; }
+.last-chip.in-loop { display: none; }
+
+/* Actions */
+.actions { padding: 6px 16px 8px; background: var(--bg); }
+.actions.is-result { background: var(--card); }
+.act-row { display: flex; gap: 10px; }
+.act-row .btn-primary, .act-row .btn-stop { flex: 1 1 auto; }
+.act-row .btn:not(.btn-primary):not(.btn-stop) { flex: none; min-height: 56px; }
+.act-row.offer { flex-direction: column; gap: 8px; }
+.act-row.offer .btn-primary { font-size: 16px; }
+.act-row.offer .btn:not(.btn-primary) { min-height: 48px; }
+.act-note { margin: 6px 0 0; font-size: 13px; text-align: center; color: var(--muted); }
+.act-keys { display: none; margin: 0; font-size: 12px; color: var(--muted); }
+.link-row { display: flex; justify-content: center; }
+
+/* Result card */
+.result { display: grid; gap: 6px; }
+.res-score { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: start; }
+.res-big { font-size: 50px; line-height: 50px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--lime); }
+.res-big.small { font-size: 26px; line-height: 34px; color: var(--amber); }
+.res-meta { display: grid; gap: 3px; min-width: 0; }
+.res-label { margin: 0; font-size: 13px; color: var(--muted); }
+.res-split { margin: 0; font-size: 14px; }
+.res-split .low { font-weight: 700; text-decoration: underline; text-decoration-color: var(--lime); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.res-reason { margin: 0; font-size: 14px; line-height: 1.35; }
+.res-words { margin: 2px 0 0; font-size: 12px; font-weight: 600; text-align: right; color: var(--gold); }
+.res-bar { position: relative; height: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--raised); }
+.res-fill { position: absolute; inset: 0 auto 0 0; border-radius: 5px; background: var(--lime); }
+.res-tick { position: absolute; top: -4px; width: 2px; height: 16px; background: var(--ink); }
+.res-tick.gold { background: var(--gold); }
+.res-ticklabels { position: relative; height: 14px; font-size: 12px; line-height: 14px; color: var(--muted); }
+.res-ticklabels span { position: absolute; top: 0; transform: translateX(-50%); }
+.dots { display: flex; gap: 4px; margin: 2px 0 0; padding: 0; list-style: none; }
+.res-meta .dots { display: none; }
+.dots li { width: 11px; height: 11px; border-radius: 50%; background: var(--lime); }
+.dots li.late { border-radius: 3px; background: var(--amber); transform: rotate(45deg) scale(.9); }
+.res-answer { display: grid; gap: 2px; }
+.res-q { margin: 2px 0 0; font-size: 15px; font-weight: 600; }
+.res-hint { margin: 0 0 4px; font-size: 12px; color: var(--muted); }
+.res-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.res-ans { display: grid; gap: 4px; align-content: start; }
+.res-ans .btn { min-height: 48px; padding: 0 8px; font-size: 15px; }
+.res-ans .up { border-color: var(--lime); color: var(--lime); }
+.res-cons { margin: 0; font-size: 13px; line-height: 1.3; color: var(--muted); }
+.res-cons.both { margin-top: 4px; }
+.res-secondary { display: flex; justify-content: space-between; gap: 4px; }
+.res-secondary .link-btn { flex: 1 1 0; min-width: 0; padding: 0 4px; font-size: 14px; }
+
+/* Phone layout: frame width up to 560 px */
+@container frame (max-width: 560px) {
+  .dock { position: sticky; bottom: 0; z-index: 3; background: var(--bg); border-top: 1px solid var(--line); box-shadow: 0 -12px 24px rgba(0,0,0,.35); }
+  .dock .loop { padding: 6px 16px 0; }
+  .next-text, .next-text:has(+ .next-sub:not([hidden])) { padding: 4px 14px 6px; }
+  .next-sub { display: none; }
+  .dock .actions { padding: 6px 16px 8px; background: transparent; }
+  .dock .actions.is-result { padding: 3px 16px 5px; }
+  .link-row { margin: -4px 0 -6px; }
+  .next-head { padding: 2px 14px; }
+  .lane-head { margin: 1px 0; }
+  .result { gap: 3px; }
+  .res-big { font-size: 40px; line-height: 40px; }
+  .res-meta { gap: 2px; }
+  .res-words { margin-top: 0; }
+  .res-answer { gap: 0; }
+  .res-q { margin-top: 0; }
+  .res-hint { margin: 0 0 3px; }
+  .res-ans .btn { min-height: 44px; }
+  .res-secondary .link-btn { margin: -2px 0; }
+  html[data-state^="after"] .lane { flex-basis: 160px; min-height: 160px; max-height: 160px; }
+}
+
+/* Desktop layout: frame width above 560 px */
+@container frame (min-width: 561px) {
+  .app { --seg-gap: 8px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 460px); grid-template-areas: "nav nav" "top top" "hud loop" "head head" "lane lane" "notice notice" "actions actions"; grid-template-rows: auto auto auto auto minmax(180px, 380px) auto auto; align-content: start; }
+  .dock { display: contents; }
+  .app-nav { grid-area: nav; padding: 0 20px; }
+  .topbar { grid-area: top; min-height: 48px; padding: 0 20px 0 10px; }
+  .brand h1 { font-size: 18px; }
+  .chip .long { display: inline; }
+  .chip .short { display: none; }
+  .hud { grid-area: hud; padding: 6px 24px 8px; }
+  .about-body { left: 24px; top: 54px; }
+  .about-body .about-cap, .about-body .about-sub { display: none; }
+  .passage { font-size: 28px; line-height: 34px; }
+  .passage-row { min-height: 34px; }
+  .hud-caption { display: block; }
+  .readout { gap: 20px; min-height: 84px; margin-top: 2px; }
+  .bpm-num { min-width: 140px; font-size: 88px; line-height: 84px; }
+  .ladder { max-width: 460px; margin-top: 6px; }
+  .seg { font-size: 18px; }
+  .ladder-now { font-size: 22px; }
+  .pips-row { margin-top: 5px; }
+  .last-chip.in-hud { display: none; }
+  .last-chip.in-loop { display: flex; }
+  .lane-head { grid-area: head; margin: 4px 0 3px; padding: 0 24px; }
+  .lane { grid-area: lane; flex: none; min-height: 0; max-height: none; margin: 0 24px; border: 1px solid var(--line); border-radius: 16px; }
+  .notice { grid-area: notice; margin: 8px 24px 0; }
+  .loop { grid-area: loop; align-content: start; padding: 10px 24px 10px 0; background: var(--card); border-bottom: 1px solid var(--line); }
+  .next-text { padding: 10px 16px 12px; font-size: 20px; }
+  .next-sub { padding: 0 16px 12px; font-size: 15px; }
+  .next-text:has(+ .next-sub:not([hidden])) { padding-bottom: 4px; }
+  .actions { grid-area: actions; position: sticky; bottom: 0; z-index: 3; margin: 0; padding: 10px 24px 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; }
+  .actions.is-result { display: block; }
+  .link-row { margin: 0; }
+  .act-row .btn-primary, .act-row .btn-stop { min-width: 260px; }
+  .act-row.offer { flex-direction: row; }
+  .act-row.offer .btn-primary { font-size: 18px; }
+  .act-keys { display: block; margin-left: auto; }
+  .act-note { margin: 0; }
+  .result { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-areas: "score answer" "second answer"; gap: 4px 32px; align-items: start; }
+  .res-score { grid-area: score; }
+  .res-answer { grid-area: answer; }
+  .res-secondary { grid-area: second; justify-content: flex-start; gap: 12px; }
+  .res-secondary .link-btn { flex: none; padding: 0 8px; }
+  .res-meta .dots { display: flex; }
+  .res-big { font-size: 64px; line-height: 64px; }
+  .res-q { margin-top: 0; font-size: 17px; }
+  .res-ans .btn { font-size: 16px; }
+}
+
+/* Under 700 px of window height the large BPM readout drops to 72 px */
+@media (max-height: 699px) {
+  .bpm-num { min-width: 82px; font-size: 72px; line-height: 60px; }
+  .readout { min-height: 60px; }
+}
+
+/* Drawer: bottom sheet on the phone layout, right-hand drawer on the desktop layout */
+.drawer { position: fixed; inset: auto 0 0 0; width: 100%; max-width: none; height: auto; max-height: 88dvh; margin: 0; padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 20px 20px 0 0; background: var(--card); color: var(--ink); }
+.drawer[open] { display: flex; flex-direction: column; }
+.drawer::backdrop { background: rgba(4,7,5,.68); }
+html[data-view="phone"] .drawer { left: calc(50% - 195px); right: auto; width: 390px; max-width: 100%; }
+@container frame (min-width: 561px) {
+  .drawer { inset: 0 0 0 auto; width: min(460px, 100vw); height: 100dvh; max-height: none; border-radius: 18px 0 0 18px; }
+}
+.drawer-head { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 8px 18px; border-bottom: 1px solid var(--line); }
+.drawer-head h2 { margin: 0; font-size: 18px; }
+.drawer-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; gap: 8px; align-content: start; padding: 10px 12px 20px; }
+.drawer details { border: 1px solid var(--line); border-radius: 14px; background: var(--raised); }
+.drawer summary { display: flex; align-items: center; min-height: 48px; padding: 0 14px; border-radius: 14px; font-weight: 600; list-style: none; cursor: pointer; }
+.drawer summary::-webkit-details-marker { display: none; }
+.drawer summary::after { content: ""; width: 8px; height: 8px; margin-left: auto; border: solid var(--muted); border-width: 0 2px 2px 0; transform: rotate(45deg); transition: transform .15s; }
+.drawer details[open] > summary::after { transform: rotate(225deg); }
+.sec-body { display: grid; gap: 12px; padding: 4px 14px 14px; }
+.sec-body p { margin: 0; font-size: 14px; line-height: 1.45; }
+.sec-body .muted { color: var(--muted); }
+.plan { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.plan li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; }
+.plan .n { display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid var(--outline); border-radius: 50%; font-size: 12px; font-weight: 700; color: var(--muted); }
+.plan .done .n { border-color: var(--lime); background: var(--lime); color: var(--on-lime); }
+.plan .done .n::after { content: ""; width: 6px; height: 11px; margin-top: -3px; border: solid var(--on-lime); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.plan .cur .n { border-color: var(--lime); color: var(--lime); }
+.plan strong { display: block; font-size: 15px; }
+.plan .sub { display: block; font-size: 13px; color: var(--muted); }
+.meter-row { display: grid; gap: 6px; font-size: 14px; }
+.meter { height: 10px; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.meter span { display: block; height: 100%; background: var(--lime); }
+.field { display: grid; gap: 6px; font-size: 14px; }
+.field select, .field input[type="number"] { min-height: 44px; padding: 0 10px; border: 1px solid var(--outline); border-radius: 12px; background: var(--card); }
+.field input[type="range"] { width: 100%; min-height: 44px; accent-color: var(--lime); }
+.check { position: relative; display: flex; align-items: center; gap: 12px; min-height: 44px; font-size: 15px; }
+.check input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.check .box { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border: 2px solid var(--outline); border-radius: 7px; background: var(--card); }
+.check input:checked + .box { border-color: var(--lime); background: var(--lime); }
+.check input:checked + .box::after { content: ""; width: 6px; height: 11px; margin-top: -2px; border: solid var(--on-lime); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.check input:focus-visible + .box { outline: 3px solid var(--gold); outline-offset: 2px; }
+.toggle { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; border: 1px solid var(--outline); border-radius: 12px; }
+.toggle label { display: grid; place-items: center; min-height: 44px; padding: 0 8px; font-size: 14px; font-weight: 600; text-align: center; cursor: pointer; }
+.toggle label:has(input:checked) { background: var(--lime); color: var(--on-lime); }
+.toggle label:has(input:focus-visible) { outline: 3px solid var(--gold); outline-offset: -3px; }
+.status-lines { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
+.status-lines li { display: flex; align-items: center; gap: 10px; }
+.status-lines .dot, .status-lines .off { flex: none; }
+.off { width: 12px; height: 12px; border: 2px solid var(--outline); border-radius: 50%; }
+.map { display: grid; grid-template-columns: 64px repeat(6, minmax(0, 1fr)); gap: 4px; align-items: center; font-size: 12px; }
+.map .h { text-align: center; line-height: 1.2; color: var(--muted); }
+.map .h b { display: block; font-weight: 600; color: var(--ink); }
+.map .r { line-height: 1.2; color: var(--muted); }
+.cell { height: 22px; border: 1.5px solid var(--outline); border-radius: 6px; }
+.cell.s1 { border-color: rgba(200,216,167,.5); background: rgba(200,216,167,.22); }
+.cell.s2 { border-color: rgba(200,216,167,.7); background: rgba(200,216,167,.5); }
+.cell.s3 { border-color: var(--lime); background: rgba(200,216,167,.78); }
+.cell.s4 { border: 2px solid var(--gold); background: var(--lime); }
+.cell.s5 { border-color: var(--amber); background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(225,173,136,.45) 4px 6px); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--muted); }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.legend .cell { width: 18px; height: 14px; }
+.player { display: flex; align-items: center; gap: 10px; padding: 6px 12px 6px 6px; border: 1px dashed var(--outline); border-radius: 12px; font-size: 13px; color: var(--muted); }
+.player button { width: 44px; height: 44px; border: 1px solid var(--outline); border-radius: 12px; background: var(--card); color: var(--dim); }
+.player .track { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
+.btn-grid { display: grid; gap: 8px; }
+.btn-grid .btn { justify-content: flex-start; }
+.btn.danger { border-color: var(--amber); color: var(--amber); }
+.journal { display: grid; gap: 6px; margin: 0; padding-left: 18px; font-size: 14px; }
+.keys { display: grid; gap: 8px; margin: 0; }
+.keys div { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+.keys dt { margin: 0; }
+.keys dd { margin: 0; color: var(--muted); }
+kbd { min-width: 44px; padding: 4px 8px; border: 1px solid var(--outline); border-bottom-width: 3px; border-radius: 8px; background: var(--card); font: 600 13px "Segoe UI", system-ui, sans-serif; text-align: center; }
+
+/* Motion: lively only, never in Calm or with reduced motion */
+@keyframes lane-fall { from { transform: translateY(0); } to { transform: translateY(var(--period, 312px)); } }
+@keyframes pip-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
+@keyframes rung-slide {
+  from { transform: translateX(calc(-100% + 10px - var(--seg-gap))) scale(1); }
+  70% { transform: translateX(0) scale(1.08); }
+  to { transform: none; }
+}
+@keyframes banner-in { from { transform: translateY(-8px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes drawer-in { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  html:is([data-state="ready"], [data-state="counting"], [data-state="climb"]):not([data-calm="1"]) .lane-notes { animation: lane-fall 22s linear infinite; }
+  html[data-state="counting"]:not([data-calm="1"]) .pip.pop { animation: pip-pop .24s ease-out; }
+  html[data-state="climb"]:not([data-calm="1"]) .ladder-now.slide { animation: rung-slide .24s ease-out; }
+  html[data-state="climb"]:not([data-calm="1"]) .banner-up { animation: banner-in .24s ease-out; }
+  html:not([data-calm="1"]) .drawer[open] { animation: sheet-in .2s ease-out; }
+  @container frame (min-width: 561px) { html:not([data-calm="1"]) .drawer[open] { animation-name: drawer-in; } }
+}
+html[data-calm="1"] .banner-up { display: none !important; }
+html[data-calm="1"] *, html[data-calm="1"] *::before, html[data-calm="1"] *::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .banner-up { display: none !important; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- Mockup controls strip -->
+<nav class="mock" aria-label="Mockup controls">
+  <span class="mock-tag">Mockup</span>
+  <ul class="mock-states">
+    <li><a href="#ready">ready</a></li>
+    <li><a href="#counting">counting</a></li>
+    <li><a href="#after-take">after-take</a></li>
+    <li><a href="#after-unclear">after-unclear</a></li>
+    <li><a href="#offer">offer</a></li>
+    <li><a href="#climb">climb</a></li>
+    <li><a href="#hold">hold</a></li>
+    <li><a href="#free">free</a></li>
+    <li><a href="#uncal">uncal</a></li>
+    <li><a href="#certify">certify</a></li>
+    <li><a href="#spot">spot</a></li>
+    <li><a href="#wait">wait</a></li>
+    <li><a href="#notice">notice</a></li>
+  </ul>
+  <div class="mock-switches">
+    <div class="mock-seg" role="group" aria-label="Layout">
+      <button type="button" data-view="phone" aria-pressed="false">Phone</button>
+      <button type="button" data-view="desktop" aria-pressed="true">Desktop</button>
+    </div>
+    <label class="mock-calm"><input type="checkbox" id="calm-toggle"> Calm</label>
+  </div>
+  <p class="mock-note">Static mockup, not connected to the app. Scores and takes are invented; the real app works NEXT out from your saved progress.</p>
+</nav>
+
+<div class="frame" id="frame">
+<div class="app" id="app">
+
+  <!-- Account nav row -->
+  <nav class="app-nav" aria-label="Pages">
+    <a href="#" data-noop>Trainer</a>
+    <a href="#" data-noop aria-current="page">Pieces</a>
+    <a href="#" data-noop>Partner</a>
+    <a href="#" data-noop>Looper</a>
+    <button type="button" class="signin"><span>Sign in</span></button>
+  </nav>
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <button type="button" class="icon-btn" id="open-menu" aria-label="Open menu" aria-haspopup="dialog">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </button>
+    <div class="brand"><h1>Gymnopédie No. 1</h1><p>Erik Satie</p></div>
+    <button type="button" class="chip chip-today" id="open-today" aria-haspopup="dialog">
+      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="#3a493c" stroke-width="3"/><path d="M10 2.5A7.5 7.5 0 0 1 17.5 10" fill="none" stroke="#c8d8a7" stroke-width="3" stroke-linecap="round"/></svg>
+      <span><span class="long">Today 1 of 4</span><span class="short">1/4</span></span>
+    </button>
+    <button type="button" class="chip chip-status" id="open-status" aria-haspopup="dialog">
+      <span class="dot" id="status-dot"></span><span><span class="long" id="status-long">Mic · calibrated</span><span class="short" id="status-short">Mic</span></span>
+    </button>
+  </header>
+
+  <!-- HUD -->
+  <section class="hud" aria-label="Current step">
+    <p class="eyebrow">04 · LEFT HAND</p>
+    <div class="passage-row">
+      <h2 class="passage">Bars 1–4 · left hand</h2>
+      <details class="about-step" id="about-step">
+        <summary aria-label="About this step"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 10v5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="11" cy="6.6" r="1.3" fill="currentColor"/></svg></summary>
+        <div class="about-body">
+          <p class="about-cap">The left hand alone: a low bass note, then a soft chord, rocking between G and D.</p>
+          <p>Top step for this passage on its own. Sections and the whole piece go on to 66.</p>
+          <p>One-hand piano steps stop at 80% of goal: 53 of 66 BPM.</p>
+          <p class="about-sub" id="about-sub" hidden></p>
+        </div>
+      </details>
+    </div>
+    <p class="hud-caption">The left hand alone: a low bass note, then a soft chord, rocking between G and D.</p>
+    <div class="readout">
+      <span class="bpm-num" id="bpm-num">33</span>
+      <div class="bpm-side">
+        <div class="side-row">
+          <span class="bpm-unit">BPM</span>
+          <span class="free-tag" id="free-tag" hidden>free</span>
+          <button type="button" class="icon-btn pencil" id="pencil" aria-label="Free tempo" aria-expanded="false" aria-controls="pop-free">
+            <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17l1-4L14.5 2.5a1.8 1.8 0 0 1 2.5 0l.5.5a1.8 1.8 0 0 1 0 2.5L7 16z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div class="goal-row"><span class="goal-chip" id="goal-chip">top 53 · one hand</span><span class="goal-sub">piece goal 66</span></div>
+      </div>
+      <div class="popover" id="pop-free" role="group" aria-label="Free tempo" hidden>
+        <div class="stepper">
+          <button type="button" id="pop-minus" aria-label="Slower">−</button>
+          <output id="pop-bpm">36</output>
+          <button type="button" id="pop-plus" aria-label="Faster">+</button>
+        </div>
+        <p>Free tempo: takes here do not move the ladder</p>
+        <button type="button" class="btn" id="pop-back" hidden>Back to 33 BPM</button>
+      </div>
+    </div>
+    <div class="ladder" id="ladder" role="group" aria-label="Tempo ladder"></div>
+    <div class="pips-row" id="pips-row"></div>
+    <div class="last-chip in-hud"><span class="k">Last take</span><span class="last-text"></span></div>
+  </section>
+
+  <!-- Lane header row and lane -->
+  <div class="lane-head">
+    <span class="phase-chip" id="phase">Ready when you are</span>
+    <p class="lane-help">Left hand blue · right hand green</p>
+  </div>
+  <section class="lane" id="lane" aria-label="Lane, left hand, bars 1 to 4">
+    <div class="lane-svg" id="lane-svg"></div>
+    <div class="banner-up" id="banner-up" hidden>Up a step</div>
+    <div class="lane-pill" id="lane-pill" hidden></div>
+  </section>
+
+  <!-- NOTICE -->
+  <div class="notice" id="notice-box" role="status" hidden>
+    <span class="dot warn" id="notice-dot" aria-hidden="true"></span>
+    <p id="notice-text"></p>
+    <button type="button" class="btn" id="notice-btn" hidden></button>
+  </div>
+
+  <!-- NEXT TAKE and the actions: one sticky block on phones -->
+  <div class="dock" id="dock">
+  <section class="loop" aria-label="What happens next">
+    <div class="next-card">
+      <div class="next-head"><span class="next-label">NEXT TAKE</span></div>
+      <div class="next-body" role="status" aria-atomic="true">
+        <p class="next-text" id="next-text"></p>
+        <p class="next-sub" id="next-sub" hidden></p>
+      </div>
+      <div class="next-actions" id="next-actions" hidden><button type="button" class="btn" id="next-btn"></button></div>
+    </div>
+    <div class="last-chip in-loop"><span class="k">Last take</span><span class="last-text"></span></div>
+  </section>
+
+  <!-- Actions, offer choices and result card -->
+  <div class="actions" id="actions">
+    <div class="act-row" id="act-row">
+      <button type="button" class="btn btn-primary" id="start">Start practice</button>
+      <button type="button" class="btn" id="hear">Hear it</button>
+    </div>
+    <div class="act-row offer" id="offer-row" hidden>
+      <button type="button" class="btn btn-primary" id="offer-go"><kbd>Space</kbd> <span>Practise bar 3 at 28 BPM</span></button>
+      <button type="button" class="btn" id="offer-next">↑ Next take as usual</button>
+    </div>
+    <p class="act-note" id="act-note" hidden>Comfort buttons are off during Wait for me</p>
+    <div class="link-row" id="place-row"><button type="button" class="link-btn" id="place">Already know this? Try it at 53 BPM</button></div>
+    <p class="act-keys" id="act-keys">Space start practice · Esc stop everything</p>
+    <div class="result" id="result" role="group" aria-label="Take result" hidden>
+      <div class="res-score">
+        <div class="res-big" id="res-big">92%</div>
+        <div class="res-meta" id="res-meta"></div>
+      </div>
+      <div class="res-answer">
+        <p class="res-q">How did that feel?</p>
+        <p class="res-hint" id="res-hint">Space = felt comfortable</p>
+        <div class="res-btns">
+          <div class="res-ans"><button type="button" class="btn up" id="ans-up">↑ Felt comfortable</button><p class="res-cons" id="cons-up"></p></div>
+          <div class="res-ans"><button type="button" class="btn" id="ans-down">↓ Needs more room</button><p class="res-cons" id="cons-down"></p></div>
+        </div>
+        <p class="res-cons both" id="cons-both" hidden></p>
+      </div>
+      <div class="res-secondary">
+        <button type="button" class="link-btn" id="hear-take">Hear this take</button>
+        <button type="button" class="link-btn" id="hear-again">Hear it</button>
+        <button type="button" class="link-btn" id="review-take" aria-haspopup="dialog">Review take</button>
+      </div>
+    </div>
+  </div>
+  </div>
+
+</div>
+
+<!-- Drawer: every section starts closed -->
+<dialog class="drawer" id="drawer" aria-labelledby="drawer-title">
+  <div class="drawer-head"><h2 id="drawer-title">Menu</h2><button type="button" class="btn" id="close-drawer">Close</button></div>
+  <div class="drawer-body" id="drawer-body">
+
+    <details id="sec-today"><summary>Today's practice</summary><div class="sec-body">
+      <ol class="plan">
+        <li class="done"><span class="n"></span><div><strong>Hear the whole piece</strong><span class="sub">Hear it before you start</span></div></li>
+        <li><span class="n">2</span><div><strong>Gmaj7 chord</strong><span class="sub">A chord the music needs · begin at 33 BPM</span></div></li>
+        <li class="cur"><span class="n">3</span><div><strong>Bars 1–4 · left hand</strong><span class="sub">Today's phrase · begin at 33 BPM</span></div></li>
+        <li><span class="n">4</span><div><strong>Intro · bars 1–4</strong><span class="sub">Today's section · begin at 33 BPM</span></div></li>
+      </ol>
+      <div class="meter-row"><span>Clean takes today: 1 of 6</span><div class="meter"><span style="width:16.7%"></span></div></div>
+      <label class="field">Daily aim<select><option>4 clean takes</option><option selected>6 clean takes</option><option>8 clean takes</option></select></label>
+    </div></details>
+
+    <details id="sec-piece"><summary>Your piece</summary><div class="sec-body">
+      <div class="map" role="img" aria-label="Progress map: left hand, right hand and hands together across six sections">
+        <span></span>
+        <span class="h"><b>Intro</b>1–4</span><span class="h"><b>Theme</b>5–12</span><span class="h"><b>Return</b>13–21</span><span class="h"><b>Middle</b>22–31</span><span class="h"><b>Ending 1</b>32–39</span><span class="h"><b>Ending 2</b>40–47</span>
+        <span class="r">Left hand</span><i class="cell s2"></i><i class="cell s1"></i><i class="cell"></i><i class="cell"></i><i class="cell"></i><i class="cell"></i>
+        <span class="r">Right hand</span><i class="cell s4"></i><i class="cell s3"></i><i class="cell s1"></i><i class="cell"></i><i class="cell"></i><i class="cell"></i>
+        <span class="r">Hands together</span><i class="cell s5"></i><i class="cell s1"></i><i class="cell"></i><i class="cell"></i><i class="cell"></i><i class="cell"></i>
+      </div>
+      <ul class="legend">
+        <li><i class="cell"></i>not started</li><li><i class="cell s1"></i>started</li><li><i class="cell s2"></i>50–70%</li>
+        <li><i class="cell s3"></i>80–94%</li><li><i class="cell s4"></i>goal tempo</li><li><i class="cell s5"></i>review due</li>
+      </ul>
+    </div></details>
+
+    <details id="sec-course"><summary>Course</summary><div class="sec-body">
+      <p>Two clean takes in a row move you up to 40 BPM.</p>
+      <p class="muted">Clean = 90% or better, and you say it felt comfortable.</p>
+      <p class="muted">One-hand piano steps stop at 80% of goal: 53 of 66 BPM.</p>
+      <ol class="plan">
+        <li><span class="n">1</span><div><strong>Gmaj7 chord</strong><span class="sub">A chord the music needs · begin at 33 BPM</span></div></li>
+        <li class="cur"><span class="n">2</span><div><strong>Bars 1–4 · left hand</strong><span class="sub">Today's phrase · begin at 33 BPM</span></div></li>
+        <li><span class="n">3</span><div><strong>Intro · bars 1–4</strong><span class="sub">Today's section · begin at 33 BPM</span></div></li>
+      </ol>
+    </div></details>
+
+    <details id="sec-input"><summary>Piece &amp; input</summary><div class="sec-body">
+      <label class="field">Piece<select id="piece-select"><option>Gymnopédie No. 1</option></select></label>
+      <div class="toggle" role="radiogroup" aria-label="Instrument">
+        <label><input class="sr" type="radio" name="inst" checked>Piano</label>
+        <label><input class="sr" type="radio" name="inst">Guitar accompaniment</label>
+      </div>
+      <div class="toggle" role="radiogroup" aria-label="Input">
+        <label><input class="sr" type="radio" name="inp" id="inp-mic" checked>Microphone</label>
+        <label><input class="sr" type="radio" name="inp" id="inp-keys">Keyboard · MIDI</label>
+      </div>
+      <label class="check"><input type="checkbox"><span class="box"></span>Play the other hand with me</label>
+    </div></details>
+
+    <details id="sec-sound"><summary>Sound &amp; timing</summary><div class="sec-body">
+      <ul class="status-lines" id="status-lines"></ul>
+      <label class="field">Goal tempo<input type="number" value="66" min="30" max="200"></label>
+      <label class="field">Volume<input type="range" min="0" max="100" value="70"></label>
+      <label class="check"><input type="checkbox" checked><span class="box"></span>Metronome</label>
+      <label class="field">Key feedback<select><option selected>Lively</option><option>Calm</option></select></label>
+      <button type="button" class="btn">Calibrate with 8 clicks</button>
+    </div></details>
+
+    <details id="sec-about"><summary>About this piece</summary><div class="sec-body">
+      <p>D major · 3/4 · 47 written bars, 78 with the repeats · 21 chords, 26 changes, 13 passages, 6 sections</p>
+      <button type="button" class="btn">Hear the whole piece</button>
+    </div></details>
+
+    <details id="sec-add"><summary>Add your own piece</summary><div class="sec-body">
+      <p>Files you add stay in this browser.</p>
+    </div></details>
+
+    <details id="sec-take"><summary>Last take</summary><div class="sec-body">
+      <ul class="dots" aria-label="Timing: 15 on time, 1 late"><li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li><li></li><li class="late"></li><li></li><li></li><li></li><li></li><li></li><li></li></ul>
+      <div class="player" aria-disabled="true">
+        <button type="button" disabled aria-label="Play"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M5 3l10 6-10 6z" fill="currentColor"/></svg></button>
+        <span class="track"></span><span>0:00</span>
+      </div>
+      <div class="btn-grid">
+        <button type="button" class="btn">Hear previous take</button>
+        <button type="button" class="btn">Hear latest take</button>
+        <button type="button" class="btn">Loop latest · play along</button>
+        <button type="button" class="btn">Download WAV</button>
+        <button type="button" class="btn">Note details</button>
+      </div>
+    </div></details>
+
+    <details id="sec-journal"><summary>Your practice today</summary><div class="sec-body">
+      <ul class="journal"><li>Heard the whole piece.</li><li id="journal-take">No take yet today</li></ul>
+      <div class="btn-grid">
+        <button type="button" class="btn">Finish this session</button>
+        <button type="button" class="btn danger">Reset progress for this piece</button>
+      </div>
+    </div></details>
+
+    <details id="sec-keys"><summary>Keyboard shortcuts</summary><div class="sec-body">
+      <dl class="keys">
+        <div><dt><kbd>Space</kbd></dt><dd>start practice</dd></div>
+        <div><dt><kbd>Esc</kbd></dt><dd>stop everything</dd></div>
+        <div><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>answer after a take</dd></div>
+      </dl>
+    </div></details>
+
+  </div>
+</dialog>
+
+</div>
+</div>
+
+<script>
+(function () {
+'use strict';
+var $ = function (s) { return document.querySelector(s); };
+var root = document.documentElement;
+var RUNGS = [33, 40, 46, 53];
+
+/* Loop copy, taken word for word from the spec (section 4) */
+var T = {
+  plain40: 'Two clean takes in a row move you up to 40 BPM.',
+  plain46: 'Two clean takes in a row move you up to 46 BPM.',
+  one40: 'One more clean take moves you up to 40 BPM.',
+  clean: 'Clean = 90% or better, and you say it felt comfortable.',
+  help1: 'Take 2 of 3 at 53 BPM, notes hidden. A clean take unlocks the last one: a click on each bar only.',
+  answer: 'Answer first: how did that take feel? ↑ comfortable · ↓ needs more room.',
+  offer: 'Practise bar 3 at 28 BPM, or carry on.',
+  spot: 'Spot practice on bar 3 at 28 BPM. It never changes your tempo step.',
+  wait: 'Wait for me: the notes wait for your keys. Only keys are checked, and it never moves your tempo.',
+  free: 'Free tempo: takes at 36 BPM do not move the ladder. Go back to 33 BPM to count takes.',
+  uncal: 'Takes will not move your tempo until timing is calibrated: 8 clicks, with an earcup held to the mic.'
+};
+var REASON = 'Audio timing was interrupted';
+var NOT_COUNTED = 'Not counted: ' + REASON + '. Either answer starts the next take.';
+var NOTICE_MIC = 'The microphone is blocked. Allow it in the address bar, or use Keyboard · MIDI.';
+var SPOT_BANNER = 'Practising bar 3, with bar 2 to lead in, at 28 BPM. Spot practice does not count for tempo steps.';
+
+/* One entry per hash id */
+var BASE = { bpm: 33, rung: 0, goal: 'top 53 · one hand', pips: { kind: 'plain', on: 0 }, last: null, phase: 'Ready when you are', status: { warn: false, long: 'Mic · calibrated', short: 'Mic' }, input: 'mic', mode: 'idle' };
+function S(o) { var s = {}, k; for (k in BASE) s[k] = BASE[k]; for (k in o) s[k] = o[k]; return s; }
+var STATES = {
+  ready: S({ text: T.plain40, sub: T.clean, place: true, fall: true }),
+  counting: S({ text: T.one40, sub: T.clean, pips: { kind: 'plain', on: 1, pop: 0 }, last: '92% · Clean, 1 of 2', phase: 'Count in · 3', mode: 'running', fall: true }),
+  'after-take': S({ text: T.answer, phase: 'Take finished', mode: 'result', result: { kind: 'scored', up: 'Clean take 1 of 2. One more moves you up to 40 BPM.', down: 'Stays at 33 BPM, the slowest step.' } }),
+  'after-unclear': S({ text: T.answer, phase: 'Take finished', mode: 'result', result: { kind: 'unclear', both: NOT_COUNTED } }),
+  offer: S({ text: T.offer, last: '92% · Needs more room: stays at 33 BPM', mode: 'offer' }),
+  climb: S({ bpm: 40, rung: 1, text: T.plain46, sub: T.clean, last: '92% · Up to 40 BPM', phase: 'Count in · 3', mode: 'running', fall: true, banner: true, slide: true }),
+  hold: S({ bpm: 40, rung: 1, text: T.plain46, sub: T.clean, last: '84% · Kept at 40 BPM: under 90%' }),
+  free: S({ bpm: 36, text: T.free, pips: { kind: 'none' }, dim: true, free: true, nextBtn: { label: 'Back to 33 BPM', go: 'ready' } }),
+  uncal: S({ text: T.uncal, status: { warn: true, long: 'Calibrate', short: 'Calibrate' }, pipsDim: true, nextBtn: { label: 'Calibrate', go: 'ready' } }),
+  certify: S({ bpm: 53, rung: 3, text: T.help1, pips: { kind: 'cert' }, last: '92% · Clean: next take hides the notes', lane: 'memory' }),
+  spot: S({ text: T.spot, dim: true, pipsDim: true, lane: 'spot', notice: { cls: 'info', text: SPOT_BANNER }, nextBtn: { label: 'Back to the step', go: 'ready' } }),
+  wait: S({ text: T.wait, status: { warn: false, long: 'Keys · MIDI', short: 'Keys' }, input: 'keys', phase: 'Play · bar 2', mode: 'running', lane: 'wait', pill: 'Waiting for you: play the glowing keys', note: true }),
+  notice: S({ text: T.plain40, sub: T.clean, status: { warn: true, long: 'Mic off', short: 'Mic' }, notice: { cls: 'warn', text: NOTICE_MIC, btn: { label: 'Use keyboard', go: 'ready' } } })
+};
+var cur = STATES.ready, carryLast = null, placeIdx = RUNGS.length - 1;
+
+/* Lane: inline SVG drawn at 1:1 pixels for the measured size */
+var WHITE = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
+var CHORD = { G: ['B3', 'D4', 'F#4'], D: ['A3', 'C#4', 'F#4'] };
+var BASS = { G: 'G2', D: 'D3' };
+var GLOW = ['B3', 'D4'];
+function r(n) { return Math.round(n * 10) / 10; }
+
+function drawLane(st) {
+  var host = $('#lane-svg'), W = host.clientWidth, H = host.clientHeight;
+  if (!W || !H) return;
+  var wide = W > 560, kh = wide ? 44 : 32, Hl = H - kh - 2, kw = W / 21;
+  var Hb = wide ? 96 : 78, bh = Hb / 3, period = 4 * Hb;
+  function key(n) {
+    var m = /^([A-G])(#?)(\d)$/.exec(n), i = (+m[3] - 2) * 7 + WHITE[m[1]];
+    return m[2] ? { cx: (i + 1) * kw, w: Math.min(kw * 0.6, 20) } : { cx: i * kw + kw / 2, w: Math.min(kw - 4, 30), i: i };
+  }
+  function note(n, bottom, h) {
+    var k = key(n);
+    return '<rect x="' + r(k.cx - k.w / 2) + '" y="' + r(bottom - h) + '" width="' + r(k.w) + '" height="' + r(h) + '" rx="5" fill="#8fb9d9"/>';
+  }
+  function bar(abs, bottom) {
+    var ch = abs % 2 ? 'G' : 'D', s = '';
+    s += '<rect x="0" y="' + r(bottom - 0.5) + '" width="' + W + '" height="1" fill="rgba(200,216,167,.16)"/>';
+    if (st.lane === 'memory') return s;
+    s += '<text x="8" y="' + r(bottom - 6) + '" font-size="12" fill="#7f927b">bar ' + ((abs - 1) % 4 + 1) + '</text>';
+    s += '<text x="' + (W - 8) + '" y="' + r(bottom - 6) + '" text-anchor="end" font-size="14" font-weight="600" fill="#b4c6a2">' + (ch === 'G' ? 'Gmaj7' : 'Dmaj7') + '</text>';
+    s += note(BASS[ch], bottom - 2, bh * 1.85);
+    CHORD[ch].forEach(function (n) { s += note(n, bottom - bh - 2, bh * 0.8) + note(n, bottom - 2 * bh - 2, bh * 0.8); });
+    return s;
+  }
+  var first = st.lane === 'spot' ? 2 : 1, off = st.lane === 'wait' ? bh : 0;
+  var count = st.lane === 'spot' ? 2 : Math.ceil((Hl + (st.fall ? period : 0)) / Hb) + 1;
+  var g = '';
+  for (var i = 0; i < count; i++) g += bar(first + i, Hl - i * Hb + off);
+  var keys = '', blacks = '', labels = '', glow = '', n;
+  for (n = 0; n < 21; n++) keys += '<rect x="' + r(n * kw + 0.5) + '" y="' + (H - kh) + '" width="' + r(kw - 1) + '" height="' + kh + '" rx="2" fill="#f1f2ea"/>';
+  for (n = 0; n < 21; n++) if ([0, 1, 3, 4, 5].indexOf(n % 7) >= 0) blacks += '<rect x="' + r((n + 1) * kw - kw * 0.3) + '" y="' + (H - kh) + '" width="' + r(kw * 0.6) + '" height="' + r(kh * 0.55) + '" rx="2" fill="#0a0d0b"/>';
+  [0, 7, 14].forEach(function (i, o) { labels += '<text x="' + r(i * kw + kw / 2) + '" y="' + (H - 5) + '" text-anchor="middle" font-size="12" fill="#56635a">C' + (o + 2) + '</text>'; });
+  if (st.lane === 'wait') GLOW.forEach(function (name) {
+    var k = key(name);
+    glow += '<rect x="' + r(k.i * kw - 1) + '" y="' + (H - kh - 5) + '" width="' + r(kw + 2) + '" height="' + (kh + 6) + '" rx="4" fill="#c8d8a7" filter="url(#glow)"/>';
+    glow += '<rect x="' + r(k.i * kw + 0.5) + '" y="' + (H - kh) + '" width="' + r(kw - 1) + '" height="' + kh + '" rx="2" fill="#c8d8a7"/>';
+  });
+  var memory = st.lane === 'memory' ? '<text x="' + r(W / 2) + '" y="' + r(Hl * 0.56) + '" text-anchor="middle" font-size="17" font-weight="600" fill="#b4c6a2">From memory, or from your music.</text>' : '';
+  host.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" font-family="Segoe UI, system-ui, sans-serif" role="img" aria-label="Lane: left-hand notes falling toward the keyboard">' +
+    '<defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b0f0d"/><stop offset="1" stop-color="#17201b"/></linearGradient>' +
+    '<clipPath id="lc"><rect x="0" y="0" width="' + W + '" height="' + Hl + '"/></clipPath>' +
+    '<filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3.5"/></filter></defs>' +
+    '<rect width="' + W + '" height="' + H + '" fill="url(#lg)"/>' +
+    '<g clip-path="url(#lc)"><g class="lane-notes" style="--period:' + period + 'px">' + g + '</g></g>' + memory +
+    '<rect x="0" y="' + Hl + '" width="' + W + '" height="2" fill="#c8d8a7" fill-opacity=".9"/>' +
+    keys + glow + blacks + labels + '</svg>';
+}
+
+/* HUD: ladder, pips and result card */
+var GEM = '<svg class="gem" viewBox="0 0 13 13" aria-hidden="true"><path d="M6.5 .8L12.2 6.5 6.5 12.2.8 6.5z" fill="#e1c48f" stroke="#19211c" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+function setText(el, t) { if (el.textContent !== t) el.textContent = t; }
+function placeText() { return 'Already know this? Try it at ' + RUNGS[placeIdx] + ' BPM'; }
+
+function buildLadder(st) {
+  var el = $('#ladder'), h = '', top = RUNGS.length - 1;
+  RUNGS.forEach(function (b, i) {
+    var cls = 'seg' + (i < st.rung ? ' passed' : ''), gem = i === top ? GEM : '', col = ' style="grid-column:' + (i + 1) + '"';
+    if (st.place && i >= st.rung + 2) {
+      var on = i === placeIdx;
+      h += '<button type="button" class="' + cls + (on ? ' target' : '') + '" data-rung="' + i + '"' + col + ' aria-pressed="' + on + '" aria-label="Place at ' + Math.round(b / 66 * 100) + '%: ' + b + ' BPM">' + b + gem + '</button>';
+    } else {
+      h += '<span class="' + cls + '"' + col + '>' + b + gem + '</span>';
+    }
+  });
+  h += '<span class="ladder-now' + (st.slide ? ' slide' : '') + '" style="grid-column:' + (st.rung + 1) + '" aria-current="step">' + RUNGS[st.rung] + (st.rung === top ? GEM : '') + '</span>';
+  el.className = 'ladder' + (st.dim ? ' dim' : '');
+  el.innerHTML = h;
+}
+
+function buildPips(st) {
+  var row = $('#pips-row'), p = st.pips, h = '';
+  row.hidden = p.kind === 'none';
+  row.className = 'pips-row' + (st.pipsDim ? ' dim' : '');
+  if (row.hidden) return;
+  if (p.kind === 'cert') {
+    h = '<div class="pips"><span class="pip-item"><span class="pip on"></span>Notes</span><span class="pip-item"><span class="pip now"></span>Memory</span><span class="pip-item"><span class="pip"></span>Click</span></div>' +
+      '<span class="pips-caption">Help level 2 of 3</span>';
+  } else {
+    h = '<div class="pips' + (st.pipsDim ? ' dim' : '') + '">';
+    [0, 1].forEach(function (i) { h += '<span class="pip' + (i < p.on ? ' on' : '') + (p.pop === i ? ' pop' : '') + '"></span>'; });
+    h += '</div><span class="pips-caption">' + p.on + ' of 2 clean takes in a row</span>';
+  }
+  row.innerHTML = h;
+}
+
+function buildResult(res) {
+  var meta = $('#res-meta'), big = $('#res-big'), dots = '', i, both = res.kind === 'unclear';
+  if (!both) {
+    for (i = 0; i < 16; i++) dots += '<li' + (i === 9 ? ' class="late"' : '') + '></li>';
+    big.textContent = '92%'; big.className = 'res-big';
+    meta.innerHTML = '<p class="res-label">Score: the lower of the two</p>' +
+      '<p class="res-split">94% on time · <span class="low">92% notes heard</span></p>' +
+      '<p class="res-words">90% counts as clean</p>' +
+      '<div class="res-bar" role="img" aria-label="92% on a bar with marks at 65% and 90%"><span class="res-fill" style="width:92%"></span><span class="res-tick" style="left:65%"></span><span class="res-tick gold" style="left:90%"></span></div>' +
+      '<div class="res-ticklabels" aria-hidden="true"><span style="left:65%">65%</span><span style="left:90%">90%</span></div>' +
+      '<ul class="dots" aria-label="Timing: 15 on time, 1 late">' + dots + '</ul>';
+    setText($('#cons-up'), res.up);
+    setText($('#cons-down'), res.down);
+  } else {
+    big.textContent = 'Not scored'; big.className = 'res-big small';
+    meta.innerHTML = '<p class="res-reason">' + REASON + '. This take will not change your progress.</p>';
+    setText($('#cons-both'), res.both);
+  }
+  $('#cons-up').hidden = both;
+  $('#cons-down').hidden = both;
+  $('#cons-both').hidden = !both;
+  $('#res-hint').hidden = both;
+}
+
+/* Drawer content that follows the state */
+function buildDrawerState(st, last) {
+  var keys = st.input === 'keys', ok = '<span class="dot"></span>', off = '<span class="off"></span>', warn = '<span class="dot warn"></span>';
+  $('#status-lines').innerHTML =
+    '<li>' + (keys || st.status.long === 'Mic off' ? off + 'Mic off' : ok + 'Mic on') + '</li>' +
+    '<li>' + ok + 'Pitch model ready</li>' +
+    '<li>' + (st.status.long === 'Calibrate' ? warn + 'Timing not calibrated' : ok + 'Timing calibrated') + '</li>' +
+    '<li>' + ok + 'Notes checked against an independent source</li>';
+  $('#inp-keys').checked = keys;
+  $('#inp-mic').checked = !keys;
+  setText($('#journal-take'), last ? 'Bars 1–4 · left hand: ' + last : 'No take yet today');
+}
+
+/* Render one state from the hash */
+function render() {
+  var id = location.hash.slice(1), key = STATES[id] ? id : 'ready', st = STATES[key], last = st.last;
+  if (key === 'ready' && carryLast) last = carryLast;
+  carryLast = null;
+  cur = st;
+  root.dataset.state = key;
+  document.querySelectorAll('.mock-states a').forEach(function (a) {
+    if (a.getAttribute('href') === '#' + key) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+  $('#status-dot').className = 'dot' + (st.status.warn ? ' warn' : '');
+  $('#open-status').classList.toggle('warn', st.status.warn);
+  setText($('#status-long'), st.status.long);
+  setText($('#status-short'), st.status.short);
+
+  setText($('#bpm-num'), String(st.bpm));
+  $('#free-tag').hidden = !st.free;
+  setText($('#goal-chip'), st.goal);
+  buildLadder(st);
+  buildPips(st);
+  closePop();
+  $('#about-step').open = false;
+  setText($('#pop-bpm'), String(st.bpm));
+  $('#pop-back').hidden = !st.free;
+
+  setText($('#phase'), st.phase);
+  $('#banner-up').hidden = !st.banner;
+  var pill = $('#lane-pill'); pill.hidden = !st.pill;
+  if (st.pill) setText(pill, st.pill);
+
+  var nt = $('#notice-box'); nt.hidden = !st.notice;
+  if (st.notice) {
+    nt.className = 'notice ' + st.notice.cls;
+    $('#notice-dot').hidden = st.notice.cls !== 'warn';
+    setText($('#notice-text'), st.notice.text);
+    var nb = $('#notice-btn'); nb.hidden = !st.notice.btn;
+    if (st.notice.btn) setText(nb, st.notice.btn.label);
+  }
+
+  setText($('#next-text'), st.text);
+  var sub = $('#next-sub'); sub.hidden = !st.sub; if (st.sub) setText(sub, st.sub);
+  var aboutSub = $('#about-sub'); aboutSub.hidden = !st.sub; if (st.sub) setText(aboutSub, st.sub);
+  $('#next-actions').hidden = !st.nextBtn;
+  if (st.nextBtn) setText($('#next-btn'), st.nextBtn.label);
+  document.querySelectorAll('.last-text').forEach(function (el) { setText(el, last || 'No take yet today'); });
+  document.querySelectorAll('.last-chip').forEach(function (el) { el.classList.toggle('empty', !last); });
+
+  var running = st.mode === 'running', result = st.mode === 'result', offer = st.mode === 'offer';
+  $('#actions').classList.toggle('is-result', result);
+  $('#act-row').hidden = result || offer;
+  $('#offer-row').hidden = !offer;
+  $('#act-keys').hidden = result || offer;
+  $('#place-row').hidden = !st.place;
+  setText($('#place'), placeText());
+  $('#act-note').hidden = !st.note;
+  $('#hear').hidden = running;
+  var start = $('#start');
+  setText(start, running ? 'Stop · Esc' : 'Start practice');
+  start.className = 'btn ' + (running ? 'btn-stop' : 'btn-primary');
+  $('#result').hidden = !result;
+  document.querySelectorAll('.last-chip').forEach(function (el) { el.classList.toggle('grey', result); });
+  if (result) buildResult(st.result);
+
+  buildDrawerState(st, last);
+  drawLane(st);
+  root.dataset.ready = '1';
+}
+
+/* Free-tempo popover */
+function closePop() { $('#pop-free').hidden = true; $('#pencil').setAttribute('aria-expanded', 'false'); }
+$('#pencil').addEventListener('click', function () {
+  var pop = $('#pop-free');
+  pop.hidden = !pop.hidden;
+  this.setAttribute('aria-expanded', String(!pop.hidden));
+});
+$('#pop-plus').addEventListener('click', function () { if (cur.free) $('#pop-bpm').textContent = String(+$('#pop-bpm').textContent + 1); else location.hash = 'free'; });
+$('#pop-minus').addEventListener('click', function () { if (cur.free) $('#pop-bpm').textContent = String(+$('#pop-bpm').textContent - 1); else location.hash = 'free'; });
+$('#pop-back').addEventListener('click', function () { location.hash = 'ready'; });
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('#pop-free, #pencil')) closePop();
+  if (!e.target.closest('#about-step')) $('#about-step').open = false;
+});
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closePop(); $('#about-step').open = false; } });
+
+/* Drawer: every section closed on open; the chip that opened it opens its own section */
+var dlg = $('#drawer');
+function openDrawer(section) {
+  dlg.querySelectorAll('details').forEach(function (d) { d.open = false; });
+  if (section) $('#' + section).open = true;
+  if (!dlg.open) dlg.showModal();
+  $('#drawer-body').scrollTop = 0;
+  if (section) $('#' + section).scrollIntoView({ block: 'nearest' });
+}
+$('#open-menu').addEventListener('click', function () { openDrawer(); });
+$('#open-today').addEventListener('click', function () { openDrawer('sec-today'); });
+$('#open-status').addEventListener('click', function () { openDrawer('sec-sound'); });
+$('#review-take').addEventListener('click', function () { openDrawer('sec-take'); });
+$('#close-drawer').addEventListener('click', function () { dlg.close(); });
+dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+document.querySelectorAll('a[data-noop], .signin').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); }); });
+
+/* Ladder placement target, actions and answers */
+$('#ladder').addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-rung]');
+  if (!b) return;
+  placeIdx = +b.dataset.rung;
+  buildLadder(cur);
+  setText($('#place'), placeText());
+  var again = $('#ladder button[data-rung="' + placeIdx + '"]');
+  if (again) again.focus();
+});
+function answer(next) {
+  if (cur.result && cur.result.kind === 'unclear') { carryLast = 'Not counted · ' + REASON; location.hash = 'ready'; } else location.hash = next;
+}
+$('#start').addEventListener('click', function () { location.hash = cur.mode === 'running' ? 'ready' : 'after-take'; });
+$('#next-btn').addEventListener('click', function () { if (cur.nextBtn) location.hash = cur.nextBtn.go; });
+$('#notice-btn').addEventListener('click', function () { if (cur.notice && cur.notice.btn) location.hash = cur.notice.btn.go; });
+$('#ans-up').addEventListener('click', function () { answer('counting'); });
+$('#ans-down').addEventListener('click', function () { answer('offer'); });
+$('#offer-go').addEventListener('click', function () { location.hash = 'spot'; });
+$('#offer-next').addEventListener('click', function () { location.hash = 'ready'; });
+
+/* Mockup controls */
+document.querySelectorAll('.mock-seg button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    root.dataset.view = b.dataset.view;
+    document.querySelectorAll('.mock-seg button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+  });
+});
+$('#calm-toggle').addEventListener('change', function () {
+  if (this.checked) root.setAttribute('data-calm', '1'); else root.removeAttribute('data-calm');
+});
+
+window.addEventListener('hashchange', render);
+if (window.ResizeObserver) new ResizeObserver(function () { drawLane(cur); }).observe($('#lane-svg'));
+render();
+})();
+</script>
+</body>
+</html>
