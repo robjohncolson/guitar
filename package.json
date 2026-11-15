@@ -15,7 +15,8 @@
     "vendor:piano": "node scripts/vendor-piano-samples.mjs",
     "check:piano": "node scripts/check-piano-samples.mjs",
     "check:piano-voice": "node scripts/piano-voice-check.mjs",
-    "check:piano-realtime": "node scripts/piano-realtime-check.mjs"
+    "check:piano-realtime": "node scripts/piano-realtime-check.mjs",
+    "check:piece-sound": "node scripts/piece-sound-check.mjs"
   },
   "dependencies": {
     "@tensorflow/tfjs": "4.22.0",

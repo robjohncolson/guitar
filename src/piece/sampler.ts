@@ -1,6 +1,8 @@
 /** A sampled grand piano: recordings every few semitones, pitched by playback rate. Files come from this site's own public/piano folder. */
 export const GAIN_CONSTANT = 0.62;
 const VOICES = 48;
+/** Waits (ms) before each new try when a recording could not be fetched; after the last one the sampler gives up until asked again. */
+const RETRY_MS = [1000, 3000, 8000];
 interface Entry { midi: number; file: string; gain: number; cents: number }
 interface Loaded { buffer: AudioBuffer; onset: number; gain: number; cents: number }
 interface Voice { source: AudioBufferSourceNode; gain: GainNode; at: number }
@@ -39,11 +41,13 @@ export class PianoSampler {
   private loaded = new Map<number, Loaded>();
   private inflight = new Map<number, Promise<void>>();
   private failedRoots = new Set<number>();
+  private round?: Promise<void>;
+  private want: [number, number] = [0, 0];
   private voices: Voice[] = [];
   constructor(readonly context: BaseAudioContext, readonly out: AudioNode) {}
-  /** True while the manifest or a file is still on its way. */
-  get loading(): boolean { return this.inflight.size > 0 || (this.manifest !== undefined && this.entries.size === 0 && !this.failed); }
-  private fail(message: string): void { this.failed = true; this.message ||= message; }
+  /** True while the manifest or a file is still on its way, or a new try is waiting. */
+  get loading(): boolean { return this.round !== undefined || this.inflight.size > 0; }
+  private note(message: string): void { this.message ||= message; }
   private fetchManifest(): Promise<Entry[]> {
     this.manifest ??= fetch(`${import.meta.env.BASE_URL}piano/manifest.json`).then(async r => {
       if (!r.ok) throw new Error(`manifest ${r.status}`);
@@ -51,7 +55,7 @@ export class PianoSampler {
       for (const e of list) this.entries.set(e.midi, e);
       if (!list.length) throw new Error('empty manifest');
       return list;
-    }).catch(error => { this.fail(String(error)); return [] as Entry[]; });
+    }).catch(error => { this.manifest = undefined; this.note(String(error)); return [] as Entry[]; });
     return this.manifest;
   }
   private fetchRoot(root: number): Promise<void> {
@@ -62,15 +66,37 @@ export class PianoSampler {
         if (!r.ok) throw new Error(`${entry.file} ${r.status}`);
         const buffer = await this.context.decodeAudioData(await r.arrayBuffer());
         this.loaded.set(root, { buffer, onset: measureOnset(buffer.getChannelData(0), buffer.sampleRate), gain: entry.gain, cents: entry.cents });
-      }).catch(error => { this.failedRoots.add(root); this.fail(String(error)); }).finally(() => this.inflight.delete(root));
+      }).catch(error => { this.failedRoots.add(root); this.note(String(error)); }).finally(() => this.inflight.delete(root));
       this.inflight.set(root, job);
     }
     return job;
   }
-  /** Fetch and decode the recordings that cover lo..hi, once each. */
-  async load(lo: number, hi: number): Promise<void> {
-    const list = await this.fetchManifest(); if (!list.length) return;
-    await Promise.all(needed([lo, hi], [...this.entries.keys()]).filter(r => !this.loaded.has(r) && !this.failedRoots.has(r)).map(r => this.fetchRoot(r)));
+  /**
+   * Fetch and decode the recordings that cover lo..hi, once each. A manifest or file that fails is tried again after
+   * 1, 3 and 8 s; only then is `failed` set, and the next call starts a fresh round. A call during a round joins it.
+   */
+  load(lo: number, hi: number): Promise<void> {
+    this.want = [lo, hi];
+    if (!this.round) { this.failed = false; this.round = this.fetchAll().finally(() => { this.round = undefined; }); }
+    return this.round;
+  }
+  private async fetchAll(): Promise<void> {
+    for (let attempt = 0; ; attempt++) {
+      this.failedRoots.clear();
+      const list = await this.fetchManifest();
+      if (list.length) await Promise.all(needed(this.want, [...this.entries.keys()]).filter(r => !this.loaded.has(r)).map(r => this.fetchRoot(r)));
+      if (this.ready(...this.want)) { this.failed = false; return; }
+      if (attempt >= RETRY_MS.length) { this.failed = true; return; }
+      await new Promise<void>(resolve => setTimeout(resolve, RETRY_MS[attempt]));
+    }
+  }
+  /** Resolves with ready(lo, hi) once the recordings are decoded or the sampler has given up, and no later than `ms` from now. */
+  async settled(lo: number, hi: number, ms: number): Promise<boolean> {
+    if (this.ready(lo, hi) || !this.round) return this.ready(lo, hi);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([this.round, new Promise<void>(resolve => { timer = setTimeout(resolve, ms); })]);
+    clearTimeout(timer);
+    return this.ready(lo, hi);
   }
   /** Every recording for lo..hi is decoded. */
   ready(lo: number, hi: number): boolean {

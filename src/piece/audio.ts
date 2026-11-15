@@ -23,6 +23,8 @@ export interface PieceTake {
   interruption?: string;
 }
 interface Capture { id: number; from: number; samples: Float32Array; copied: number; ready: boolean }
+/** Longest a demo, keys take or Wait for me run is held back (ms) for piano recordings that are still arriving. */
+const PIANO_WAIT = 3000;
 
 /** One AudioContext per page. Demonstrations and scoring never overlap; Stop releases the microphone and all sound. */
 export class PieceAudio {
@@ -130,7 +132,9 @@ export class PieceAudio {
     try {
       this.context = await enableContext(this.context); if (generation !== this.generation) return;
       await this.settle(); if (generation !== this.generation) return;
-      this.make(); this.lockPiano();
+      this.make();
+      if (backing.length > 0 || (exercise.instrument === 'piano' && (kind === 'demo' || (kind === 'practice' && this.input === 'keys')))) { await this.waitForPiano(); if (generation !== this.generation) return; }
+      this.lockPiano();
       const needsPitch = kind === 'practice' && exercise.instrument === 'guitar' && exercise.events.some(e => e.grade === 'pitch');
       if (needsPitch) {
         const ear = await this.loadEar(); if (generation !== this.generation) return;
@@ -160,6 +164,12 @@ export class PieceAudio {
   }
   /** Start fetching the recordings for the piece's range (never awaited: a take does not wait for them). */
   private loadPiano(): void { const [lo, hi] = this.pianoRange; void this.sampler?.load(lo - 3, hi + 3).catch(() => {}); }
+  /** Holds a start that will play piano notes while the recordings are still arriving, so it does not lock into the simple voice. */
+  private async waitForPiano(): Promise<void> {
+    if (this.piano !== 'grand' || !this.sampler) return;
+    const [lo, hi] = this.pianoRange;
+    await this.sampler.settled(lo, hi, PIANO_WAIT);
+  }
   /** Fix the piano sound for the take or Wait for me run about to begin; stop() clears it. */
   lockPiano(on = true): void { this.locked = on ? this.piano === 'grand' && Boolean(this.sampler?.ready(...this.pianoRange)) : undefined; }
   private grand(): boolean { return this.locked ?? (this.piano === 'grand' && Boolean(this.sampler?.ready(...this.pianoRange))); }
@@ -256,6 +266,7 @@ export class PieceAudio {
   async prepare(): Promise<void> {
     this.context = await enableContext(this.context);
     this.make(); this.voice!.warm();
+    await this.waitForPiano();
   }
   /** One note now, for notes played on the player's behalf. */
   playNote(midi: number, length: number): void {
@@ -276,7 +287,8 @@ export class PieceAudio {
     const generation = this.generation;
     this.context = await enableContext(this.context); if (generation !== this.generation) return;
     await this.settle(); if (generation !== this.generation) return;
-    this.make(); this.lockPiano();
+    this.make(); await this.waitForPiano(); if (generation !== this.generation) return;
+    this.lockPiano();
     const period = 60 / take.bpm, first = Math.min(0, ...take.presses.map(p => p.t));
     const start = this.now + outputDelay(this.context) + 0.4 - first, end = start + take.exercise.beats * period;
     const sounds: Sound[] = take.presses.map(p => ({ at: start + p.t, kind: 'note' as const, midi: p.midi, length: Math.min(6, p.dur ?? 0.6), level: 0.75, timbre: 'piano' as const })).sort((a, b) => a.at - b.at);
