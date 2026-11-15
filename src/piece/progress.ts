@@ -47,7 +47,7 @@ export function parsePieceProgress(raw: string | null, fallbackCalibration?: { o
       const s = saved as Partial<UnitProgress>;
       if (id.length > 300 || !s || typeof s !== 'object') continue;
       result.units[id] = {
-        rung: Math.floor(bounded(s.rung, 0, 20, 0)), clean: 0, hard: 0, support: Math.floor(bounded(s.support, 0, 2, 0)) as 0 | 1 | 2,
+        rung: Math.floor(bounded(s.rung, 0, 20, 0)), clean: Math.floor(bounded(s.clean, 0, 2, 0)), hard: Math.floor(bounded(s.hard, 0, 1, 0)), support: Math.floor(bounded(s.support, 0, 2, 0)) as 0 | 1 | 2,
         best: bounded(s.best, 0, 1.2, 0), certified: Array.isArray(s.certified) ? s.certified.filter(c => typeof c === 'number' && c > 0 && c <= 1.2).slice(0, 10) : [],
         attempts: Math.floor(bounded(s.attempts, 0, 1e6, 0)), last: bounded(s.last, 0, 1e14, 0), due: bounded(s.due, 0, 1e14, 0), interval: bounded(s.interval, 0, 365, 0),
         days: Array.isArray(s.days) ? s.days.filter(d => typeof d === 'string' && /^\d{4}-\d\d-\d\d$/.test(d)).slice(-10) : [], learned: s.learned === true,

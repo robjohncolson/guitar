@@ -1,0 +1,158 @@
+/* Tokens. Everything here is scoped to main.piece, because the Trainer page shares the global sheets. */
+main.piece{--bg:#131715;--card:#19211c;--raised:#1f2a23;--line:#3a493c;--outline:#8fa486;--ink:#e8e9df;--muted:#a4ada1;--lime:#c8d8a7;--gold:#e1c48f;--amber:#e1ad88;--on-fill:#131715;--hand-l:#8fb9d9;--dim:#8f998c;--dim-fill:#4c5a44}
+main.piece [hidden]{display:none!important}
+
+/* Page header */
+main.piece .app-nav{margin-bottom:16px}
+main.piece .eyebrow{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+main.piece .trainer-header{align-items:center;gap:12px}
+main.piece .trainer-header>div{flex:1 1 auto;min-width:0}
+main.piece .trainer-header h1{margin:2px 0 0;font-size:28px;font-weight:600;letter-spacing:-.5px;line-height:1.15;overflow-wrap:anywhere}
+main.piece .trainer-header .intro{max-width:100%;margin:4px 0 0;overflow:hidden;font-size:14px;color:var(--muted);text-overflow:ellipsis;white-space:nowrap}
+main.piece .trainer-header button{flex:none}
+main.piece .trainer-header button,main.piece .trainer-actions button{min-height:44px}
+
+/* First-visit welcome card (inserted by account code): a compact block that never passes 160 px; the list ends in an ellipsis after five lines, and the top padding leaves room for the Got it focus ring */
+main.piece .welcome-card{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title ok" "list list";align-items:center;gap:2px 10px;max-height:160px;margin:0 0 12px;padding:8px 10px 6px 14px;overflow:hidden;border-color:var(--line);background:var(--card);font-size:13px;line-height:1.35;color:var(--muted)}
+main.piece .welcome-card h2{grid-area:title;margin:0;font-size:15px;line-height:1.3;color:var(--ink)}
+main.piece .welcome-card strong{color:var(--ink)}
+main.piece .welcome-card ol{grid-area:list;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:5;margin:0;padding:0;overflow:hidden;list-style:none}
+main.piece .welcome-card li{display:inline}
+main.piece .welcome-card button{grid-area:ok;min-height:44px;margin:0;padding:0 18px}
+
+/* Piece, instrument and input: one closed row until opened; the label stays whole and only the status after it is cut with an ellipsis */
+main.piece .piece-setup{margin:14px 0 18px;padding:0;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:14px;color:var(--ink)}
+main.piece .piece-setup>summary{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 14px;border-radius:12px;list-style:none;cursor:pointer}
+main.piece .piece-setup[open]>summary{border-radius:12px 12px 0 0}
+main.piece .piece-setup>summary::-webkit-details-marker{display:none}
+main.piece .piece-setup>summary::after{content:"";flex:none;width:8px;height:8px;margin:-3px 2px 0 auto;border:solid var(--muted);border-width:0 2px 2px 0;transform:rotate(45deg)}
+main.piece .piece-setup[open]>summary::after{margin-top:3px;transform:rotate(225deg)}
+main.piece .piece-setup>summary>.setup-label{flex:none;font-weight:600;color:var(--ink);white-space:nowrap}
+main.piece .piece-setup>summary>#piece-setup-summary{min-width:0;overflow:hidden;color:var(--muted);text-overflow:ellipsis;white-space:nowrap}
+main.piece .piece-setup>:not(summary){margin-right:14px;margin-left:14px}
+main.piece .piece-setup .piece-controls{margin-top:4px;gap:12px 18px}
+main.piece .piece-setup .trainer-status{margin-bottom:8px;padding:10px 0 0;font-size:13px}
+main.piece .trainer-status span::before{content:"";display:inline-block;width:7px;height:7px;margin-right:8px;border-radius:50%;background:currentColor;vertical-align:middle}
+
+/* Passage: stage, name, one-line caption, and the longer text behind "About this step" */
+main.piece .lesson-heading.hud{flex-wrap:wrap;align-items:flex-start;gap:4px 28px}
+main.piece .hud-passage{flex:1 1 260px;min-width:0}
+main.piece .hud-passage h2{margin:2px 0 4px;font-size:28px;font-weight:600;letter-spacing:-.4px;line-height:1.15;overflow-wrap:anywhere}
+main.piece #unit-stage{display:block;color:var(--lime)}
+main.piece .unit-caption{margin:0;overflow:hidden;font-size:13px;line-height:1.4;color:var(--muted);text-overflow:ellipsis;white-space:nowrap}
+main.piece .unit-caption:empty{display:none}
+main.piece .about-step{margin:0;font-size:14px;color:var(--muted)}
+main.piece .about-step>summary{display:flex;align-items:center;gap:8px;min-height:44px;list-style:none;font-weight:600;color:var(--lime);cursor:pointer}
+main.piece .about-step>summary::-webkit-details-marker{display:none}
+main.piece .about-step>summary::after{content:"";width:7px;height:7px;margin-top:-3px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(45deg)}
+main.piece .about-step[open]>summary::after{margin-top:3px;transform:rotate(225deg)}
+main.piece .about-step>:not(summary){max-width:62ch;margin:0 0 10px;font-size:14px;line-height:1.5;color:var(--ink);overflow-wrap:anywhere}
+main.piece .about-step>.unit-why{font-size:13px;color:var(--muted)}
+main.piece #lane-help{padding:0;background:none;font-size:13px;color:var(--muted)}
+main.piece #lane-help:empty{display:none}
+
+/* Tempo: the BPM box is the big readout, outlined at rest so it reads as editable; its width is --digits (2 or 3, set from main.ts) times one digit. The Trainer's span rules reach into this block, so reset them first */
+main.piece .hud-tempo{display:flex;flex:1 1 300px;flex-direction:column;align-items:stretch;gap:6px;min-width:0;max-width:480px}
+main.piece .hud-tempo :where(span){grid-column:auto;max-width:none;font-size:inherit;color:inherit;text-align:left}
+main.piece .bpm-readout{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 10px;min-width:0}
+main.piece .hud-tempo label{font-size:14px;font-weight:700;letter-spacing:.12em;color:var(--muted)}
+main.piece #piece-bpm{width:calc(var(--digits,3)*1ch + .24em + 4px);height:1.1em;padding:0 .12em;border:2px solid var(--line);border-radius:14px;background:transparent;font-size:clamp(72px,14vw,104px);font-weight:700;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums;color:var(--lime);caret-color:var(--lime);text-shadow:0 0 28px rgba(200,216,167,.28);-moz-appearance:textfield;appearance:textfield}
+main.piece #piece-bpm::-webkit-outer-spin-button,main.piece #piece-bpm::-webkit-inner-spin-button{margin:0;-webkit-appearance:none}
+main.piece #piece-bpm:hover:not(:disabled){border-color:var(--outline)}
+main.piece #piece-bpm:focus-visible{border-color:var(--outline);outline:3px solid var(--gold);outline-offset:2px;background:var(--raised)}
+main.piece #piece-bpm[aria-invalid=true]{border-color:var(--amber)}
+main.piece #piece-bpm:disabled{border-color:transparent;color:var(--lime);-webkit-text-fill-color:var(--lime);opacity:1;cursor:default}
+main.piece .hud-tempo.free #piece-bpm{color:var(--amber);text-shadow:0 0 28px rgba(225,173,136,.26)}
+main.piece .hud-tempo.free #piece-bpm:disabled{-webkit-text-fill-color:var(--amber)}
+main.piece .free-tag{padding:1px 10px;border:1px solid var(--amber);border-radius:12px;font-size:13px;font-weight:700;color:var(--amber)}
+main.piece .tempo-line{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0}
+main.piece #piece-tempo-help{display:inline-block;padding:3px 12px;border:1px solid rgba(225,196,143,.5);border-radius:12px;background:rgba(225,196,143,.08);font-size:14px;font-weight:600;line-height:1.35;color:var(--gold);overflow-wrap:anywhere}
+main.piece #piece-tempo-help:empty{display:none}
+main.piece .hud-tempo.free #piece-tempo-help{border-color:rgba(225,173,136,.55);background:rgba(225,173,136,.08);color:var(--amber)}
+main.piece .free-back{min-height:44px;padding:0 16px;border:1px solid var(--outline);border-radius:12px;background:var(--raised);font-size:14px;font-weight:600;color:var(--ink)}
+main.piece .free-back:hover:not(:disabled){background:#2a382f}
+
+/* Ladder: one segment per rung, 44 px high, the BPM inside. Phones keep every segment 44 px wide: a 2 px gap below 400 px, rows of four below 384 px (seven segments need 320 px) */
+main.piece #piece-pips{display:block}
+main.piece #piece-pips:empty{display:none}
+main.piece .ladder{--rung-gap:4px;display:flex;gap:var(--rung-gap);margin-top:10px}
+main.piece .rung{position:relative;display:flex;flex:1;align-items:center;justify-content:center;min-width:36px;height:44px;padding:0;border:1px solid var(--outline);border-radius:12px;background:transparent;font-size:16px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;color:var(--muted);text-align:center}
+main.piece .rung.passed{border-color:var(--lime);background:var(--lime);color:var(--on-fill)}
+main.piece .rung.now{z-index:1;border:2px solid var(--lime);background:var(--raised);box-shadow:0 0 16px rgba(200,216,167,.25);font-size:18px;font-weight:700;color:var(--lime)}
+main.piece .rung.certified{box-shadow:0 0 0 2px var(--gold)}
+main.piece .rung.now.certified{box-shadow:0 0 0 2px var(--gold),0 0 16px rgba(200,216,167,.25)}
+main.piece .ladder.dim .rung{border-color:#667862;color:var(--dim)}
+main.piece .ladder.dim .rung.passed{border-color:#667862;background:var(--dim-fill);color:var(--ink)}
+main.piece .ladder.dim .rung.now{border-color:#7a8d74;background:var(--card);box-shadow:none}
+main.piece .ladder.dim .rung.certified{box-shadow:none}
+main.piece .ladder.dim .gem{opacity:.65}
+main.piece .rung-pick{cursor:pointer}
+main.piece .rung-pick:hover{border-color:var(--lime);background:var(--raised)}
+main.piece .rung-pick:focus-visible{z-index:2;outline:3px solid var(--gold);outline-offset:2px}
+main.piece .rung-pick.on{border:2px solid var(--gold);background:rgba(225,196,143,.12);color:var(--ink)}
+main.piece .ladder.dim .rung-pick.on{border-color:var(--gold);color:var(--ink)}
+main.piece .gem{position:absolute;top:-8px;right:-4px;font-size:13px;line-height:1;color:var(--gold);text-shadow:-1px 0 var(--card),1px 0 var(--card),0 -1px var(--card),0 1px var(--card);pointer-events:none}
+
+/* Pips: clean takes in a row, or the three levels of fading help */
+main.piece .pip-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;min-height:26px;margin-top:8px}
+main.piece .pip-group{display:inline-flex;align-items:center;gap:8px}
+main.piece .pip{display:inline-grid;flex:none;place-items:center;width:22px;height:22px;border:2px solid var(--outline);border-radius:50%}
+main.piece .pip.on{border-color:var(--lime);background:var(--lime)}
+main.piece .pip.on::after{content:"";width:5px;height:9px;margin-top:-2px;border:solid var(--on-fill);border-width:0 2px 2px 0;transform:rotate(45deg)}
+main.piece .pip-item{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+main.piece .pip-caption{font-size:13px;line-height:1.3;color:var(--muted)}
+
+/* Motion: one short pop or slide after a confirmed clean answer, never looping */
+@keyframes hud-pip-pop{0%{transform:scale(.6)}60%{transform:scale(1.35)}100%{transform:scale(1)}}
+@keyframes hud-rung-slide{from{transform:translateX(calc(-100% - var(--rung-gap,4px)))}to{transform:none}}
+main.piece .pip.pop{animation:hud-pip-pop .24s ease-out}
+main.piece .rung.now.slide{animation:hud-rung-slide .24s ease-out}
+
+/* NEXT TAKE and LAST TAKE */
+main.piece .loop-panel{display:grid;gap:8px;margin:14px 0}
+main.piece .next-take{display:grid;grid-template-columns:minmax(0,1fr);justify-items:start;gap:3px;padding:10px 14px 12px;border:1px solid var(--line);border-radius:14px;background:var(--raised)}
+main.piece .loop-label{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}
+main.piece .next-text{margin:0;font-size:17px;line-height:1.4;color:var(--ink);overflow-wrap:anywhere}
+main.piece .next-muted{margin:0;font-size:13px;line-height:1.4;color:var(--muted);overflow-wrap:anywhere}
+main.piece .next-text:empty,main.piece .next-muted:empty{display:none}
+main.piece .next-action{min-height:44px;margin-top:6px;padding:0 16px;border:1px solid var(--outline);border-radius:12px;background:var(--card);font-size:15px;font-weight:600;color:var(--ink)}
+main.piece .next-action:hover:not(:disabled){background:#2a382f}
+main.piece .last-take{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;padding:7px 12px;border:1px solid var(--line);border-radius:12px;background:var(--raised);font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+main.piece .last-take.stale{opacity:.75}
+
+/* Result card: the score, the bar with its marks, then the answer buttons with what each does */
+main.piece .take-score{margin:0 0 4px}
+main.piece .score-head{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:2px 14px}
+main.piece .score-head:not(.scored){display:block}
+main.piece .score-num{display:block;font-size:24px;font-weight:700;line-height:1.2;color:var(--amber)}
+main.piece .score-head.scored .score-num{font-size:56px;line-height:1;font-variant-numeric:tabular-nums;color:var(--lime)}
+main.piece .score-why{margin:2px 0 0;font-size:15px;line-height:1.4;overflow-wrap:anywhere}
+main.piece .score-meta{display:grid;gap:2px;min-width:0}
+main.piece .score-label{margin:0;font-size:13px;line-height:1.35;color:var(--muted)}
+main.piece .score-est{font-style:italic;color:var(--muted)}
+main.piece .score-split{margin:0;font-size:15px;line-height:1.35}
+main.piece .lower{font-weight:700;text-decoration:underline;text-decoration-color:var(--lime);text-decoration-thickness:2px;text-underline-offset:3px}
+main.piece .score-bar{position:relative;height:11px;margin-top:10px;border-radius:6px;background:var(--raised);box-shadow:inset 0 0 0 1px var(--outline)}
+main.piece .score-fill{position:absolute;top:0;bottom:0;left:0;border-radius:6px;background:var(--lime)}
+main.piece .score-tick{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:var(--ink);box-shadow:0 0 0 1px var(--bg)}
+main.piece .score-tick.clean{background:var(--gold)}
+main.piece .score-ticks{position:relative;height:18px;margin-top:5px;font-size:12px;line-height:18px;color:var(--muted)}
+main.piece .score-ticks span{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
+main.piece .score-rule{margin:0;font-size:13px;font-weight:600;color:var(--gold);text-align:right}
+main.piece .comfort-ask{margin:14px 0 8px;font-size:16px;font-weight:600;line-height:1.35;color:var(--ink)}
+main.piece .comfort-default{margin-left:6px;font-size:13px;font-weight:400;color:var(--muted)}
+main.piece #piece-result .comfort-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;margin:0 0 10px}
+main.piece #piece-result .comfort-actions button{width:100%;min-height:48px;padding:6px 8px;border:1px solid var(--outline);border-radius:12px;background:var(--raised);font-size:15px;font-weight:600;line-height:1.25;color:var(--ink);text-align:center;overflow-wrap:anywhere}
+main.piece #piece-result .comfort-actions button:hover:not(:disabled){background:#2a382f}
+main.piece #piece-result .comfort-actions button.primary{border-color:var(--lime);background:var(--lime);color:var(--on-fill)}
+main.piece #piece-result .comfort-actions button.primary:hover:not(:disabled){background:#d6e4b8}
+main.piece .comfort-actions kbd{padding:1px 6px;font-size:12px;border-radius:4px}
+main.piece .kbd-or{font-size:12px}
+main.piece .comfort-note{margin:0;font-size:13px;line-height:1.35;color:var(--muted);overflow-wrap:anywhere}
+
+@media(max-width:700px){main.piece .trainer-header h1{font-size:22px}main.piece .hud-passage h2{font-size:24px}main.piece .welcome-card{font-size:12px}}
+@media(min-width:701px){main.piece .next-text{font-size:19px}main.piece .score-head.scored .score-num{font-size:64px}}
+@media(max-height:699px){main.piece #piece-bpm{font-size:72px}}
+@media(max-width:399px){main.piece .ladder{--rung-gap:2px}}
+@media(max-width:383px){main.piece .ladder{display:grid;grid-template-columns:repeat(4,minmax(44px,1fr));row-gap:10px}main.piece .rung.now.slide{animation:none}}
+@media(prefers-reduced-motion:reduce){main.piece .pip.pop,main.piece .rung.now.slide{animation:none}}

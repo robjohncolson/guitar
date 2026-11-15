@@ -78,6 +78,13 @@ it('keeps bests and deltas from trusted takes only, and leads with what improved
   expect(Object.keys(store).sort()).toEqual(['b', 'c']);
 });
 
+it('prints take percentages rounded down and compares them on the same rounding', () => {
+  const before = { score: 0.894, tight: 40, last: 0.894, memory: false, date: 1 }, facts = (score: number, timing: number) => ({ score, timing, support: 0, date: 2 });
+  expect(compareTake(before, facts(0.899, 0.899), true).wins).toEqual([]);
+  expect(compareTake(before, facts(0.903, 0.907), true).wins).toEqual(['New best at this tempo: 90% (was 89%).', '+1% on time versus your last take.']);
+  expect(compareTake(undefined, facts(0.899, 0.899), true).wins).toEqual(['First counted take at this tempo: 89%.']);
+});
+
 it('saves bests inside the piece progress and still loads old saves without them', () => {
   const old = parsePieceProgress(JSON.stringify({ version: 1, units: {}, history: [] }));
   expect(old.bests).toEqual({});
