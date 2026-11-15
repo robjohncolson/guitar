@@ -361,6 +361,7 @@ async function start(kind: 'practice' | 'demo', place?: number): Promise<void> {
   const { mine, auto } = kind === 'practice' ? reachSplit(exercise) : { mine: exercise, auto: [] };
   autoKeys = new Set(auto.flatMap(e => e.notes.map(n => noteKey(e.beat, n.midi))));
   if (kind === 'practice') placing = place;
+  audio.offsetLatency = progress.latency;
   await audio.start(mine, spot ? spot.id : unit.id, place !== undefined ? rungBpm(unit, { ...current(), rung: place }) : bpmNow(), kind, spot || place !== undefined ? 0 : current().support, progress.offset, demonstrate, kind === 'practice' ? [...otherPart(), ...auto] : []);
   if (kind === 'demo' || demonstrate) heard.add(unit.id);
   if (!usingKeys() && audio.deviceKey && progress.calibrated && progress.calibrationKey && progress.calibrationKey !== audio.deviceKey) { progress.calibrated = false; el('piece-calibration-feedback').textContent = 'The audio path changed. Recalibrate to count tempo steps.'; say('path-changed'); persist(); }
@@ -511,7 +512,7 @@ function endMoment(startNext: boolean): void {
 }
 audio.onCalibration = result => {
   el('piece-calibration-feedback').textContent = result.message; say('calibration', { ok: result.ok, message: result.message });
-  if (result.ok) { progress.offset = result.offset; progress.calibrated = true; progress.calibrationKey = audio.deviceKey; el<HTMLInputElement>('piece-offset').value = String(Math.round(result.offset * 1000)); persist(); }
+  if (result.ok) { progress.offset = result.offset; progress.latency = result.latency; progress.calibrated = true; progress.calibrationKey = audio.deviceKey; el<HTMLInputElement>('piece-offset').value = String(Math.round(result.offset * 1000)); persist(); }
 };
 /** A placement take's answer: placed moves the step (and its one-hand steps) and records the take as clean; otherwise nothing is recorded. */
 function placeTake(u: Unit, done: NonNullable<typeof pending>, comfortable: boolean): AdvanceEvent {
@@ -856,7 +857,7 @@ el('piece-use-offset').onclick = () => {
   if (active()) return;
   const v = el<HTMLInputElement>('piece-offset').valueAsNumber;
   if (!Number.isFinite(v) || v < -300 || v > 500) { el('piece-calibration-feedback').textContent = 'Enter an offset between -300 and 500 ms.'; return; }
-  progress.offset = v / 1000; progress.calibrated = true; progress.calibrationKey = audio.deviceKey; persist(); el('piece-calibration-feedback').textContent = `Using your manual ${v} ms offset.`;
+  progress.offset = v / 1000; progress.latency = undefined; progress.calibrated = true; progress.calibrationKey = audio.deviceKey; persist(); el('piece-calibration-feedback').textContent = `Using your manual ${v} ms offset.`;
 };
 el('piece-calibrate').onclick = () => { if (active()) return; const dropped = Boolean(pending); closeOverlays(); player.pause(); endReveal(); endMoment(false); pending = undefined; if (dropped) el('piece-result').hidden = true; progress.calibrated = false; persist(); say('calibrating', { dropped }); void audio.start(exercise, 'calibration', 60, 'calibration'); };
 el<HTMLInputElement>('piece-file').onchange = async () => {
@@ -1006,7 +1007,7 @@ function paint(): void {
   text('piece-piano-status', { '': '', loading: 'Loading piano…', failed: 'Grand piano could not load; using the simple piano.' }[audio.pianoStatus]);
   text('piece-mic', usingKeys() ? `Keys${keyInput.midiDevices ? ' · MIDI' : ''} · mic off` : audio.busy ? audio.analysis ? 'Mic off · listening back' : 'Preparing audio' : audio.micActive ? `Mic listening${audio.level > 0.9 ? ' · too loud' : ''}` : 'Mic off');
   text('piece-model', instrument === 'guitar' && exercise.events.some(e => e.grade === 'pitch') ? (audio.model === 'not needed' ? 'CREPE loads for plucked-note checks' : audio.model) : 'Piano listening: on this device');
-  text('piece-calibration', usingKeys() ? 'Key timing needs no calibration' : progress.calibrated ? `Timing offset ${Math.round(progress.offset * 1000)} ms` : 'Timing not calibrated');
+  text('piece-calibration', usingKeys() ? 'Key timing needs no calibration' : progress.calibrated ? `Timing offset ${Math.round(progress.offset * 1000)} ms${progress.latency !== undefined ? ` · output delay ${Math.round(progress.latency * 1000)} ms when measured${audio.latencyNow ? `, ${Math.round(audio.latencyNow * 1000)} ms now` : ''}` : ''}` : 'Timing not calibrated');
   const attention = !usingKeys() && !progress.calibrated; if (shown.get('attention') !== String(attention)) { shown.set('attention', String(attention)); el('piece-calibration').classList.toggle('needs-attention', attention); }
   text('piece-setup-hint', progress.calibrated ? '· calibrated' : '· start here for tempo steps');
   const rung = rungBpm(unit, p);

@@ -31,6 +31,10 @@ export class PieceAudio {
   context?: AudioContext;
   error = ''; busy = false; analysis = ''; level = 0; model = 'not needed';
   plan?: PiecePlan; take?: PieceTake; previous?: PieceTake;
+  /** The output latency at calibration (see progress.latency), or undefined for a manual or older offset. */
+  offsetLatency: number | undefined;
+  /** The output latency the browser reports now, in seconds (0 before audio starts). */
+  get latencyNow(): number { return this.context ? outputDelay(this.context) : 0; }
   mode: OutputMode = 'headphones'; volume = 0.5; click = true; deviceKey = ''; checkPitch = true;
   /** mic: listen to an acoustic instrument. keys: grade the computer keyboard or MIDI presses; no microphone. */
   input: 'mic' | 'keys' = 'mic';
@@ -145,7 +149,10 @@ export class PieceAudio {
       const keys = kind === 'practice' && this.input === 'keys' && exercise.instrument === 'piano';
       if (kind !== 'demo' && !keys && !await this.microphone(generation, kind === 'calibration')) return;
       this.plan = planExercise(exercise, bpm, this.now + outputDelay(this.context), kind, support, demonstrate, backing);
-      this.current = { exercise, unit, bpm, offset }; this.index = 0; this.lastTick = this.now; this.interrupted = false; this.why = '';
+      // The calibrated offset is the round trip minus the output latency reported then; browsers (Android Chrome in
+      // particular) revise that figure, so re-base it on the latency reported now or every attack shifts by the change.
+      const rebased = this.offsetLatency === undefined ? offset : offset + this.offsetLatency - outputDelay(this.context);
+      this.current = { exercise, unit, bpm, offset: rebased }; this.index = 0; this.lastTick = this.now; this.interrupted = false; this.why = '';
       if (keys) this.presses = [];
       else if (kind !== 'demo') {
         const plan = this.plan, rate = this.context.sampleRate, from = plan.playAt - (kind === 'calibration' ? 0.25 : 0.5), until = plan.end + 0.75;

@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { Unit } from '../src/piece/curriculum';
 import { advanceUnit, DAY, initialUnit, parsePieceProgress, progressId, type UnitProgress } from '../src/piece/progress';
 
@@ -90,4 +90,12 @@ it('carries a pending clean or needs-more-room take across midnight', () => {
   const eased = nextDay(take(start, 0.95, false).progress, 0.95, false);
   expect(eased.progress).toMatchObject({ rung: 1, hard: 0 });
   expect(eased.event.kind).toBe('step-down');
+});
+
+describe('calibration latency', () => {
+  it('keeps the output latency measured with the offset, and drops a bad one', () => {
+    expect(parsePieceProgress(JSON.stringify({ version: 1, offset: 0.12, calibrated: true, latency: 0.045 })).latency).toBe(0.045);
+    expect(parsePieceProgress(JSON.stringify({ version: 1, offset: 0.12, calibrated: true, latency: 5 })).latency).toBe(1);
+    expect(parsePieceProgress(JSON.stringify({ version: 1, offset: 0.12, calibrated: true })).latency).toBeUndefined();
+  });
 });

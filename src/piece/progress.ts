@@ -15,6 +15,8 @@ export interface TodayPlan { day: string; rows: { id: string; reason: string; sl
 export interface PieceProgress {
   version: 1; units: Record<string, UnitProgress>; goals: Record<string, number>; history: PieceTake[];
   offset: number; calibrated: boolean; calibrationKey: string; auto: boolean; checkPitch: boolean;
+  /** The output latency the browser reported when the offset was measured; a take re-bases the offset on the latency it reports then. */
+  latency?: number;
   selected: { piece: string; unit: string; instrument: 'piano' | 'guitar' };
   /** Personal bests per step, tempo and input (see bests.ts). Trusted takes only. */
   bests: Record<string, TakeBest>;
@@ -39,7 +41,7 @@ export function parsePieceProgress(raw: string | null, fallbackCalibration?: { o
   try {
     const value = JSON.parse(raw ?? '{}');
     if (!value || value.version !== 1) return result;
-    result.offset = bounded(value.offset, -0.3, 0.5, 0); result.calibrated = value.calibrated === true; result.auto = value.auto !== false; result.checkPitch = value.checkPitch !== false;
+    result.offset = bounded(value.offset, -0.3, 0.5, 0); if (typeof value.latency === 'number') result.latency = bounded(value.latency, 0, 1, 0); result.calibrated = value.calibrated === true; result.auto = value.auto !== false; result.checkPitch = value.checkPitch !== false;
     result.calibrationKey = typeof value.calibrationKey === 'string' && value.calibrationKey.length < 300 ? value.calibrationKey : '';
     if (value.selected && typeof value.selected === 'object') result.selected = { piece: String(value.selected.piece ?? '').slice(0, 120), unit: String(value.selected.unit ?? '').slice(0, 160), instrument: value.selected.instrument === 'guitar' ? 'guitar' : 'piano' };
     for (const [id, g] of Object.entries(value.goals ?? {})) if (id.length < 120) result.goals[id] = Math.round(bounded(g, 20, 240, 60));

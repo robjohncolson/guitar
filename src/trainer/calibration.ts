@@ -13,7 +13,8 @@ export function pipOnsets(samples:Float32Array,rate:number):number[] {
   for(const value of values) if(value.power>=peak*.25 && value.t-previous>.2) {result.push(value.t-.004);previous=value.t;}
   return result;
 }
-export interface Calibration { ok:boolean; offset:number; spread:number; matched:number; message:string }
+/** latency: the output latency the browser reported while measuring; offset is the round trip minus it. */
+export interface Calibration { ok:boolean; offset:number; spread:number; matched:number; message:string; latency:number }
 /** Uses app-generated sound, never the player's tendency to play early/late. */
 export function calibrate(expected:number[],observed:number[],outputLatency:number):Calibration {
   let best:number[]=[];
@@ -34,5 +35,5 @@ export function calibrate(expected:number[],observed:number[],outputLatency:numb
     : best.length<6 ? `Heard ${best.length} of ${expected.length} clicks clearly. Turn the volume up or hold an earcup near the microphone, keep the instrument quiet, and try again.`
     : offset<-.3 || offset>.5 ? `The clicks arrived ${Math.round(offset*1000)} ms late, too late to measure (Bluetooth headphones?). Use the speaker or wired headphones and try again.`
     : `The clicks arrived unevenly (${Math.round(spread*1000)} ms apart). Keep the room and the instrument quiet and try again.`;
-  return {ok,offset:ok ? offset : 0,spread,matched:best.length,message:ok ? `Timing measured from ${best.length} clicks. Input offset ${Math.round(offset*1000)} ms.` : why};
+  return {ok,offset:ok ? offset : 0,spread,matched:best.length,latency:outputLatency,message:ok ? `Timing measured from ${best.length} clicks. Input offset ${Math.round(offset*1000)} ms.` : why};
 }
