@@ -23,9 +23,12 @@ const pct = (p: UnitProgress | undefined) => (p?.attempts ? `${Math.round(reache
 
 export function pieceMap(score: Score, units: Unit[], get: Get, now: number, instrument: 'piano' | 'guitar', current?: string): { headline: string; html: string } {
   const byId = new Map(units.map(u => [u.id, u])), resolve = (u: Unit) => (u.sameAs ? byId.get(u.sameAs) ?? u : u);
+  const pieceGuitar = instrument === 'guitar' && units.some(u => u.id.startsWith('gp-'));
   const lanes: Lane[] = instrument === 'piano'
     ? [{ label: 'Left hand', short: 'L', match: u => u.kind === 'hand' && u.hands.join('') === 'L' }, { label: 'Right hand', short: 'R', match: u => u.kind === 'hand' && u.hands.join('') === 'R' }, { label: 'Hands together', short: 'LR', match: u => u.kind === 'together' }]
-    : [{ label: 'Accompaniment (timing only)', short: 'G', match: u => u.kind === 'section' }];
+    : pieceGuitar
+      ? [{ label: 'Melody', short: 'M', match: u => u.kind === 'hand' && u.hands.join('') === 'R' }, { label: 'Bass and chords', short: 'B', match: u => u.kind === 'hand' && u.hands.join('') === 'L' }, { label: 'Together', short: 'T', match: u => u.kind === 'together' }]
+      : [{ label: 'Accompaniment (timing only)', short: 'G', match: u => u.kind === 'section' }];
   const cell = (u: Unit | undefined, label: string) => {
     if (!u) return `<span class="map-cell none" aria-hidden="true"></span>`;
     const r = resolve(u), p = get(r.id), state = unitState(r, p, now), due = state === 'due';
@@ -41,7 +44,9 @@ export function pieceMap(score: Score, units: Unit[], get: Get, now: number, ins
   }).join('');
   const strips: [string, (u: Unit) => boolean][] = instrument === 'piano'
     ? [['Chords', u => u.kind === 'chord'], ['Changes', u => u.kind === 'change'], ['Joins', u => u.kind === 'seam'], ['Run-throughs', u => u.kind === 'section' || u.kind === 'performance']]
-    : [['Shapes', u => u.kind === 'chord'], ['Changes', u => u.kind === 'change'], ['Pattern', u => u.kind === 'hand'], ['Whole piece', u => u.kind === 'performance']];
+    : pieceGuitar
+      ? [['Figures', u => u.kind === 'chord'], ['Changes', u => u.kind === 'change'], ['Joins', u => u.kind === 'seam'], ['Run-throughs', u => u.kind === 'section' || u.kind === 'performance']]
+      : [['Shapes', u => u.kind === 'chord'], ['Changes', u => u.kind === 'change'], ['Pattern', u => u.kind === 'hand'], ['Whole piece', u => u.kind === 'performance']];
   const stripHtml = strips.map(([name, match]) => {
     const members = units.filter(u => match(u) && !u.sameAs);
     return members.length ? `<div class="map-strip"><span class="map-strip-name">${name}</span><span class="map-cells">${members.map(u => cell(u, name.replace(/s$/, ''))).join('')}</span></div>` : '';
@@ -54,6 +59,7 @@ export function pieceMap(score: Score, units: Unit[], get: Get, now: number, ins
   const headline = `${atGoal} of ${counted.length} bars at goal tempo${instrument === 'piano' ? ' hands together' : ''}${started > atGoal ? ` · ${started} started` : ''}${due ? ` · ${due} review${due > 1 ? 's' : ''} due` : ''}`;
   const legend = `<div class="map-legend"><span><i class="map-cell new"></i>not started</span><span><i class="map-cell begun"></i>started</span><span><i class="map-cell low"></i>50–70%</span><span><i class="map-cell mid"></i>80–94%</span><span><i class="map-cell goal"></i>goal tempo</span><span><i class="map-cell new due"></i>review due</span></div>`;
   const note = instrument === 'piano' ? '<p class="muted map-note">Colour is the fastest tempo step reached. One hand alone stops at 80%; hands together goes on to the goal tempo. Choose a cell to practise that step.</p>'
-    : '<p class="muted map-note">Colour is the fastest tempo step reached. Guitar takes check timing only. Choose a cell to practise that step.</p>';
+    : pieceGuitar ? '<p class="muted map-note">Colour is the fastest tempo step reached. Melody and bass stop at 80%; together goes on to the goal tempo. A single string is checked for pitch. Choose a cell to practise that step.</p>'
+      : '<p class="muted map-note">Colour is the fastest tempo step reached. Guitar takes check timing only. Choose a cell to practise that step.</p>';
   return { headline, html: `<div class="map-sections">${blocks}</div>${stripHtml}${legend}${note}` };
 }

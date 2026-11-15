@@ -32,6 +32,7 @@ export function planExercise(ex: Exercise, bpm: number, now: number, kind: Piece
     if (support < 2 || downbeat) sounds.push({ at: playAt + i * period, kind: 'click', length: 0.01, accent: downbeat });
     if (sub && support < 2) sounds.push({ at: playAt + (i + 0.5) * period, kind: 'click', length: 0.01, level: 0.45 });
   }
-  if (backing.length) sounds.push(...notesOf(backing, playAt, period, 'piano', 0.45));
+  const backTimbre = backing.some(e => e.notes.some(n => n.string !== undefined)) ? 'guitar' : 'piano';
+  if (backing.length) sounds.push(...notesOf(backing, playAt, period, backTimbre, 0.45));
   return { kind, start, playAt, end, finish: end + 0.7, period, support, beatsPerBar: ex.beatsPerBar, sounds: sounds.sort((a, b) => a.at - b.at) };
 }

@@ -5,6 +5,8 @@ export interface XNote {
   midi: number; hand: Hand; dur: number; finger?: number;
   /** Guitar position for the lane and chord boxes. */
   string?: number; fret?: number;
+  /** A second layer this pluck also serves: a folded melody that is already a chord tone. */
+  also?: Hand;
 }
 export interface XEvent {
   beat: number; notes: XNote[];
@@ -91,4 +93,22 @@ export function chordExercise(score: Score, bars: number[], id: string, title: s
   for (const bar of bars.length === 1 ? [bars[0], bars[0]] : bars) { addWritten(bar); addBroken(bar); }
   addWritten(bars[0]);
   return { id, title, instrument: 'piano', beatsPerBar, beats: offset, keySig: score.bars[bars[0]].key, events: toEvents(notes), bars: marks, chords };
+}
+
+/** Bar positions from..to of an exercise that was built in that bar order, keeping one layer. A pinch left with a single string is pitch-checked. */
+export function sliceExercise(ex: Exercise, from: number, to: number, hands: Hand[], id: string, title: string): Exercise {
+  const start = ex.bars[Math.max(0, from)]?.beat ?? 0, end = ex.bars[to + 1]?.beat ?? ex.beats;
+  const shift = (beat: number) => Math.round((beat - start) * 960) / 960;
+  const keep = (n: XNote) => hands.includes(n.hand) || (n.also !== undefined && hands.includes(n.also));
+  const events = ex.events.flatMap(e => {
+    if (e.beat < start - 1e-6 || e.beat >= end - 1e-6) return [];
+    const notes = e.notes.filter(keep).map(n => (hands.includes(n.hand) ? n : { ...n, hand: n.also!, also: n.hand }));
+    if (!notes.length) return [];
+    const grade: XEvent['grade'] = e.grade === 'none' ? 'none' : notes.length === 1 ? 'pitch' : 'onset';
+    return [{ ...e, beat: shift(e.beat), notes, grade: e.strum ? e.grade : grade }];
+  });
+  const bars = ex.bars.filter(b => b.beat >= start - 1e-6 && b.beat < end - 1e-6).map(b => ({ ...b, beat: shift(b.beat) }));
+  const chords = ex.chords.filter(c => c.beat >= start - 1e-6 && c.beat < end - 1e-6).map(c => ({ ...c, beat: shift(c.beat) }));
+  const shapes = ex.shapes?.filter(s => s.beat >= start - 1e-6 && s.beat < end - 1e-6).map(s => ({ ...s, beat: shift(s.beat) }));
+  return { ...ex, id, title, events, bars, chords, shapes, beats: Math.max(1e-6, end - start) };
 }

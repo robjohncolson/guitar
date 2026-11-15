@@ -67,4 +67,5 @@ export function barsText(numbers: number[]): string {
 }
 
 export const spotOffered = (instrument: 'piano' | 'guitar', unit: Unit) =>
-  instrument === 'piano' && !unit.drill && !['chord', 'listen'].includes(unit.kind) && unit.bars.length >= 2;
+  !unit.drill && !['chord', 'listen'].includes(unit.kind) && unit.bars.length >= 2
+  && (instrument === 'piano' || unit.id.startsWith('gp-'));

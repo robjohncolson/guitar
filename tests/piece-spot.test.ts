@@ -99,9 +99,11 @@ it('words bar runs', () => {
   expect(barsText([8, 1])).toBe('bars 8, 1');
 });
 
-it('offers spots only for piano passages of two or more bars', () => {
+it('offers spots for piano passages and guitar piece passages of two or more bars', () => {
   expect(spotOffered('piano', unit())).toBe(true);
   expect(spotOffered('guitar', unit())).toBe(false);
+  expect(spotOffered('guitar', unit({ id: 'gp-R:5-8' }))).toBe(true);
+  expect(spotOffered('guitar', unit({ id: 'g-shape:G' }))).toBe(false);
   expect(spotOffered('piano', unit({ kind: 'chord' }))).toBe(false);
   expect(spotOffered('piano', unit({ kind: 'listen' }))).toBe(false);
   expect(spotOffered('piano', unit({ bars: [0] }))).toBe(false);

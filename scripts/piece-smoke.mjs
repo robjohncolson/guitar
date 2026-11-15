@@ -125,8 +125,8 @@ try {
   assert.equal(p1.attempts, 1); assert.equal(p1.best, 0.5);
   await browser.screenshot('smoke-artifacts/piece-piano.png');
   // Guitar: a muted strum pattern graded by timing only, then a shape with each string's pitch checked by real CREPE.
-  await evaluate("document.getElementById('inst-guitar').click()");
-  await until("document.getElementById('inst-guitar').getAttribute('aria-pressed') === 'true'");
+  await evaluate("document.getElementById('inst-accompany').click()");
+  await until("document.getElementById('inst-accompany').getAttribute('aria-pressed') === 'true'");
   await select('g-pattern:muted', 66);
   const strums = Array.from({ length: 12 }, (_, i) => [i, [55], 0.15, 'strum']);
   await evaluate(`__piece.score = ${JSON.stringify(strums)}; __piece.period = 60 / 66`);

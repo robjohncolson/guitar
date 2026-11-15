@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { buildCurriculum, type Unit } from '../src/piece/curriculum';
 import { arrange, guitarUnits } from '../src/piece/guitar';
+import { arrangePiece, guitarPieceUnits } from '../src/piece/solo';
 import { answerLines, capNote, CLEAN_RULE, comfortAsk, firstSentence, floorPct, nextLine, nextState, outcome, routeTake, takeStatus, UNANSWERED, type LoopFlags, type NextLine, type NextState, type Outcome, type TakeFacts, type TakeRoute } from '../src/piece/loop';
 import { compile } from '../src/piece/notation';
 import { advanceUnit, DAY, dayOf, initialUnit, placeUnit, rungBpm, type UnitProgress } from '../src/piece/progress';
@@ -945,10 +946,13 @@ const pack = readFileSync(new URL('../src/piece/packs/gymnopedie-1.piece.txt', i
 const piece = compile(pack).score!, arrangement = arrange(piece);
 /** The piece's own goal tempo, 30 and 66, and 120: goals that put steps on the 20 BPM floor, or give the tempos three digits. */
 const GOALS = [...new Set([piece.tempo.bpm, 30, 66, 120])];
-const COURSES = GOALS.flatMap(goal => [
-  { name: `piano, goal ${goal}`, units: buildCurriculum(piece, goal).units },
-  { name: `guitar, goal ${goal}`, units: guitarUnits(piece, arrangement, goal) },
-]);
+const COURSES = [
+  ...GOALS.flatMap(goal => [
+    { name: `piano, goal ${goal}`, units: buildCurriculum(piece, goal).units },
+    { name: `guitar, goal ${goal}`, units: guitarUnits(piece, arrangement, goal) },
+  ]),
+  { name: 'guitar piece', units: guitarPieceUnits(piece, arrangePiece(piece), piece.tempo.bpm) },
+];
 const states = (unit: Unit): [string, Partial<UnitProgress>][] => [
   ['plain', { attempts: 3, last: now - 60_000 }],
   ['certified on an earlier day', { certified: [...unit.certify], days: [earlier], attempts: 9, last: now - DAY }],

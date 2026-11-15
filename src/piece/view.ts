@@ -50,7 +50,7 @@ export function pieceShell(): void {
       <details id="piece-map"><summary>Your piece <span id="map-count" class="muted"></span></summary><div id="map-body"></div></details>
       <details id="piece-course"><summary>Course <span id="course-count"></span></summary><p>Each step climbs a tempo ladder: 50, 60, 70, 80, 88, 94 and 100% of the goal tempo. Two clean, comfortable takes in a row (90% or better) move up one step. At 80% and 100% three takes fade the help: notes visible, then from memory, then a click only on each bar. Two needs-more-room takes in a row (under 65%, or answered "Needs more room") step down. Hands together, joins and sections open as their parts reach the tempo they need.</p><div id="course-list"></div></details>
       <details id="piece-setup" class="piece-setup"><summary>Piece &amp; input <span id="piece-setup-summary" class="muted">Piano · Microphone</span></summary>
-        <div class="piece-controls"><label>Piece <select id="piece-select"></select></label><div class="instrument-toggle" role="group" aria-label="Instrument"><button id="inst-piano" aria-pressed="true">Piano</button><button id="inst-guitar" aria-pressed="false">Guitar accompaniment</button></div><div class="instrument-toggle" id="input-toggle" role="group" aria-label="Play with"><button id="input-mic" aria-pressed="true">Microphone</button><button id="input-keys" aria-pressed="false">Keyboard · MIDI</button></div><label class="inline-check"><input type="checkbox" id="piece-backing"> <span id="piece-backing-label">Play the other hand with me</span></label></div>
+        <div class="piece-controls"><label>Piece <select id="piece-select"></select></label><div class="instrument-toggle" role="group" aria-label="Instrument"><button id="inst-piano" aria-pressed="true">Piano</button><button id="inst-guitar" aria-pressed="false">Guitar</button><button id="inst-accompany" aria-pressed="false">Accompany</button></div><div class="instrument-toggle" id="input-toggle" role="group" aria-label="Play with"><button id="input-mic" aria-pressed="true">Microphone</button><button id="input-keys" aria-pressed="false">Keyboard · MIDI</button></div><label class="inline-check"><input type="checkbox" id="piece-backing"> <span id="piece-backing-label">Play the other hand with me</span></label></div>
       </details>
       <details id="piece-settings"><summary>Sound &amp; timing <span id="piece-setup-hint"></span></summary>
         <div class="trainer-status"><span id="piece-mic">Mic off</span><span id="piece-model"></span><span id="piece-calibration">Timing not calibrated</span><span id="piece-verified"></span></div>
@@ -64,7 +64,7 @@ export function pieceShell(): void {
         <label><input id="piece-midi-sound" type="checkbox" checked> Sound for MIDI keys (turn off if your keyboard makes its own sound)</label>
         <label><input id="piece-check-pitch" type="checkbox" checked> Piano note checks (turn off for a piano far out of tune)</label>
         <div class="calibration"><p><strong>Measure your sound delay</strong></p><p>Keep the instrument quiet. Hold one headphone earcup close to the microphone so it can hear eight short clicks.</p><button id="piece-calibrate">Calibrate with 8 clicks</button><p id="piece-calibration-feedback" role="status">Practice works without it; calibration lets tempo steps count.</p><label for="piece-offset">Manual input offset (ms)</label><div class="offset-row"><input id="piece-offset" type="number" min="-300" max="500" step="1" value="0"><button id="piece-use-offset">Use this offset</button></div></div>
-        <div class="honesty"><p><strong>What the microphone can and cannot tell</strong></p><p>Timing comes from each attack. For piano, a note counts as <em>heard</em> only when its own partials rise at the attack; <em>not heard</em> needs them to stay quiet. Notes doubled an octave or a twelfth above another note have no partials of their own: <em>can't check</em>. Everything else is <em>unclear</em> and counts neither way. Tested on real piano recordings, a played note was called missing or wrong about 2% of the time and an unplayed note was confirmed under 1% of the time. Your room and piano may differ; listen back to your takes.</p><p>For guitar, single plucked strings are checked for pitch; strums are timing only. Fingering, hand position, pedalling, tone and which strings rang stay for you to judge.</p></div>
+        <div class="honesty"><p><strong>What the microphone can and cannot tell</strong></p><p>Timing comes from each attack. For piano, a note counts as <em>heard</em> only when its own partials rise at the attack; <em>not heard</em> needs them to stay quiet. Notes doubled an octave or a twelfth above another note have no partials of their own: <em>can't check</em>. Everything else is <em>unclear</em> and counts neither way. Tested on real piano recordings, a played note was called missing or wrong about 2% of the time and an unplayed note was confirmed under 1% of the time. Your room and piano may differ; listen back to your takes.</p><p>For guitar, a single plucked string is checked for pitch; two or more strings at once, and strums, are timing only. Fingering, hand position, pedalling, tone and which strings rang stay for you to judge.</p></div>
       </details>
       <details id="piece-about"><summary>About this piece</summary><p id="piece-summary" class="intro"></p><div id="piece-about-body"></div><button id="piece-listen">Hear the whole piece</button></details>
       <details id="piece-add"><summary>Add your own piece</summary><p>Pieces are plain-text files (<code>.piece.txt</code>). Give a PDF or photo of sheet music to your AI assistant with <code>PIECES.md</code> from this project; it writes the file and checks it twice. Open it here: it stays in this browser${import.meta.env.VITE_ACCOUNTS !== 'off' ? ' unless you are signed in and choose <em>Save to my account</em> (private to you)' : ' and is never uploaded'}.</p><input type="file" id="piece-file" accept=".txt,text/plain"><div id="piece-file-report" role="status"></div><div id="piece-local-list"></div><div id="piece-account-list"></div></details>
@@ -182,7 +182,6 @@ function drawLight2d(p: CanvasRenderingContext2D, f: LightFrame): void {
 }
 // The light is drawn by a WebGL overlay when one can be made, else by drawLight2d; never both in one frame.
 let layer: LightLayer | undefined, layerTried = false, lastLight: LightFrame | undefined;
-const EMPTY_LIGHT: LightFrame = newFrame();
 // One frame, one input and a pool of judged-key entries, reused every frame so the lane allocates nothing for its light.
 const frame = newFrame(), lightIn: LightInput = { now: 0, lively: false, quiet: false, inTake: false, w: 0, hitY: 0, effects: [], bursts: [], warm: 0, haze: 0, pulse: 0 };
 /** Development check: which backend drew the last frame and how much light it held. */
@@ -438,11 +437,19 @@ function pillBox(p: CanvasRenderingContext2D, message: string, w: number, small:
   return { x: w / 2 - tw / 2, y: 10, w: tw, h: small ? 28 : 32 };
 }
 
-/** Guitar: thin string on top, fret numbers on the strings, strums as a bracket with its direction. */
-export function drawStrings(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePlan | undefined, now: number, support: number, result: PieceGrade | undefined, reduced: boolean, hideWhilePlaying: boolean, reveal?: number, lively = !reduced): void {
+/** Guitar: thin string on top, fret numbers on the strings, strums as a bracket with its direction. Bass is blue, melody green, until a verdict replaces the colour. */
+export function drawStrings(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePlan | undefined, now: number, support: number, result: PieceGrade | undefined, reduced: boolean, hideWhilePlaying: boolean, reveal?: number, lively = !reduced, quiet = false): void {
+  look = { lively: lively && !reduced, quiet };
+  if (!layerTried) {
+    layerTried = true;
+    const mode = new URLSearchParams(location.search).get('light');
+    if (mode !== '2d') layer = glLight(canvas.parentElement!, () => { if (layer) layer.canvas.hidden = true; layer = undefined; }, mode === 'gl');
+  }
+  const gl = layer?.ready() ? layer : undefined;
   const w = Math.max(280, Math.round(widthOf(canvas))), small = w < 600, height = laneTall ?? (small ? 230 : 300), p = prepare(canvas, height);
-  // The guitar lane has no light: clear anything left from the keys lane.
-  bursts.length = 0; lastLight = EMPTY_LIGHT; layer?.draw(EMPTY_LIGHT, w, height);
+  const clock = performance.now();
+  // Sparks land in the lane. The light's clip is the whole canvas: there is no keyboard under it to hide them.
+  lastLane = { w, hitY: height * 0.62 };
   const row = (height - 70) / 6, yOf = (string: number) => 40 + (string - 1) * row, hit = small ? 80 : 150, scale = small ? 70 : 120;
   const { beat, moving, playing } = position(ex, plan, now), origin = moving && !reduced ? beat : 0;
   const xOf = (b: number) => (moving && !reduced ? hit : 70) + (b - origin) * (moving && !reduced ? scale : (w - 90) / Math.max(4, Math.min(ex.beats, small ? 6 : 12)));
@@ -452,25 +459,38 @@ export function drawStrings(canvas: HTMLCanvasElement, ex: Exercise, plan: Piece
   for (const bar of ex.bars) { const x = xOf(bar.beat); if (x < 55 || x > w - 10) continue; p.strokeStyle = '#3d4c3f'; p.beginPath(); p.moveTo(x, 26); p.lineTo(x, height - 22); p.stroke(); }
   for (const c of ex.chords) { const x = xOf(c.beat); if (x < 55 || x > w - 30) continue; p.fillStyle = '#c8d8a7'; p.font = 'bold 13px Segoe UI'; p.fillText(c.symbol, x + 4, 14); p.font = '12px Segoe UI'; }
   const marks = result ? new Map(result.events.filter(e => reveal === undefined || e.beat <= reveal).map(e => [ex.events[e.index]?.beat, e.mark])) : undefined;
+  if (reveal === undefined || reveal < revealed) revealed = -Infinity;
   if (!(hideWhilePlaying && playing)) for (const e of ex.events) {
     const x = xOf(e.beat); if (x < 55 || x > w - 12) continue;
-    const mark = marks?.get(e.beat), colour = mark ? (mark === 'good' ? '#c8d8a7' : mark === 'unsure' ? '#9ea79b' : '#e1ad88') : '#c8d8a7';
+    const mark = marks?.get(e.beat), markColour = mark === 'good' ? '#c8d8a7' : mark === 'unsure' ? '#9ea79b' : mark ? '#e1ad88' : undefined, bracket = markColour ?? '#c8d8a7';
     if (e.strum || e.notes.length > 1) {
       const ys = e.notes.map(n => yOf(n.string ?? 1)), top = Math.min(...ys) - 9, bottom = Math.max(...ys) + 9;
-      p.strokeStyle = colour; p.lineWidth = 3; p.beginPath(); p.moveTo(x, top); p.lineTo(x, bottom); p.stroke(); p.lineWidth = 1;
-      if (e.strum) { p.fillStyle = colour; p.beginPath(); const tip = e.strum === 'D' ? bottom + 7 : top - 7; p.moveTo(x - 6, e.strum === 'D' ? bottom : top); p.lineTo(x + 6, e.strum === 'D' ? bottom : top); p.lineTo(x, tip); p.fill(); }
+      p.strokeStyle = bracket; p.lineWidth = 3; p.beginPath(); p.moveTo(x, top); p.lineTo(x, bottom); p.stroke(); p.lineWidth = 1;
+      if (e.strum) { p.fillStyle = bracket; p.beginPath(); const tip = e.strum === 'D' ? bottom + 7 : top - 7; p.moveTo(x - 6, e.strum === 'D' ? bottom : top); p.lineTo(x + 6, e.strum === 'D' ? bottom : top); p.lineTo(x, tip); p.fill(); }
     }
     for (const n of e.notes) {
       const y = yOf(n.string ?? 1);
-      p.fillStyle = colour; p.beginPath(); p.arc(x, y, small ? 9 : 11, 0, Math.PI * 2); p.fill();
+      p.fillStyle = markColour ?? HAND[n.hand]; p.beginPath(); p.arc(x, y, small ? 9 : 11, 0, Math.PI * 2); p.fill();
       p.fillStyle = '#172018'; p.font = `bold ${small ? 11 : 12}px Segoe UI`; p.textAlign = 'center'; p.fillText(String(n.fret ?? 0), x, y); p.textAlign = 'left'; p.font = '12px Segoe UI';
     }
+    const lead = e.notes[0];
+    if (look.lively && !quiet && mark === 'good' && reveal !== undefined && e.beat > revealed && e.beat <= reveal && lead) bursts.push(revealBurst(clock, x, small ? 18 : 22, yOf(lead.string ?? 1), rgbOf(HAND[lead.hand])));
     if (e.label && !small) { p.fillStyle = '#91a48d'; p.font = '10px Segoe UI'; p.fillText(e.label, x - 8, height - 12); p.font = '12px Segoe UI'; }
   }
+  if (reveal !== undefined) revealed = reveal;
   if (hideWhilePlaying && playing) { p.fillStyle = '#c8d8a7'; p.font = `${small ? 15 : 20}px Segoe UI`; p.textAlign = 'center'; p.fillText(support >= 2 ? 'Carry the pulse.' : 'You know the pattern.', w * 0.6, height / 2); p.textAlign = 'left'; }
   if (moving && !reduced) { p.strokeStyle = '#d8e4c5'; p.lineWidth = 2; p.beginPath(); p.moveTo(hit, 26); p.lineTo(hit, height - 22); p.stroke(); p.lineWidth = 1; }
   if (ex.capo) { p.fillStyle = '#e1c48f'; p.font = '11px Segoe UI'; p.fillText(`Capo ${ex.capo}`, w - 70, height - 10); }
-  drawMoment(p, w, height, small, lively && !reduced);
+  if (!look.lively) bursts.length = 0;
+  pruneBursts(bursts, clock);
+  const li = lightIn;
+  li.now = clock; li.lively = look.lively; li.quiet = quiet; li.inTake = Boolean(plan); li.w = w; li.hitY = height;
+  lightFx.length = 0; li.effects = lightFx; li.bursts = bursts; li.warm = 0; li.haze = 0; li.pulse = 0; li.sweepY = undefined;
+  lightFrame(li, frame);
+  lastLight = frame;
+  if (!gl) drawLight2d(p, frame);
+  drawMoment(p, w, height, small, look.lively);
+  if (gl) { if (momentBox) frame.keepOut.push(momentBox); gl.draw(frame, w, height); }
 }
 
 /** A chord box: strings low E to high E left to right, nut at the top, finger numbers in the dots. */
