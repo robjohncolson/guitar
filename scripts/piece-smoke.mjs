@@ -81,9 +81,14 @@ try {
   const select = async (id, bpm) => {
     await evaluate(`document.querySelector('[data-unit="${id}"]').click()`);
     if (bpm) await evaluate(`{ const b = document.getElementById('piece-bpm'); b.value = '${bpm}'; b.dispatchEvent(new Event('input')); }`);
-    // Hear it once (then stop) so the next take starts with the count-in, not a demonstration.
-    await evaluate("document.getElementById('piece-demo').click()"); await pause(400); await evaluate("document.getElementById('piece-stop').click()");
-    await until("!document.getElementById('piece-start').disabled");
+    // Hear it once (then stop) so the next take starts with the count-in, not a demonstration. The first Hear it can leave the page
+    // unpainted for a moment (the piano recordings decode and the lane draws its first frames), so wait until the page shows it is
+    // playing before pressing Stop, then until it is idle again.
+    await evaluate("document.getElementById('piece-demo').click()");
+    await until("!document.getElementById('piece-stop').disabled");
+    await evaluate("document.getElementById('piece-stop').click()");
+    await until("document.getElementById('piece-stop').disabled && !document.getElementById('piece-start').disabled");
+    await pause(1000);
   };
   await select('L:1-4', 66);
   await evaluate(`__piece.score = ${JSON.stringify(intro)}; __piece.period = 60 / 66`);
@@ -94,7 +99,8 @@ try {
   assert.equal(verdicts.filter(v => v === 'wrong' || v === 'not-heard').length, 0, 'A played note was accused');
   assert.ok(verdicts.filter(v => v === 'heard').length >= 10);
   await evaluate("document.getElementById('piece-comfortable').click()");
-  await until("/Free tempo/.test(document.getElementById('piece-feedback').textContent)");
+  // A take at a free tempo is answered but never moves the ladder: LAST TAKE says it was not counted.
+  await until("/Not counted · free tempo/.test(document.getElementById('piece-last-text').textContent)");
   await halt();
   const wrong = await take('wrong');
   const target = wrong.result.events.find(e => e.beat === 10).notes.find(n => n.midi === 61);
@@ -137,8 +143,13 @@ try {
   assert.equal(plucks.filter(n => n.verdict === 'wrong').length, 0);
   await browser.screenshot('smoke-artifacts/piece-guitar.png');
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-  for (const panel of ['piece-today', 'piece-course', 'piece-about', 'piece-settings', 'piece-add', 'piece-journal']) await evaluate(`document.getElementById('${panel}').open = true`);
+  // The panels live in the menu dialog: open it, open every section, and check nothing in it scrolls sideways.
+  await evaluate("document.getElementById('piece-menu').click()");
+  assert.equal(await evaluate("document.getElementById('piece-drawer').open"), true, 'Menu did not open');
+  for (const panel of ['piece-today', 'piece-map', 'piece-course', 'piece-setup', 'piece-settings', 'piece-about', 'piece-add', 'piece-last', 'piece-journal', 'piece-keys']) await evaluate(`document.getElementById('${panel}').open = true`);
   await pause(300);
+  assert.equal(await evaluate("[...document.querySelectorAll('#piece-drawer details')].every(d => d.open)"), true, 'A menu section stayed closed');
+  assert.equal(await evaluate("(() => { const d = document.getElementById('piece-drawer'), b = d.querySelector('.drawer-body'); return d.scrollWidth <= d.clientWidth && b.scrollWidth <= b.clientWidth; })()"), true, 'Menu overflow');
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true, 'Mobile overflow');
   await browser.screenshot('smoke-artifacts/piece-mobile.png');
   assert.equal(await evaluate('__piece.contexts.length'), 1); assert.deepEqual(await evaluate('__piece.errors'), []); assert.deepEqual(browser.errors, []);

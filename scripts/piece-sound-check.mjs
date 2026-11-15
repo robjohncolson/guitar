@@ -3,8 +3,9 @@
 //   npm run build && npx vite preview --port 4173 --strictPort --host 127.0.0.1
 //   SMOKE_ORIGIN=http://127.0.0.1:4173 node scripts/piece-sound-check.mjs
 // A synth note is an oscillator given a PeriodicWave (the simple voice). A sampled note is a buffer source playing a recording longer than 0.8 s.
-// Three fresh pages: the default setup; recordings that arrive slowly (a demo that starts early must wait for them);
-// and one failed manifest request plus one failed recording (the piano must recover without a reload). Exits 1 on any failure.
+// Four fresh pages: the default setup; recordings that arrive slowly (a demo that starts early must wait for them);
+// one failed manifest request plus one failed recording (the piano must recover without a reload); and a piano that never
+// loads (the stage must say so, and the page must still play). Exits 1 on any failure.
 import { chromeSession, pause } from './chrome-session.mjs';
 
 const origin = process.env.SMOKE_ORIGIN || 'http://127.0.0.1:4173';
@@ -28,8 +29,10 @@ const instrument = config => `(() => {
     catch (error) { if (name) __snd.fetches.push({ name, status: 0 }); throw error; }
   };
 })()`;
-const SNAP = `(() => ({ synth: __snd.synth, sampled: __snd.sampled, decodeFail: __snd.decodeFail, fetches: __snd.fetches.slice(),
-  select: document.getElementById('piece-piano') && document.getElementById('piece-piano').value, status: (document.getElementById('piece-piano-status') || {}).textContent || '' }))()`;
+const SNAP = `(() => { const box = document.getElementById('piece-notice'); return {
+  synth: __snd.synth, sampled: __snd.sampled, decodeFail: __snd.decodeFail, fetches: __snd.fetches.slice(),
+  select: document.getElementById('piece-piano') && document.getElementById('piece-piano').value, status: (document.getElementById('piece-piano-status') || {}).textContent || '',
+  notice: box && !box.hidden ? (document.getElementById('piece-feedback').textContent || '') : '' }; })()`;
 
 const mouse = async (s, x, y) => { for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await s.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 }); };
 const key = async (s, code) => { for (const type of ['keyDown', 'keyUp']) await s.send('Input.dispatchKeyEvent', { type, key: code.slice(-1).toLowerCase(), code, windowsVirtualKeyCode: code.charCodeAt(code.length - 1) }); };
@@ -110,5 +113,18 @@ await page('failed requests', { fail: { 'manifest.json': 1, 'C3.mp3': 1 } }, asy
   return `${injected.length} requests failed on purpose; Hear it ${demo.sampled} sampled / ${demo.synth} synth`;
 });
 
+await page('piano that never loads', { fail: { 'manifest.json': 99 } }, async s => {
+  await mouse(s, 5, 5);
+  const end = Date.now() + 40000;
+  let state = await s.evaluate(SNAP);
+  while (Date.now() < end && !/^Grand piano could not load/.test(state.status)) { await pause(500); state = await s.evaluate(SNAP); }
+  check(/^Grand piano could not load/.test(state.status), `piano that never loads: the Sound & timing line says "${state.status}" after 40 s`);
+  check(/Grand piano could not load/.test(state.notice), `piano that never loads: the stage notice says "${state.notice}"`);
+  await clickHearIt(s); await pause(8500);
+  const demo = sounded(state, await s.evaluate(SNAP));
+  check(demo.sampled === 0 && demo.synth >= 4, `piano that never loads: Hear it sounded ${demo.sampled} sampled and ${demo.synth} synth notes (the simple piano should play)`);
+  return `notice "${state.notice}"; Hear it ${demo.sampled} sampled / ${demo.synth} synth`;
+});
+
 if (failures.length) { console.error(`\n${failures.length} problem(s):\n- ${failures.join('\n- ')}`); process.exit(1); }
-console.log('\nThe sampled piano is the default and recovers from failed requests.');
+console.log('\nThe sampled piano is the default, recovers from failed requests, and says so when it cannot load.');
