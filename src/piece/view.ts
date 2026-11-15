@@ -289,7 +289,7 @@ export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePla
   const { lo, hi, whites, sorted } = rangeOf(ex);
   const keyW = w / whites.length, kbH = small ? 72 : 104, felt = small ? 5 : 7, kbTop = height - kbH, hitY = kbTop - felt;
   const xOf = (m: number) => { if (!isBlack(m)) return { x: whites.indexOf(m) * keyW, width: keyW }; const left = whites.indexOf(m - 1); return { x: (left + 1) * keyW - keyW * 0.29, width: keyW * 0.58 }; };
-  const { beat, moving, playing } = live?.beat !== undefined ? { beat: live.beat, moving: true, playing: false } : position(ex, plan, now), animate = moving && !reduced;
+  const { beat, moving, playing } = live?.beat !== undefined ? { beat: live.beat, moving: true, playing: false } : position(ex, plan, now), animate = moving;
   lastLane = { w, hitY };
   // A result on a still lane fits up to twice the usual span, so more of the take's verdicts are in view.
   const usual = Math.max(4, ex.beatsPerBar * (small ? 1.3 : 2)), visible = result && !animate ? Math.min(usual * 2, Math.max(usual, ex.beats)) : usual, scale = (hitY - 18) / visible;
@@ -423,7 +423,6 @@ export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePla
     if (label && width >= 9) { p.fillStyle = on ? '#1d2a20' : '#aab5a8'; p.font = `bold ${small ? 8 : 11}px Segoe UI`; p.textAlign = 'center'; p.fillText(label, x + width / 2, kbTop + bh - (small ? 13 : 18)); p.textAlign = 'left'; }
   }
   p.fillStyle = gradient(p, `shade${kbTop}`, kbTop, kbTop + 10, [[0, 'rgba(0,0,0,.4)'], [1, 'rgba(0,0,0,0)']]); p.fillRect(0, kbTop, w, 10);
-  if (reduced && playing) { p.fillStyle = '#c8d8a7'; p.font = '16px Segoe UI'; p.fillText(`Beat ${Math.floor(beat) % ex.beatsPerBar + 1}`, w - 80, 14); }
   drawMoment(p, w, hitY, small, lively);
   if (gl) {
     if (live?.message) frame.keepOut.push(pillBox(p, live.message, w, small));
@@ -451,8 +450,8 @@ export function drawStrings(canvas: HTMLCanvasElement, ex: Exercise, plan: Piece
   // Sparks land in the lane. The light's clip is the whole canvas: there is no keyboard under it to hide them.
   lastLane = { w, hitY: height * 0.62 };
   const row = (height - 70) / 6, yOf = (string: number) => 40 + (string - 1) * row, hit = small ? 80 : 150, scale = small ? 70 : 120;
-  const { beat, moving, playing } = position(ex, plan, now), origin = moving && !reduced ? beat : 0;
-  const xOf = (b: number) => (moving && !reduced ? hit : 70) + (b - origin) * (moving && !reduced ? scale : (w - 90) / Math.max(4, Math.min(ex.beats, small ? 6 : 12)));
+  const { beat, moving, playing } = position(ex, plan, now), origin = moving ? beat : 0;
+  const xOf = (b: number) => (moving ? hit : 70) + (b - origin) * (moving ? scale : (w - 90) / Math.max(4, Math.min(ex.beats, small ? 6 : 12)));
   p.font = '12px Segoe UI'; p.textBaseline = 'middle';
   for (let s = 1; s <= 6; s++) { const y = yOf(s); p.strokeStyle = '#536550'; p.lineWidth = 1 + (s - 1) * 0.18; p.beginPath(); p.moveTo(50, y); p.lineTo(w - 10, y); p.stroke(); p.fillStyle = '#a9b6a6'; p.fillText(`${s} ${['E', 'B', 'G', 'D', 'A', 'E'][s - 1]}`, 8, y); }
   p.lineWidth = 1;
@@ -479,7 +478,7 @@ export function drawStrings(canvas: HTMLCanvasElement, ex: Exercise, plan: Piece
   }
   if (reveal !== undefined) revealed = reveal;
   if (hideWhilePlaying && playing) { p.fillStyle = '#c8d8a7'; p.font = `${small ? 15 : 20}px Segoe UI`; p.textAlign = 'center'; p.fillText(support >= 2 ? 'Carry the pulse.' : 'You know the pattern.', w * 0.6, height / 2); p.textAlign = 'left'; }
-  if (moving && !reduced) { p.strokeStyle = '#d8e4c5'; p.lineWidth = 2; p.beginPath(); p.moveTo(hit, 26); p.lineTo(hit, height - 22); p.stroke(); p.lineWidth = 1; }
+  if (moving) { p.strokeStyle = '#d8e4c5'; p.lineWidth = 2; p.beginPath(); p.moveTo(hit, 26); p.lineTo(hit, height - 22); p.stroke(); p.lineWidth = 1; }
   if (ex.capo) { p.fillStyle = '#e1c48f'; p.font = '11px Segoe UI'; p.fillText(`Capo ${ex.capo}`, w - 70, height - 10); }
   if (!look.lively) bursts.length = 0;
   pruneBursts(bursts, clock);
