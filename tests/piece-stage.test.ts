@@ -48,6 +48,10 @@ describe('lane height', () => {
     [700, 250, 200, 200],   // 100dvh - 500
     [844, 600, 205, 180],   // never under 180
   ])('phone %i tall, lane at %i, block %i -> %i', (vh, top, below, h) => expect(phone(vh, top, below)).toBe(h));
+  it('takes all the room on a phone while something plays', () => {
+    expect(laneHeight({ phone: true, vh: 664, laneTop: 60, below: 80, card: false, notice: false, running: true })).toBe(516);
+    expect(laneHeight({ phone: true, vh: 400, laneTop: 60, below: 200, card: false, notice: false, running: true })).toBe(180);
+  });
   it('collapses to 160 while a result card is open on a phone', () => {
     expect(phone(844, 301, 205, true)).toBe(160);
     expect(phone(664, 301, 400, true)).toBe(160);

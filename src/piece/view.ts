@@ -26,7 +26,7 @@ export function pieceShell(): void {
         </div>
       </div>
       <div id="piece-last-take" class="last-take" hidden><span class="loop-label">Last take</span> <span id="piece-last-text"></span></div>
-      <div class="practice-state"><span id="piece-phase">Ready when you are</span><span id="piece-lane-line" class="lane-line"></span><span id="piece-guidance" hidden></span></div>
+      <div class="practice-state"><span id="piece-phase">Ready when you are</span><span id="piece-meter" class="meter" aria-hidden="true" hidden><i></i></span><span id="piece-lane-line" class="lane-line"></span><span id="piece-guidance" hidden></span></div>
       <div class="lane-wrap"><canvas id="piece-lane" role="img" aria-label="The notes to play, falling toward the keys" aria-describedby="unit-text"></canvas></div>
       <p id="unit-text" class="sr-only"></p><p id="piece-notice-live" class="sr-only" role="status" aria-atomic="true"></p><p id="piece-bpm-live" class="sr-only" role="status"></p><p id="piece-take-status" class="sr-only" role="status"></p><div id="unit-shapes" class="unit-shapes"></div>
       <div class="dock">

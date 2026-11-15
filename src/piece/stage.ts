@@ -26,10 +26,12 @@ export const keyAllowed = (open: boolean, code: string) => !open || code === 'Es
  * take, while its card is open, 160. Desktop: min(440, 100vh − 360), no taller than the room above Start, never under
  * 300 (250 while a result card or NOTICE shows). laneTop: the lane's top on the page; below: on phones the sticky
  * block's height, on desktop the distance from the lane's bottom to the bottom of Start (or the answer buttons).
+ * running: on a phone, while something plays the HUD folds away and the lane takes all the room there is.
  */
-export function laneHeight(v: { phone: boolean; vh: number; laneTop: number; below: number; card: boolean; notice: boolean }): number {
+export function laneHeight(v: { phone: boolean; vh: number; laneTop: number; below: number; card: boolean; notice: boolean; running?: boolean }): number {
   const fit = Math.floor(v.vh - v.laneTop - v.below - 8);
   if (v.phone) {
+    if (v.running) return Math.max(180, fit);
     if (v.card) return 160;
     return Math.max(180, Math.min(300, v.vh - 500, fit));
   }

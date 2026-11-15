@@ -812,10 +812,10 @@ function placeChrome(): void {
   const main = document.querySelector<HTMLElement>('main.piece')!, nav = main.querySelector('.app-nav'), phase = el('piece-phase');
   if (phone.matches) {
     if (nav) el('piece-drawer-tools').append(nav);
-    main.querySelector('.topbar .brand')!.after(phase);
+    main.querySelector('.topbar .brand')!.after(phase); phase.after(el('piece-meter'));
   } else {
     if (nav) { main.prepend(nav); const card = drawer.querySelector('.welcome-card'); if (card) nav.after(card); }
-    main.querySelector('.practice-state')!.prepend(phase);
+    main.querySelector('.practice-state')!.prepend(phase); phase.after(el('piece-meter'));
   }
 }
 placeDetails(); placeChrome();
@@ -825,7 +825,7 @@ phone.addEventListener?.('change', () => { placeDetails(); placeChrome(); layout
  * Phones: the room above the sticky block (measured while no result card is open). Desktop: the room above Start, or
  * above the answer buttons while a card is open.
  */
-let layoutDirty = true, dockHeight = 0, laneSet = 0;
+let layoutDirty = true, layoutNow = false, dockHeight = 0, laneSet = 0;
 function layoutLane(): void {
   const wrap = el('piece-lane').parentElement!, box = wrap.getBoundingClientRect(), card = !el('piece-result').hidden, small = phone.matches;
   let below: number;
@@ -835,7 +835,7 @@ function layoutLane(): void {
     const target = choice !== undefined && !choices.hidden ? choices : card && !answers.hidden ? answers : el(active() ? 'piece-stop' : 'piece-start');
     below = Math.max(0, target.getBoundingClientRect().bottom - box.bottom);
   }
-  const h = laneHeight({ phone: small, vh: innerHeight, laneTop: box.top + scrollY, below, card: (card || (!small && choice !== undefined)) && (!small || !reveal), notice: !el('piece-notice').hidden });
+  const h = laneHeight({ phone: small, vh: innerHeight, laneTop: box.top + scrollY, below, card: (card || (!small && choice !== undefined)) && (!small || !reveal), notice: !el('piece-notice').hidden, running: small && active() });
   if (h !== laneSet) { laneSet = h; wrap.style.height = `${h}px`; setLaneHeight(h); }
 }
 if (typeof ResizeObserver !== 'undefined') { const watch = new ResizeObserver(() => { layoutDirty = true; }); watch.observe(document.querySelector('main.piece')!); watch.observe(document.querySelector('main.piece .dock')!); }
@@ -977,10 +977,11 @@ function paint(): void {
     el('piece-start').hidden = running; el('piece-stop').hidden = !running;
     if (focus === el(swap[0])) el(swap[1]).focus();
     const main = document.querySelector('main.piece')!;
-    main.classList.toggle('slot-taken', slot); main.classList.toggle('card-open', card); main.classList.toggle('calm', !lively()); main.classList.toggle('running', running);
+    main.classList.toggle('slot-taken', slot); main.classList.toggle('card-open', card); main.classList.toggle('calm', !lively()); main.classList.toggle('running', running); layoutNow = true;
     layoutDirty = true;
   }
-  if (layoutDirty && !running) { layoutDirty = false; layoutLane(); }
+  // The lane is sized while nothing plays, and once when something starts or stops (a phone folds the HUD away then).
+  if (layoutDirty && (!running || layoutNow)) { layoutDirty = false; layoutNow = false; layoutLane(); }
   const status = statusChip({ keys: usingKeys(), midi: keyInput.midiDevices > 0, tooLoud, calibrated: progress.calibrated });
   text('piece-status-long', status.long); text('piece-status-short', status.short);
   if (shown.get('status:warn') !== String(status.warn)) { shown.set('status:warn', String(status.warn)); el('piece-status-chip').classList.toggle('warn', status.warn); }
@@ -1041,6 +1042,9 @@ function paint(): void {
     if (wait.done) finishWait(wait);
   }
   text('piece-phase', phase);
+  // While the microphone listens, a small meter shows what it hears.
+  const hearing = running && audio.micActive; if (shown.get('meter') !== String(hearing)) { shown.set('meter', String(hearing)); el('piece-meter').hidden = !hearing; }
+  if (hearing) node('piece-meter').style.setProperty('--level', Math.min(1, Math.sqrt(audio.level) * 1.5).toFixed(2));
   const guidance = unit.kind === 'listen' ? '' : ['Notes shown', 'From memory', 'Click on each bar'][p.support] ?? '';
   text('piece-guidance', guidance); text('piece-lane-line', p.support > 0 && guidance ? guidance : laneLine);
   if (reveal) stepReveal();

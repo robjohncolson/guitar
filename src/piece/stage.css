@@ -92,6 +92,10 @@ main.piece .chord-box{width:112px}
 main.piece .chord-box svg{width:112px}
 main.piece .chord-box figcaption{font-size:12px}
 
+/* Input meter beside the phase chip while the microphone listens */
+main.piece .meter{flex:none;display:inline-block;width:44px;height:8px;margin-left:6px;overflow:hidden;border:1px solid var(--outline);border-radius:4px;background:var(--card)}
+main.piece .meter i{display:block;width:100%;height:100%;background:var(--lime);transform:scaleX(var(--level,0));transform-origin:left}
+
 /* Phones: NOTICE, NEXT TAKE and the actions (or the result card) form one sticky block at the bottom of the stage */
 main.piece .dock{position:sticky;bottom:0;z-index:3;display:grid;gap:6px;padding:6px 16px 8px;border-top:1px solid var(--line);background:var(--bg);box-shadow:0 -12px 24px rgba(0,0,0,.35)}
 main.piece .notice{display:flex;align-items:center;gap:10px;padding:4px 6px 4px 12px;border:1px solid rgba(200,216,167,.35);border-radius:14px;background:var(--card)}
@@ -187,6 +191,7 @@ main.piece:not(.calm) .drawer[open]{animation:piece-sheet-in .2s ease-out}
   main.piece :is(.welcome-card,#piece-today-chip,#piece-status-chip,.practice-state,#piece-place){display:none}
   main.piece .topbar #piece-phase{flex:none;max-width:46%;overflow:hidden;text-overflow:ellipsis}
   main.piece:not(.running) .topbar #piece-phase{display:none}
+  main.piece.running :is(.hud,#piece-last-take,#piece-next-take,.act-more,.unit-shapes){display:none}
   main.piece .drawer-tools .app-nav{display:flex;flex-wrap:wrap;height:auto;padding:4px 10px;border-bottom:1px solid var(--line)}
   main.piece .drawer-tools .app-nav a{margin:0}
   main.piece .dock{max-height:calc(100dvh - 8px);overflow-y:auto;overscroll-behavior:contain}
