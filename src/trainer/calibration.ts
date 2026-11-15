@@ -30,5 +30,9 @@ export function calibrate(expected:number[],observed:number[],outputLatency:numb
   best.sort((a,b)=>a-b); const center=best.length ? best[Math.floor(best.length/2)] : 0;
   const spread=best.length ? best.at(-1)!-best[0] : Infinity, offset=center-outputLatency;
   const ok=best.length>=6 && spread<.035 && offset>=-.3 && offset<=.5;
-  return {ok,offset:ok ? offset : 0,spread,matched:best.length,message:ok ? `Timing measured from ${best.length} clicks. Input offset ${Math.round(offset*1000)} ms.` : 'The clicks were not clear enough. Hold an earcup near the mic, keep the guitar quiet, and try again.'};
+  const why=!observed.length ? `The microphone did not hear the clicks. Turn the volume up (without headphones the speaker must reach the microphone), keep the instrument quiet, and try again.`
+    : best.length<6 ? `Heard ${best.length} of ${expected.length} clicks clearly. Turn the volume up or hold an earcup near the microphone, keep the instrument quiet, and try again.`
+    : offset<-.3 || offset>.5 ? `The clicks arrived ${Math.round(offset*1000)} ms late, too late to measure (Bluetooth headphones?). Use the speaker or wired headphones and try again.`
+    : `The clicks arrived unevenly (${Math.round(spread*1000)} ms apart). Keep the room and the instrument quiet and try again.`;
+  return {ok,offset:ok ? offset : 0,spread,matched:best.length,message:ok ? `Timing measured from ${best.length} clicks. Input offset ${Math.round(offset*1000)} ms.` : why};
 }

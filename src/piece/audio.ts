@@ -105,9 +105,10 @@ export class PieceAudio {
     });
     return this.earLoading;
   }
-  private async microphone(generation: number): Promise<boolean> {
+  private async microphone(generation: number, calibrating = false): Promise<boolean> {
     const context = this.context!;
-    const stream = await navigator.mediaDevices.getUserMedia(microphoneConstraints(this.mode));
+    // Calibration listens for the app's own clicks, so echo cancellation (which removes them) stays off whatever the input mode.
+    const stream = await navigator.mediaDevices.getUserMedia(microphoneConstraints(calibrating ? 'headphones' : this.mode));
     try {
       if (generation !== this.generation) { stream.getTracks().forEach(t => t.stop()); return false; }
       if (!this.modules) { await context.audioWorklet.addModule(recorderUrl); this.modules = true; }
@@ -142,7 +143,7 @@ export class PieceAudio {
         void ear;
       }
       const keys = kind === 'practice' && this.input === 'keys' && exercise.instrument === 'piano';
-      if (kind !== 'demo' && !keys && !await this.microphone(generation)) return;
+      if (kind !== 'demo' && !keys && !await this.microphone(generation, kind === 'calibration')) return;
       this.plan = planExercise(exercise, bpm, this.now + outputDelay(this.context), kind, support, demonstrate, backing);
       this.current = { exercise, unit, bpm, offset }; this.index = 0; this.lastTick = this.now; this.interrupted = false; this.why = '';
       if (keys) this.presses = [];
@@ -193,8 +194,9 @@ export class PieceAudio {
       this.voice!.play(event.midi!, at, event.length, level, event.timbre); return;
     }
     const oscillator = context.createOscillator(), gain = context.createGain(); oscillator.frequency.value = 1000;
-    gain.gain.setValueAtTime(0, at); gain.gain.linearRampToValueAtTime(0.25, at + 0.001); gain.gain.linearRampToValueAtTime(0, at + 0.009);
-    oscillator.connect(gain).connect(context.destination); oscillator.start(at); oscillator.stop(at + 0.011); this.pips.push(oscillator);
+    // A 40 ms tone, loud enough for a phone speaker and its microphone; the onset is its sharp start.
+    gain.gain.setValueAtTime(0, at); gain.gain.linearRampToValueAtTime(0.6, at + 0.001); gain.gain.setValueAtTime(0.6, at + 0.036); gain.gain.linearRampToValueAtTime(0, at + 0.04);
+    oscillator.connect(gain).connect(context.destination); oscillator.start(at); oscillator.stop(at + 0.042); this.pips.push(oscillator);
     oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); this.pips = this.pips.filter(p => p !== oscillator); };
   }
   tick(): void {

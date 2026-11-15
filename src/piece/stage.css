@@ -184,6 +184,11 @@ main.piece:not(.calm) .drawer[open]{animation:piece-sheet-in .2s ease-out}
   main.piece .chip .long{display:none}
   main.piece .chip .short{display:inline}
   main.piece .app-nav span{display:none}
+  main.piece :is(.welcome-card,#piece-today-chip,#piece-status-chip,.practice-state,#piece-place){display:none}
+  main.piece .topbar #piece-phase{flex:none;max-width:46%;overflow:hidden;text-overflow:ellipsis}
+  main.piece:not(.running) .topbar #piece-phase{display:none}
+  main.piece .drawer-tools .app-nav{display:flex;flex-wrap:wrap;height:auto;padding:4px 10px;border-bottom:1px solid var(--line)}
+  main.piece .drawer-tools .app-nav a{margin:0}
   main.piece .dock{max-height:calc(100dvh - 8px);overflow-y:auto;overscroll-behavior:contain}
   main.piece.notice-act .next-action{display:none}
 }

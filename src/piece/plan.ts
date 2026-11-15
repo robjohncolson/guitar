@@ -15,7 +15,7 @@ const notesOf = (events: XEvent[], from: number, period: number, timbre: Sound['
 export function planExercise(ex: Exercise, bpm: number, now: number, kind: PieceKind, support = 0, demonstrate = false, backing: XEvent[] = []): PiecePlan {
   const period = 60 / bpm, start = now + 0.4, sounds: Sound[] = [], timbre = ex.instrument === 'guitar' ? 'guitar' : 'piano';
   if (kind === 'calibration') {
-    for (let i = 0; i < 8; i++) sounds.push({ at: start + 0.3 + i * 0.6, kind: 'pip', length: 0.008 });
+    for (let i = 0; i < 8; i++) sounds.push({ at: start + 0.3 + i * 0.6, kind: 'pip', length: 0.04 });
     return { kind, start, playAt: start, end: start + 5.4, finish: start + 5.6, period: 1, support: 0, beatsPerBar: 4, sounds };
   }
   const demo = kind === 'demo' || demonstrate, demoLength = demo ? ex.beats * period : 0;

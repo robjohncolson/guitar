@@ -804,8 +804,22 @@ el('piece-bpm-down').onclick = () => nudge(-1);
 el('piece-bpm-up').onclick = () => nudge(1);
 /** On a phone the timing strip, verdicts and take details move into the menu's Last take section; on a desktop they stay on the card. */
 function placeDetails(): void { const details = el('piece-take-details'); (phone.matches ? el('piece-last-slot') : el('piece-result')).append(details); }
-placeDetails();
-phone.addEventListener?.('change', () => { placeDetails(); layoutDirty = true; });
+/**
+ * A phone keeps only the menu and the piece in its top bar: the tool links (and the account button that account code adds to
+ * them) move to the top of the menu, and the phase chip moves into the top bar, shown only while something plays.
+ */
+function placeChrome(): void {
+  const main = document.querySelector<HTMLElement>('main.piece')!, nav = main.querySelector('.app-nav'), phase = el('piece-phase');
+  if (phone.matches) {
+    if (nav) el('piece-drawer-tools').append(nav);
+    main.querySelector('.topbar .brand')!.after(phase);
+  } else {
+    if (nav) { main.prepend(nav); const card = drawer.querySelector('.welcome-card'); if (card) nav.after(card); }
+    main.querySelector('.practice-state')!.prepend(phase);
+  }
+}
+placeDetails(); placeChrome();
+phone.addEventListener?.('change', () => { placeDetails(); placeChrome(); layoutDirty = true; });
 /**
  * The lane's height (stage.ts laneHeight), measured when nothing plays so the lane never changes size during a take.
  * Phones: the room above the sticky block (measured while no result card is open). Desktop: the room above Start, or
@@ -963,7 +977,7 @@ function paint(): void {
     el('piece-start').hidden = running; el('piece-stop').hidden = !running;
     if (focus === el(swap[0])) el(swap[1]).focus();
     const main = document.querySelector('main.piece')!;
-    main.classList.toggle('slot-taken', slot); main.classList.toggle('card-open', card); main.classList.toggle('calm', !lively());
+    main.classList.toggle('slot-taken', slot); main.classList.toggle('card-open', card); main.classList.toggle('calm', !lively()); main.classList.toggle('running', running);
     layoutDirty = true;
   }
   if (layoutDirty && !running) { layoutDirty = false; layoutLane(); }
