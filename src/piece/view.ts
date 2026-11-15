@@ -6,32 +6,54 @@ import { fretList, type Shape } from './guitar';
 import { GRAVITY, celebration, hitBurst, isEmpty, lightFrame, newFrame, particle, pruneBursts, revealBurst, rgb, type Burst, type LightFrame, type LightInput, type Particle, type Rect, type Rgb } from './light';
 import { glLight, type LightLayer } from './lightgl';
 
+const ICON_MENU = '<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+const ICON_INFO = '<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 10v5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="11" cy="6.6" r="1.3" fill="currentColor"/></svg>';
+const ICON_PEN = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17l1-4L14.5 2.5a1.8 1.8 0 0 1 2.5 0l.5.5a1.8 1.8 0 0 1 0 2.5L7 16z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+const ICON_RING = '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="#3a493c" stroke-width="3"/><circle id="piece-today-ring" cx="10" cy="10" r="7.5" fill="none" stroke="#c8d8a7" stroke-width="3" stroke-linecap="round" pathLength="100" stroke-dasharray="0 100" transform="rotate(-90 10 10)"/></svg>';
+
 export function pieceShell(): void {
   document.querySelector('#app')!.innerHTML = `<main class="trainer piece">
     <nav class="app-nav" aria-label="Music tools"><a href="${import.meta.env.BASE_URL}">Trainer</a><a href="${import.meta.env.BASE_URL}piece.html" aria-current="page">Pieces</a><a href="${import.meta.env.BASE_URL}play.html?mode=partner">Partner</a><a href="${import.meta.env.BASE_URL}play.html?mode=looper">Looper</a><span>One passage at a time.</span></nav>
-    <header class="trainer-header"><div><span id="piece-composer" class="eyebrow"></span><h1 id="piece-title">Learn a piece</h1><p class="intro" id="piece-summary"></p></div><button id="piece-stop" disabled>Stop · Esc</button></header>
-    <div class="piece-controls"><label>Piece <select id="piece-select"></select></label><div class="instrument-toggle" role="group" aria-label="Instrument"><button id="inst-piano" aria-pressed="true">Piano</button><button id="inst-guitar" aria-pressed="false">Guitar accompaniment</button></div><div class="instrument-toggle" id="input-toggle" role="group" aria-label="Play with"><button id="input-mic" aria-pressed="true">Microphone</button><button id="input-keys" aria-pressed="false">Keyboard · MIDI</button></div></div>
-    <div class="trainer-status"><span id="piece-mic">Mic off</span><span id="piece-model"></span><span id="piece-calibration">Timing not calibrated</span><span id="piece-verified"></span></div>
-    <section class="lesson-card" aria-labelledby="unit-title">
-      <div class="lesson-heading"><div><span id="unit-stage" class="eyebrow"></span><h2 id="unit-title"></h2></div><div class="trainer-tempo"><label for="piece-bpm">BPM</label><input id="piece-bpm" type="number" min="20" max="240" step="1" inputmode="numeric"><span id="piece-tempo-help"></span><span id="piece-pips" class="tempo-pips"></span></div></div>
-      <p id="unit-goal"></p><p id="unit-why" class="unit-why"></p>
-      <div class="practice-state"><span id="piece-phase" role="status">Ready when you are</span><span id="piece-guidance"></span></div>
-      <div class="lane-wrap"><canvas id="piece-lane" role="img" aria-label="The notes to play, falling toward the keys" aria-describedby="unit-text"></canvas><div id="lane-help"></div></div>
-      <p id="unit-text" class="sr-only"></p><div id="unit-shapes" class="unit-shapes"></div>
-      <div class="trainer-actions"><button id="piece-start" class="primary">Start practice</button><button id="piece-place" hidden></button><button id="piece-demo">Hear it</button><button id="piece-wait" hidden title="The notes stop until you play them. Only the keys are checked, not timing.">Wait for me</button><label class="inline-check"><input type="checkbox" id="piece-backing"> <span id="piece-backing-label">Play the other hand with me</span></label><button id="piece-next">Next in today's plan</button></div>
-      <p id="piece-feedback" class="coach" role="status"></p>
-      <div id="piece-result" hidden><div id="piece-metrics" class="grade-metrics"></div><div id="piece-callouts" class="take-callouts"><ul id="piece-wins" class="take-wins"></ul><p id="piece-fix" class="take-fix"></p></div><div id="piece-strip" class="timing-strip"></div><div id="piece-verdicts" class="note-verdicts"></div><p id="piece-details" class="muted"></p><p id="piece-comfort-ask" class="comfort-ask">How did that feel? Your answer, with the score, decides the next tempo and starts the next take.</p><div class="comfort-actions"><button id="piece-comfortable"><kbd>↑</kbd> Felt comfortable</button><button id="piece-struggling"><kbd>↓</kbd> Needs more room</button></div></div>
-      <div id="piece-review" hidden><div class="review-heading"><span>Hear yourself</span><span id="piece-take" class="muted"></span></div><audio id="piece-player" controls></audio><div class="review-actions"><button id="piece-previous">Hear previous take</button><button id="piece-latest">Hear latest take</button><button id="piece-loop">Loop latest · play along</button><a id="piece-download" download="take.wav">Download WAV</a><a id="piece-trace" download="take.json">Note details</a></div><p id="piece-review-note" class="muted">Playback stops the microphone. Takes stay in this page.</p></div>
+    <header class="trainer-header topbar"><button id="piece-menu" type="button" class="icon-btn" aria-label="Open menu" aria-haspopup="dialog">${ICON_MENU}</button><div class="brand"><h1 id="piece-title">Learn a piece</h1><span id="piece-composer" class="composer"></span></div><button id="piece-today-chip" type="button" class="chip" aria-haspopup="dialog">${ICON_RING}<span id="piece-today-long" class="long"></span><span id="piece-today-short" class="short"></span></button><button id="piece-status-chip" type="button" class="chip status-chip" aria-haspopup="dialog"><span class="dot" aria-hidden="true"></span><span id="piece-status-long" class="long"></span><span id="piece-status-short" class="short"></span></button></header>
+    <section class="lesson-card stage" aria-labelledby="unit-title">
+      <div class="hud">
+        <div class="hud-passage"><span id="unit-stage" class="eyebrow"></span><div class="passage-row"><h2 id="unit-title"></h2><details id="piece-about-step" class="about-step"><summary aria-label="About this step">${ICON_INFO}</summary><div class="about-body"><p id="unit-goal"></p><p id="unit-why" class="unit-why"></p><div id="lane-help"></div><p id="piece-about-muted" class="about-muted"></p></div></details></div><p id="unit-caption" class="unit-caption"></p></div>
+        <div class="hud-tempo" id="piece-tempo">
+          <div class="readout"><span id="piece-bpm-num" class="bpm-num"></span><div class="bpm-side"><div class="side-row"><span class="bpm-unit">BPM</span><span id="piece-free-tag" class="free-tag" hidden>free</span><button id="piece-free-open" type="button" class="icon-btn pencil" aria-label="Free tempo" aria-expanded="false" aria-controls="piece-free">${ICON_PEN}</button></div><p class="goal-row"><span id="piece-tempo-help"></span><span id="piece-goal-sub" class="goal-sub"></span></p></div>
+            <div id="piece-free" class="free-pop" role="group" aria-label="Free tempo" hidden><div class="stepper"><button id="piece-bpm-down" type="button" aria-label="Slower">−</button><input id="piece-bpm" type="number" min="20" max="240" step="1" inputmode="numeric" aria-label="Tempo in BPM" aria-describedby="piece-free-line piece-bpm-error"><button id="piece-bpm-up" type="button" aria-label="Faster">+</button></div><p id="piece-free-line">Free tempo: takes here do not move the ladder</p><p id="piece-bpm-error" class="free-error"></p><button id="piece-free-back" type="button" class="free-back" hidden></button><button id="piece-free-done" type="button" class="free-done">Done</button></div>
+          </div>
+          <div id="piece-pips"></div>
+        </div>
+      </div>
+      <div id="piece-last-take" class="last-take" hidden><span class="loop-label">Last take</span> <span id="piece-last-text"></span></div>
+      <div class="practice-state"><span id="piece-phase">Ready when you are</span><span id="piece-lane-line" class="lane-line"></span><span id="piece-guidance" hidden></span></div>
+      <div class="lane-wrap"><canvas id="piece-lane" role="img" aria-label="The notes to play, falling toward the keys" aria-describedby="unit-text"></canvas></div>
+      <p id="unit-text" class="sr-only"></p><p id="piece-notice-live" class="sr-only" role="status" aria-atomic="true"></p><p id="piece-bpm-live" class="sr-only" role="status"></p><p id="piece-take-status" class="sr-only" role="status"></p><div id="unit-shapes" class="unit-shapes"></div>
+      <div class="dock">
+        <div id="piece-notice" class="notice" hidden><span class="notice-dot" aria-hidden="true"></span><p id="piece-feedback" class="coach"></p><button id="piece-notice-action" type="button" hidden></button></div>
+        <div id="piece-spot-banner" class="spot-banner" hidden><span id="piece-spot-text"></span> <button id="piece-spot-back" data-choice="back">Back to the step</button></div>
+        <div id="piece-next-take" class="next-take"><span class="loop-label">Next take</span><div class="next-body" role="status" aria-atomic="true"><p id="piece-next-text" class="next-text"></p><p id="piece-next-muted" class="next-muted"></p></div><button id="piece-next-action" type="button" class="next-action" hidden></button></div>
+        <div class="trainer-actions"><button id="piece-start" class="primary">Start practice</button><button id="piece-stop" class="stop" hidden>Stop · Esc</button><div class="act-more"><button id="piece-demo">Hear it</button><button id="piece-wait" hidden title="The notes stop until you play them. Only the keys are checked, not timing.">Wait for me</button><button id="piece-next-stage" type="button" hidden>Next in today's plan</button><button id="piece-place" class="link-btn" hidden></button></div><p class="act-keys" aria-hidden="true">Space start practice · Esc stop everything</p></div>
+        <div id="piece-result" class="result-card" hidden><div id="piece-score" class="take-score"></div><p id="piece-fix" class="take-fix"></p>
+          <div class="answer"><p id="piece-comfort-ask" class="comfort-ask">How did that feel?</p><div class="comfort-actions"><button id="piece-comfortable" aria-describedby="piece-comfortable-note"><kbd>↑</kbd> Felt comfortable</button><button id="piece-struggling" aria-describedby="piece-struggling-note"><kbd>↓</kbd> Needs more room</button><p id="piece-comfortable-note" class="comfort-note"></p><p id="piece-struggling-note" class="comfort-note"></p></div></div>
+          <div class="card-secondary"><button id="piece-card-hear" type="button" class="link-btn">Hear this take</button><button id="piece-card-demo" type="button" class="link-btn">Hear it</button><button id="piece-card-wait" type="button" class="link-btn" hidden>Wait for me</button><button id="piece-card-review" type="button" class="link-btn" aria-haspopup="dialog">Review take</button></div>
+          <div id="piece-take-details" class="take-details"><div id="piece-metrics" class="grade-metrics"></div><div id="piece-callouts" class="take-callouts"><ul id="piece-wins" class="take-wins"></ul></div><div id="piece-strip" class="timing-strip"></div><div id="piece-verdicts" class="note-verdicts"></div><p id="piece-details" class="muted"></p></div></div>
+      </div>
     </section>
-    <div class="trainer-secondary">
-      <details id="piece-today" open><summary>Today's practice <span id="today-count" class="muted"></span></summary>
+    <dialog id="piece-drawer" class="drawer" aria-labelledby="piece-drawer-title"><div class="drawer-inner">
+      <div class="drawer-head"><h2 id="piece-drawer-title">Menu</h2><button id="piece-drawer-close" type="button">Close</button></div><p id="piece-drawer-status" class="drawer-status" role="status" aria-atomic="true"></p>
+      <div class="drawer-body trainer-secondary">
+      <details id="piece-today"><summary>Today's practice <span id="today-count" class="muted"></span></summary>
         <div class="today-rhythm"><div class="today-aim"><span id="today-clean"></span><span id="today-meter" class="today-meter" aria-hidden="true"><i></i></span><label class="inline-check">Daily aim <select id="piece-daily-goal"><option>3</option><option>6</option><option>10</option><option>15</option><option>20</option><option>30</option></select> clean takes</label></div><div id="today-week" class="today-week"></div></div>
-        <ol id="today-list" class="today-list"></ol><p id="today-done" class="today-done" role="status" hidden></p>
+        <ol id="today-list" class="today-list"></ol><p id="today-done" class="today-done" role="status" hidden></p><button id="piece-next">Next in today's plan</button>
         <p class="muted">One phrase at a time: hear the piece, warm up, review what is due, play yesterday's new steps again, then today's phrase. Short sessions on several days beat one long one. Keep going as long as you like.</p></details>
-      <details id="piece-map" open><summary>Your piece <span id="map-count" class="muted"></span></summary><div id="map-body"></div></details>
-      <details id="piece-course"><summary>Course <span id="course-count"></span></summary><p>Each step climbs a tempo ladder: 50, 60, 70, 80, 88, 94 and 100% of the goal tempo. Two clean, comfortable takes (90% or better) move up one step. At 80% and 100% three takes fade the help: notes visible, then from memory, then a click only on each bar. Two hard takes step down. Hands together, joins and sections open as their parts reach the tempo they need.</p><div id="course-list"></div></details>
-      <details id="piece-about"><summary>About this piece</summary><div id="piece-about-body"></div><button id="piece-listen">Hear the whole piece</button></details>
+      <details id="piece-map"><summary>Your piece <span id="map-count" class="muted"></span></summary><div id="map-body"></div></details>
+      <details id="piece-course"><summary>Course <span id="course-count"></span></summary><p>Each step climbs a tempo ladder: 50, 60, 70, 80, 88, 94 and 100% of the goal tempo. Two clean, comfortable takes in a row (90% or better) move up one step. At 80% and 100% three takes fade the help: notes visible, then from memory, then a click only on each bar. Two needs-more-room takes in a row (under 65%, or answered "Needs more room") step down. Hands together, joins and sections open as their parts reach the tempo they need.</p><div id="course-list"></div></details>
+      <details id="piece-setup" class="piece-setup"><summary>Piece &amp; input <span id="piece-setup-summary" class="muted">Piano · Microphone</span></summary>
+        <div class="piece-controls"><label>Piece <select id="piece-select"></select></label><div class="instrument-toggle" role="group" aria-label="Instrument"><button id="inst-piano" aria-pressed="true">Piano</button><button id="inst-guitar" aria-pressed="false">Guitar accompaniment</button></div><div class="instrument-toggle" id="input-toggle" role="group" aria-label="Play with"><button id="input-mic" aria-pressed="true">Microphone</button><button id="input-keys" aria-pressed="false">Keyboard · MIDI</button></div><label class="inline-check"><input type="checkbox" id="piece-backing"> <span id="piece-backing-label">Play the other hand with me</span></label></div>
+      </details>
       <details id="piece-settings"><summary>Sound &amp; timing <span id="piece-setup-hint"></span></summary>
+        <div class="trainer-status"><span id="piece-mic">Mic off</span><span id="piece-model"></span><span id="piece-calibration">Timing not calibrated</span><span id="piece-verified"></span></div>
         <p>Use headphones so the click and the app's notes stay out of the microphone. Put the laptop on the piano's music desk or a chair beside it, mic facing the strings, the same place every time.</p>
         <label>Goal tempo for this piece <input id="piece-goal" type="number" min="30" max="200" step="1"> <span id="piece-goal-help" class="muted"></span></label>
         <label>Input processing <select id="piece-output"><option value="headphones">Headphones · clean input</option><option value="speakers">Speakers · echo cancellation</option></select></label>
@@ -44,10 +66,14 @@ export function pieceShell(): void {
         <div class="calibration"><p><strong>Measure your sound delay</strong></p><p>Keep the instrument quiet. Hold one headphone earcup close to the microphone so it can hear eight short clicks.</p><button id="piece-calibrate">Calibrate with 8 clicks</button><p id="piece-calibration-feedback" role="status">Practice works without it; calibration lets tempo steps count.</p><label for="piece-offset">Manual input offset (ms)</label><div class="offset-row"><input id="piece-offset" type="number" min="-300" max="500" step="1" value="0"><button id="piece-use-offset">Use this offset</button></div></div>
         <div class="honesty"><p><strong>What the microphone can and cannot tell</strong></p><p>Timing comes from each attack. For piano, a note counts as <em>heard</em> only when its own partials rise at the attack; <em>not heard</em> needs them to stay quiet. Notes doubled an octave or a twelfth above another note have no partials of their own: <em>can't check</em>. Everything else is <em>unclear</em> and counts neither way. Tested on real piano recordings, a played note was called missing or wrong about 2% of the time and an unplayed note was confirmed under 1% of the time. Your room and piano may differ; listen back to your takes.</p><p>For guitar, single plucked strings are checked for pitch; strums are timing only. Fingering, hand position, pedalling, tone and which strings rang stay for you to judge.</p></div>
       </details>
+      <details id="piece-about"><summary>About this piece</summary><p id="piece-summary" class="intro"></p><div id="piece-about-body"></div><button id="piece-listen">Hear the whole piece</button></details>
       <details id="piece-add"><summary>Add your own piece</summary><p>Pieces are plain-text files (<code>.piece.txt</code>). Give a PDF or photo of sheet music to your AI assistant with <code>PIECES.md</code> from this project; it writes the file and checks it twice. Open it here: it stays in this browser${import.meta.env.VITE_ACCOUNTS !== 'off' ? ' unless you are signed in and choose <em>Save to my account</em> (private to you)' : ' and is never uploaded'}.</p><input type="file" id="piece-file" accept=".txt,text/plain"><div id="piece-file-report" role="status"></div><div id="piece-local-list"></div><div id="piece-account-list"></div></details>
+      <details id="piece-last"><summary>Last take</summary><p id="piece-last-empty" class="muted">No take yet on this page.</p><div id="piece-last-slot"></div>
+        <div id="piece-review" hidden><div class="review-heading"><span>Hear yourself</span><span id="piece-take" class="muted"></span></div><audio id="piece-player" controls></audio><div class="review-actions"><button id="piece-previous">Hear previous take</button><button id="piece-latest">Hear latest take</button><button id="piece-loop">Loop latest · play along</button><a id="piece-download" download="take.wav">Download WAV</a><a id="piece-trace" download="take.json">Note details</a></div><p id="piece-review-note" class="muted">Playback stops the microphone. Takes stay in this page.</p></div></details>
       <details id="piece-journal"><summary>Your practice today</summary><div id="piece-journal-list"></div><button id="piece-finish">Finish this session</button><div id="piece-session" role="status" hidden></div><button id="piece-reset" class="text-button">Reset progress for this piece</button><p id="piece-storage" class="muted">Progress stays in this browser. Audio is never saved automatically.</p></details>
-    </div>
-    <footer><span><kbd>Space</kbd> start practice</span><span><kbd>Esc</kbd> stop everything</span><span><kbd>↑</kbd> <kbd>↓</kbd> answer after a take</span><span>Listening happens in this browser; nothing is uploaded.</span></footer>
+      <details id="piece-keys"><summary>Keyboard shortcuts</summary><footer><span><kbd>Space</kbd> start practice</span><span><kbd>Esc</kbd> stop everything</span><span><kbd>↑</kbd> <kbd>↓</kbd> answer after a take</span><span>Listening happens in this browser; nothing is uploaded.</span></footer></details>
+      </div>
+    </div></dialog>
   </main>`;
 }
 
@@ -68,6 +94,9 @@ function widthOf(canvas: HTMLCanvasElement): number {
   }
   return w;
 }
+/** The lane's height in CSS pixels, chosen by the page from the viewport (stage.ts laneHeight); undefined: the old fixed sizes. */
+let laneTall: number | undefined;
+export function setLaneHeight(height: number): void { if (height !== laneTall) { laneTall = height; resized = true; } }
 /** True once after the lane changed size, so a static lane knows to redraw. */
 export function laneResized(): boolean { const r = resized; resized = false; return r; }
 function prepare(canvas: HTMLCanvasElement, height: number): CanvasRenderingContext2D {
@@ -256,7 +285,7 @@ export function drawKeys(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePla
   }
   // Until its shaders are ready the layer draws nothing and the 2D light stands in.
   const gl = layer?.ready() ? layer : undefined;
-  const lively = look.lively, w = Math.max(280, Math.round(widthOf(canvas))), small = w < 600, height = small ? 300 : 440, p = prepare(canvas, height);
+  const lively = look.lively, w = Math.max(280, Math.round(widthOf(canvas))), small = w < 600, height = laneTall ?? (small ? 300 : 440), p = prepare(canvas, height);
   const clock = performance.now(), dt = lastFrame ? Math.min(0.05, (clock - lastFrame) / 1000) : 0; lastFrame = clock;
   const { lo, hi, whites, sorted } = rangeOf(ex);
   const keyW = w / whites.length, kbH = small ? 72 : 104, felt = small ? 5 : 7, kbTop = height - kbH, hitY = kbTop - felt;
@@ -411,7 +440,7 @@ function pillBox(p: CanvasRenderingContext2D, message: string, w: number, small:
 
 /** Guitar: thin string on top, fret numbers on the strings, strums as a bracket with its direction. */
 export function drawStrings(canvas: HTMLCanvasElement, ex: Exercise, plan: PiecePlan | undefined, now: number, support: number, result: PieceGrade | undefined, reduced: boolean, hideWhilePlaying: boolean, reveal?: number, lively = !reduced): void {
-  const w = Math.max(280, Math.round(widthOf(canvas))), small = w < 600, height = small ? 230 : 300, p = prepare(canvas, height);
+  const w = Math.max(280, Math.round(widthOf(canvas))), small = w < 600, height = laneTall ?? (small ? 230 : 300), p = prepare(canvas, height);
   // The guitar lane has no light: clear anything left from the keys lane.
   bursts.length = 0; lastLight = EMPTY_LIGHT; layer?.draw(EMPTY_LIGHT, w, height);
   const row = (height - 70) / 6, yOf = (string: number) => 40 + (string - 1) * row, hit = small ? 80 : 150, scale = small ? 70 : 120;
@@ -450,6 +479,6 @@ export function chordBox(shape: Pick<Shape, 'name' | 'frets' | 'fingers'>, capo 
   const x = (s: number) => 16 + s * 16, y = (f: number) => 26 + (f - base + 0.5) * 18;
   const strings = Array.from({ length: 6 }, (_, s) => `<line x1="${x(s)}" x2="${x(s)}" y1="26" y2="116" stroke="#8a9a86"/>`).join('');
   const frets5 = Array.from({ length: 6 }, (_, i) => `<line x1="16" x2="96" y1="${26 + i * 18}" y2="${26 + i * 18}" stroke="#8a9a86" stroke-width="${i === 0 && base === 1 ? 4 : 1}"/>`).join('');
-  const marks = frets.map((f, s) => f < 0 ? `<text x="${x(s)}" y="19" text-anchor="middle" font-size="11" fill="#e1ad88">×</text>` : f === 0 ? `<circle cx="${x(s)}" cy="15" r="4" fill="none" stroke="#c8d8a7"/>` : `<circle cx="${x(s)}" cy="${y(f)}" r="7" fill="#c8d8a7"/><text x="${x(s)}" y="${y(f) + 4}" text-anchor="middle" font-size="10" fill="#172018">${fingers[s] === '0' || fingers[s] === 'x' ? '' : fingers[s]}</text>`).join('');
-  return `<figure class="chord-box"><svg viewBox="0 0 112 128" role="img" aria-label="${shape.name}: ${shape.frets}">${strings}${frets5}${marks}${base > 1 ? `<text x="100" y="${y(base) + 4}" font-size="10" fill="#a9b6a6">${base}</text>` : ''}</svg><figcaption>${shape.name}${capo ? ` · capo ${capo}` : ''}</figcaption></figure>`;
+  const marks = frets.map((f, s) => f < 0 ? `<text x="${x(s)}" y="19" text-anchor="middle" font-size="12" fill="#e1ad88">×</text>` : f === 0 ? `<circle cx="${x(s)}" cy="15" r="4" fill="none" stroke="#c8d8a7"/>` : `<circle cx="${x(s)}" cy="${y(f)}" r="7" fill="#c8d8a7"/><text x="${x(s)}" y="${y(f) + 4}" text-anchor="middle" font-size="12" fill="#172018">${fingers[s] === '0' || fingers[s] === 'x' ? '' : fingers[s]}</text>`).join('');
+  return `<figure class="chord-box"><svg viewBox="0 0 112 128" role="img" aria-label="${shape.name}: ${shape.frets}">${strings}${frets5}${marks}${base > 1 ? `<text x="100" y="${y(base) + 4}" font-size="12" fill="#a9b6a6">${base}</text>` : ''}</svg><figcaption>${shape.name}${capo ? ` · capo ${capo}` : ''}</figcaption></figure>`;
 }

@@ -1,0 +1,248 @@
+/* The Pieces stage: nav row, top bar, HUD, lane, and on phones one sticky block (NEXT TAKE and the actions). Scoped to main.piece. */
+main.piece{max-width:1060px;padding:0}
+main.piece .app-nav{gap:2px;height:28px;margin:0;padding:0 8px;font-size:13px}
+main.piece .app-nav a{display:inline-flex;align-items:center;min-height:44px;margin:-8px 0;padding:0 8px;border:0;color:var(--muted)}
+main.piece .app-nav a[aria-current]{border:0;font-weight:600;color:var(--ink);text-decoration:underline;text-decoration-color:var(--lime);text-decoration-thickness:2px;text-underline-offset:5px}
+main.piece .app-nav span{padding-right:8px;font-size:12px}
+
+/* First-visit welcome card (inserted by account code): one short block; the list ends in an ellipsis */
+main.piece .welcome-card{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title ok" "list list";align-items:center;gap:0 10px;max-height:80px;margin:2px 8px 6px;padding:2px 6px 6px 12px;overflow:hidden;border-color:var(--line);background:var(--card);font-size:13px;line-height:1.35;color:var(--muted)}
+main.piece .welcome-card h2{grid-area:title;margin:0;font-size:15px;line-height:1.3;color:var(--ink)}
+main.piece .welcome-card strong{color:var(--ink)}
+main.piece .welcome-card ol{grid-area:list;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:1;margin:0;padding:0;overflow:hidden;list-style:none}
+main.piece .welcome-card li{display:inline}
+main.piece .welcome-card button{grid-area:ok;min-height:44px;margin:0;padding:0 18px}
+
+/* Top bar: menu, piece and composer, Today chip, status chip */
+main.piece .topbar{display:flex;align-items:center;gap:6px;min-height:52px;padding:0 8px 0 4px;border-bottom:1px solid var(--line);background:var(--bg)}
+main.piece .brand{flex:1 1 auto;min-width:0;line-height:1.15}
+main.piece .topbar h1{margin:0;overflow:hidden;font-size:18px;font-weight:700;letter-spacing:0;text-overflow:ellipsis;white-space:nowrap}
+main.piece .composer{display:block;overflow:hidden;font-size:12px;color:var(--muted);text-overflow:ellipsis;white-space:nowrap}
+main.piece .icon-btn{display:grid;flex:none;place-items:center;width:44px;height:44px;padding:0;border:0;border-radius:14px;background:transparent;color:var(--ink)}
+main.piece .icon-btn:hover:not(:disabled){background:var(--raised)}
+main.piece .chip{display:inline-flex;flex:none;align-items:center;gap:8px;min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:14px;background:var(--card);font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap}
+main.piece .chip:hover:not(:disabled){background:var(--raised)}
+main.piece .chip svg{flex:none}
+main.piece .chip .short{display:none}
+main.piece .status-chip .dot{flex:none;width:12px;height:12px;border-radius:50%;background:#86d29a;box-shadow:0 0 0 3px rgba(134,210,154,.22)}
+main.piece .status-chip.warn{border-color:var(--amber);color:var(--amber)}
+main.piece .status-chip.warn .dot{width:14px;height:13px;border-radius:0;background:var(--amber);box-shadow:none;clip-path:polygon(50% 0,100% 100%,0 100%)}
+main.piece :is(.icon-btn,.chip):disabled{opacity:.5}
+main.piece .status-chip.warn:disabled{opacity:1}
+
+/* Stage and HUD */
+main.piece .stage{display:flex;flex-direction:column;margin:0;padding:0;border:0;border-radius:0;background:var(--bg)}
+main.piece .hud{position:relative;padding:4px 16px 4px;border-bottom:1px solid var(--line);background:var(--card)}
+main.piece .hud-passage{position:relative;min-width:0}
+main.piece #unit-stage{font-size:12px;line-height:14px}
+main.piece .passage-row{display:flex;align-items:center;gap:2px;min-height:30px}
+main.piece .hud-passage h2{margin:0;font-size:24px;font-weight:600;letter-spacing:-.3px;line-height:28px;overflow-wrap:anywhere}
+main.piece .unit-caption{display:none;margin:0;overflow:hidden;font-size:13px;line-height:16px;color:var(--muted);text-overflow:ellipsis;white-space:nowrap}
+main.piece .about-step{margin:0;font-size:14px}
+main.piece .about-step>summary{display:grid;place-items:center;width:44px;height:44px;margin:-8px 0;border-radius:14px;list-style:none;color:var(--muted);cursor:pointer}
+main.piece .about-step>summary::-webkit-details-marker{display:none}
+main.piece .about-step[open]>summary{color:var(--lime)}
+main.piece .about-body{position:absolute;z-index:6;top:100%;left:0;width:min(420px,100%);max-height:60vh;padding:10px 14px;overflow-y:auto;border:1px solid var(--line);border-radius:14px;background:var(--raised);box-shadow:0 12px 28px rgba(0,0,0,.45)}
+main.piece .about-body>*{margin:0 0 8px;font-size:14px;line-height:1.45;color:var(--ink);overflow-wrap:anywhere}
+main.piece .about-body>:last-child{margin-bottom:0}
+main.piece .about-body .unit-why,main.piece .about-body .about-muted{font-size:13px;color:var(--muted)}
+main.piece .about-muted:empty{display:none}
+
+/* Tempo readout: the BPM, its unit, the free-tempo pencil and the goal chip */
+main.piece .hud-tempo{position:relative;min-width:0}
+main.piece .readout{position:relative;display:flex;align-items:center;gap:12px;min-height:60px;margin-top:2px}
+main.piece .bpm-num{flex:none;min-width:calc(var(--digits,2) * .58em);font-size:72px;font-weight:700;letter-spacing:-.02em;line-height:60px;font-variant-numeric:tabular-nums;color:var(--lime);text-shadow:0 0 28px rgba(200,216,167,.3)}
+main.piece .hud-tempo.free .bpm-num{color:var(--amber);text-shadow:0 0 28px rgba(225,173,136,.26)}
+main.piece .bpm-side{display:grid;gap:2px;justify-items:start;min-width:0}
+main.piece .side-row{display:flex;align-items:center;gap:10px;height:28px}
+main.piece .bpm-unit{font-size:14px;font-weight:700;letter-spacing:.12em;color:var(--muted)}
+main.piece .pencil{margin:-8px -4px;color:var(--muted)}
+main.piece .pencil[aria-expanded=true]{color:var(--amber)}
+main.piece .goal-row{display:flex;flex-wrap:wrap;align-items:center;gap:0 8px;margin:0}
+main.piece .goal-sub{font-size:13px;color:var(--muted)}
+main.piece .goal-sub:empty{display:none}
+
+/* Free-tempo box */
+main.piece .free-pop{position:absolute;z-index:7;top:calc(100% + 4px);left:0;display:grid;gap:8px;width:min(320px,100%);padding:12px 14px;border:1px solid var(--amber);border-radius:14px;background:var(--raised);box-shadow:0 14px 30px rgba(0,0,0,.5)}
+main.piece .stepper{display:flex;align-items:center;gap:10px}
+main.piece .stepper button{width:44px;height:44px;padding:0;border:1px solid var(--outline);border-radius:12px;background:var(--card);font-size:22px;line-height:1;color:var(--ink)}
+main.piece #piece-bpm{width:96px;height:44px;padding:0 8px;border:1px solid var(--outline);border-radius:12px;background:var(--card);font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--amber);text-align:center;-moz-appearance:textfield;appearance:textfield}
+main.piece #piece-bpm::-webkit-outer-spin-button,main.piece #piece-bpm::-webkit-inner-spin-button{margin:0;-webkit-appearance:none}
+main.piece #piece-bpm[aria-invalid=true]{border-color:var(--amber);outline:2px solid var(--amber)}
+main.piece .free-pop p{margin:0;font-size:14px;line-height:1.4;color:var(--ink)}
+main.piece .free-pop .free-error{font-weight:600;color:var(--amber)}
+main.piece .free-error:empty{display:none}
+main.piece :is(.free-back,.free-done){width:100%;min-height:44px;padding:0 16px;border:1px solid var(--outline);border-radius:12px;background:var(--card);font-size:15px;font-weight:600;color:var(--ink)}
+main.piece .free-back{border-color:var(--lime);color:var(--lime)}
+
+/* The ladder sits tight under the readout on a phone */
+main.piece .ladder{margin-top:4px}
+main.piece .pip-row{min-height:24px;margin-top:2px}
+
+/* LAST TAKE (under the HUD on phones), lane header row, lane */
+main.piece .last-take{margin:6px 16px 0;padding:4px 10px;font-size:13px}
+main.piece .last-take .loop-label{letter-spacing:.06em;color:var(--muted)}
+main.piece .practice-state{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:28px;margin:2px 0;padding:0 16px;border:0;font-size:13px}
+main.piece #piece-phase{flex:none;display:inline-flex;align-items:center;height:24px;padding:0 10px;border:1px solid rgba(200,216,167,.35);border-radius:12px;background:var(--card);font-size:13px;font-weight:600;color:var(--lime);white-space:nowrap}
+main.piece .lane-line{min-width:0;overflow:hidden;font-size:12px;color:var(--muted);text-align:right;text-overflow:ellipsis;white-space:nowrap}
+main.piece .lane-wrap{height:300px;border-width:1px 0;border-radius:0}
+main.piece #piece-lane{height:100%;min-height:0}
+main.piece .unit-shapes{padding:6px 16px 0}
+main.piece .chord-box{width:112px}
+main.piece .chord-box svg{width:112px}
+main.piece .chord-box figcaption{font-size:12px}
+
+/* Phones: NOTICE, NEXT TAKE and the actions (or the result card) form one sticky block at the bottom of the stage */
+main.piece .dock{position:sticky;bottom:0;z-index:3;display:grid;gap:6px;padding:6px 16px 8px;border-top:1px solid var(--line);background:var(--bg);box-shadow:0 -12px 24px rgba(0,0,0,.35)}
+main.piece .notice{display:flex;align-items:center;gap:10px;padding:4px 6px 4px 12px;border:1px solid rgba(200,216,167,.35);border-radius:14px;background:var(--card)}
+main.piece .notice.warn{border-color:var(--amber)}
+main.piece .notice-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--lime)}
+main.piece .notice.warn .notice-dot{width:13px;height:12px;border-radius:0;background:var(--amber);clip-path:polygon(50% 0,100% 100%,0 100%)}
+main.piece #piece-feedback{flex:1 1 auto;min-width:0;margin:4px 0;font-size:15px;line-height:1.35;color:var(--ink);overflow-wrap:anywhere}
+main.piece #piece-notice-action{flex:none;min-height:44px;padding:0 12px;border:1px solid var(--outline);border-radius:12px;background:var(--raised);font-size:14px;font-weight:600;color:var(--ink)}
+main.piece .spot-banner{margin:0}
+main.piece .next-take{gap:0;padding:4px 12px 6px}
+main.piece .next-take .loop-label{line-height:18px}
+main.piece .next-muted{display:none}
+main.piece .next-action{margin-top:4px}
+main.piece .trainer-actions{display:grid;gap:6px;margin:0}
+main.piece :is(#piece-start,#piece-stop){width:100%;min-height:56px;padding:0 20px;border-radius:16px;font-size:18px;font-weight:700}
+main.piece #piece-start{border:0;background:var(--lime);color:var(--on-fill);box-shadow:0 0 0 1px rgba(200,216,167,.55),0 0 26px rgba(200,216,167,.28)}
+main.piece #piece-start:hover:not(:disabled){background:#d6e4b8}
+main.piece #piece-stop{border:2px solid var(--lime);background:transparent;color:var(--lime)}
+main.piece .act-more{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+main.piece .act-more button:not(.link-btn){min-height:44px;padding:0 16px;border:1px solid var(--outline);border-radius:12px;background:var(--raised);font-size:15px;font-weight:600;color:var(--ink)}
+main.piece .act-more #piece-place{flex:1 1 140px;min-width:0;padding:0 4px;font-size:14px;line-height:1.25;text-align:left;white-space:normal}
+main.piece .link-btn{min-height:44px;padding:0 8px;border:0;border-radius:10px;background:none;font-size:15px;font-weight:600;color:var(--lime);text-decoration:underline;text-underline-offset:3px}
+main.piece .link-btn:hover:not(:disabled){background:var(--raised)}
+main.piece .act-keys{display:none;margin:0;font-size:12px;color:var(--muted)}
+main.piece.slot-taken .trainer-actions{display:none}
+
+/* Result card in the action slot */
+main.piece .result-card{display:grid;gap:2px}
+main.piece .result-card .score-head.scored .score-num{font-size:40px}
+main.piece .result-card .score-bar{margin-top:6px}
+main.piece .result-card .comfort-ask{margin:4px 0}
+main.piece .result-card .take-fix{margin:2px 0;font-size:14px;line-height:1.35}
+main.piece .result-card .comfort-actions{margin:0}
+main.piece #piece-result .comfort-actions button{min-height:44px}
+main.piece .card-secondary{display:flex;justify-content:space-between;gap:4px}
+main.piece .card-secondary .link-btn{flex:1 1 0;min-width:0;padding:0 4px;font-size:14px;white-space:normal}
+main.piece .take-details{display:grid;gap:4px}
+main.piece .take-details:empty{display:none}
+main.piece .take-details .grade-metrics{margin:4px 0}
+main.piece .strip-legend{font-size:12px}
+main.piece .spot-choices{margin:0}
+main.piece .spot-choices .comfort-ask{margin:2px 0 6px}
+main.piece .spot-choices button{min-height:44px}
+
+/* The menu: a bottom sheet on phones, a right-hand drawer on desktops; every section starts closed */
+html:has(main.piece .drawer[open]){overflow:hidden}
+main.piece .drawer{position:fixed;inset:auto 0 0 0;width:100%;max-width:none;height:auto;max-height:88dvh;margin:0;padding:0;overflow:hidden;border:1px solid var(--line);border-radius:20px 20px 0 0;background:var(--card);color:var(--ink)}
+main.piece .drawer[open]{display:flex}
+main.piece .drawer::backdrop{background:rgba(4,7,5,.68)}
+main.piece .drawer-inner{display:flex;flex:1 1 auto;flex-direction:column;width:100%;min-height:0}
+main.piece .drawer-head{display:flex;flex:none;align-items:center;justify-content:space-between;padding:6px 10px 6px 18px;border-bottom:1px solid var(--line)}
+main.piece .drawer-head h2{margin:0;font-size:18px;font-weight:600}
+main.piece .drawer-head button{min-height:44px;padding:0 18px;border:1px solid var(--outline);border-radius:14px;background:var(--raised);font-size:15px;font-weight:600}
+main.piece .drawer-body{display:grid;flex:1 1 auto;align-content:start;gap:8px;min-height:0;padding:10px 12px 20px;overflow-y:auto;overscroll-behavior:contain}
+main.piece .drawer details{min-width:0;margin:0;padding:0;border:1px solid var(--line);border-radius:14px;background:var(--raised);font-size:14px;line-height:1.5;color:var(--ink)}
+main.piece .drawer details>summary{display:flex;flex-wrap:wrap;align-items:center;gap:0 8px;min-height:48px;padding:4px 36px 4px 14px;position:relative;border-radius:14px;list-style:none;font-size:15px;font-weight:600;color:var(--ink)}
+main.piece .drawer details>summary::-webkit-details-marker{display:none}
+main.piece .drawer details>summary::after{content:"";position:absolute;top:50%;right:16px;width:8px;height:8px;margin-top:-6px;border:solid var(--muted);border-width:0 2px 2px 0;transform:rotate(45deg)}
+main.piece .drawer details[open]>summary::after{margin-top:-2px;transform:rotate(225deg)}
+main.piece .drawer details>summary span{margin:0;font-size:13px;font-weight:400;color:var(--muted)}
+main.piece .drawer details>:not(summary){margin-right:14px;margin-left:14px}
+main.piece .drawer details>:last-child:not(summary){margin-bottom:14px}
+main.piece .drawer details>summary~p{max-width:62ch}
+main.piece .drawer .piece-controls{margin-top:4px;gap:12px 18px}
+main.piece .drawer .trainer-status{gap:6px 16px;padding:4px 0 0;font-size:13px}
+main.piece .drawer .intro{margin:0 0 8px;font-size:14px;color:var(--muted)}
+main.piece .drawer #piece-next{min-height:44px;margin-top:4px}
+main.piece .drawer footer{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:0;padding-top:0;border:0;font-size:14px;color:var(--ink)}
+main.piece .drawer kbd{display:inline-block;min-width:32px;padding:2px 8px;border:1px solid var(--outline);border-bottom-width:3px;border-radius:8px;background:var(--card);font-size:13px;font-weight:600;text-align:center;color:var(--ink)}
+main.piece .drawer :is(.muted,.today-week,.map-strip,.map-legend,.map-name,.map-key,.today-aim .inline-check,.text-button,.review-actions button,.review-actions a,.offset-row button,.course-lesson span .muted){font-size:12px}
+main.piece .drawer :is(.today-step span:last-child,.course-lesson span:last-child,.journal-entry span:last-child){font-size:12px}
+main.piece .drawer .map-key{width:22px}
+main.piece .drawer :is(.week-day,.map-key){color:var(--muted)}
+main.piece .drawer-status{flex:none;margin:0;padding:6px 18px;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink)}
+main.piece .drawer-status:empty{display:none}
+main.piece .drawer :is(button,a,select,input[type=number]){min-height:44px}
+main.piece .drawer .map-cell{min-height:0}
+main.piece .drawer .review-actions a{display:inline-flex;align-items:center}
+main.piece .drawer #piece-player{display:block}
+main.piece .drawer .take-details{margin-top:4px}
+
+/* Motion: the sheet slides in briefly; never in Calm or with reduced motion */
+@keyframes piece-sheet-in{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+@keyframes piece-drawer-in{from{transform:translateX(28px);opacity:0}to{transform:none;opacity:1}}
+main.piece:not(.calm) .drawer[open]{animation:piece-sheet-in .2s ease-out}
+
+/* Phones: one-word chips, a sticky block that can always scroll within the screen, and NEXT TAKE leaves its button to a NOTICE
+   that offers one. On a short screen NEXT TAKE puts its label on the sentence's line, leaves its button to any NOTICE, and Hear it joins Start's row */
+@media not all and (min-width:701px){
+  main.piece .chip .long{display:none}
+  main.piece .chip .short{display:inline}
+  main.piece .app-nav span{display:none}
+  main.piece .dock{max-height:calc(100dvh - 8px);overflow-y:auto;overscroll-behavior:contain}
+  main.piece.notice-act .next-action{display:none}
+}
+@media not all and (min-width:701px){@media(max-height:700px){
+  main.piece.notice-on .next-action{display:none}
+  main.piece .trainer-actions{display:flex;flex-wrap:wrap;gap:6px 8px}
+  main.piece .act-more{display:contents}
+  main.piece :is(#piece-start,#piece-stop){flex:1 1 240px;width:auto;min-width:240px}
+  main.piece .notice{padding:2px 4px 2px 10px}
+  main.piece .next-take{display:block;padding:4px 12px 5px}
+  main.piece .next-take .loop-label{margin-right:8px}
+  main.piece :is(.next-body,.next-text){display:inline}
+  main.piece .next-text{font-size:15px;line-height:1.3}
+  main.piece .next-action{display:block}
+  main.piece #piece-feedback{font-size:14px;line-height:1.3}
+}}
+
+/* Desktop: two HUD columns (step and tempo on the left, NEXT TAKE and LAST TAKE on the right), the lane, then the actions */
+@media(min-width:701px){
+  main.piece{padding:0 24px 8px}
+  main.piece .welcome-card ol{-webkit-line-clamp:2}
+  main.piece .welcome-card{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"title list ok";gap:0 16px;max-height:64px;margin:0 0 4px;padding:2px 8px 2px 16px}
+  main.piece .topbar{min-height:52px;padding:0 4px 0 0}
+  main.piece .stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,440px);grid-template-areas:"hud next" "hud last" "head head" "lane lane" "shapes shapes" "notice notice" "spot spot" "actions actions" "result result" "choices choices";grid-template-rows:auto 1fr;column-gap:24px;align-items:start}
+  main.piece .dock{display:contents}
+  main.piece .hud{grid-area:hud;padding:8px 0 10px;border:0;background:none}
+  main.piece .hud-passage h2{font-size:28px;line-height:34px}
+  main.piece .passage-row{min-height:34px}
+  main.piece .unit-caption{display:block}
+  main.piece .readout{gap:20px;min-height:84px}
+  main.piece .bpm-num{font-size:88px;line-height:84px}
+  main.piece .ladder{max-width:480px;margin-top:6px}
+  main.piece .pip-row{margin-top:6px}
+  main.piece #piece-next-take{grid-area:next;margin-top:10px;padding:8px 16px 12px}
+  main.piece .next-muted{display:block;font-size:15px}
+  main.piece .about-body .about-muted{display:none}
+  main.piece .last-take{grid-area:last;align-self:start;margin:8px 0 0}
+  main.piece .practice-state{grid-area:head;margin:6px 0 4px;padding:0}
+  main.piece .lane-wrap{grid-area:lane;height:440px;border-width:1px;border-radius:16px}
+  main.piece .unit-shapes{grid-area:shapes;padding:6px 0 0}
+  main.piece .notice{grid-area:notice;margin-top:8px}
+  main.piece .spot-banner{grid-area:spot;margin-top:8px}
+  main.piece .trainer-actions{grid-area:actions;display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:10px 0 0}
+  main.piece :is(#piece-start,#piece-stop){width:auto;min-width:260px}
+  main.piece .act-keys{display:block;margin-left:auto}
+  main.piece .result-card{grid-area:result;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);grid-template-areas:"score answer" "fix answer" "hint answer" "second answer" "details details";gap:4px 32px;align-items:start;padding-top:10px}
+  main.piece .result-card .take-score{grid-area:score}
+  main.piece .result-card .take-fix{grid-area:fix}
+  main.piece .result-card .spot-hint{grid-area:hint}
+  main.piece .result-card .answer{grid-area:answer}
+  main.piece .result-card .card-secondary{grid-area:second;justify-content:flex-start;gap:12px}
+  main.piece .result-card .card-secondary .link-btn{flex:none;padding:0 8px}
+  main.piece .result-card .take-details{grid-area:details;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:4px 24px}
+  main.piece .result-card .take-details>:not(.timing-strip,.grade-metrics){grid-column:1 / -1}
+  main.piece .result-card .score-head.scored .score-num{font-size:56px}
+  main.piece .result-card .comfort-ask{margin-top:0}
+  main.piece .spot-choices{grid-area:choices;padding-top:10px}
+  main.piece .drawer{inset:0 0 0 auto;width:min(460px,100vw);height:100dvh;max-height:none;border-radius:18px 0 0 18px}
+  main.piece:not(.calm) .drawer[open]{animation-name:piece-drawer-in}
+}
+@media(min-width:701px) and (max-height:699px){main.piece .bpm-num{font-size:72px;line-height:60px}main.piece .readout{min-height:60px}}
+@media(prefers-reduced-motion:reduce){main.piece .drawer[open]{animation:none!important}}

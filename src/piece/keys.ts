@@ -43,13 +43,16 @@ export function layoutFor(midis: number[]): KeyLayout {
 
 export interface KeyHandlers { down(midi: number, stamp: number, source: 'keys' | 'midi'): void; up(midi: number): void }
 
-/** Listens to the computer keyboard and to every MIDI input while enabled. Stamps are performance.now() milliseconds. */
+/**
+ * Listens to the computer keyboard and to every MIDI input while enabled. Stamps are performance.now() milliseconds.
+ * paused: while true (a menu or box covers the page) no key or MIDI note plays; keys already down still release.
+ */
 export class KeyInput {
   enabled = false; layout: KeyLayout = { lower: 48, upper: 60 }; midiDevices = 0; midiError = '';
   private map = keyMap(this.layout);
   private down = new Map<string, number>();
   private access?: MIDIAccess;
-  constructor(private handlers: KeyHandlers, private onOctave: () => void = () => {}) {
+  constructor(private handlers: KeyHandlers, private onOctave: () => void = () => {}, private paused: () => boolean = () => false) {
     window.addEventListener('keydown', e => this.keydown(e));
     window.addEventListener('keyup', e => this.keyup(e));
     window.addEventListener('blur', () => this.releaseAll());
@@ -64,7 +67,7 @@ export class KeyInput {
     return e.ctrlKey || e.metaKey || e.altKey || (t instanceof Element && Boolean(t.closest('input, select, textarea, [contenteditable=true]')));
   }
   private keydown(e: KeyboardEvent): void {
-    if (!this.enabled || this.typing(e)) return;
+    if (!this.enabled || this.typing(e) || this.paused()) return;
     if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); if (!e.repeat) { const step = e.code === 'ArrowLeft' ? -12 : 12; this.setLayout({ lower: this.layout.lower + step, upper: this.layout.upper + step }); this.onOctave(); } return; }
     const midi = this.map.get(e.code);
     if (midi === undefined) return;
@@ -93,7 +96,7 @@ export class KeyInput {
   private message(m: MIDIMessageEvent): void {
     if (!this.enabled || !m.data || m.data.length < 3) return;
     const [status, note, velocity] = m.data, type = status & 0xf0;
-    if (type === 0x90 && velocity > 0) this.handlers.down(note, m.timeStamp, 'midi');
+    if (type === 0x90 && velocity > 0) { if (!this.paused()) this.handlers.down(note, m.timeStamp, 'midi'); }
     else if (type === 0x80 || (type === 0x90 && velocity === 0)) this.handlers.up(note);
   }
 }

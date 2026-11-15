@@ -1,4 +1,5 @@
 import type { EventResult } from './grade';
+import { floorPct } from './pct';
 import type { TakeBest } from './progress';
 
 /**
@@ -42,14 +43,14 @@ export interface TakeFacts { score: number; timing: number; tight?: number; supp
  */
 export function compareTake(before: TakeBest | undefined, take: TakeFacts, trusted: boolean, approx = false): { after: TakeBest | undefined; wins: string[] } {
   if (!trusted) return { after: before, wins: [] };
-  const pct = (x: number) => `${Math.round(x * 100)}%`, wins: string[] = [], about = approx ? 'about ' : '';
+  const pct = (x: number) => `${floorPct(x)}%`, wins: string[] = [], about = approx ? 'about ' : '';
   const memory = take.support >= 1 && take.score >= 0.9;
   if (!before) {
     wins.push(`First counted take at this tempo: ${pct(take.score)}.`);
     if (memory) wins.push('Clean from memory on the first counted take at this tempo.');
   } else {
-    if (Math.round(take.score * 100) > Math.round(before.score * 100)) wins.push(`New best at this tempo: ${pct(take.score)} (was ${pct(before.score)}).`);
-    const delta = Math.round(take.timing * 100) - Math.round(before.last * 100);
+    if (floorPct(take.score) > floorPct(before.score)) wins.push(`New best at this tempo: ${pct(take.score)} (was ${pct(before.score)}).`);
+    const delta = floorPct(take.timing) - floorPct(before.last);
     if (delta > 0) wins.push(`+${delta}% on time versus your last take.`);
     if (take.tight !== undefined && take.tight < before.tight) wins.push(`Tightest timing yet: ${about}${take.tight} ms from the beat (was ${about}${before.tight}).`);
     if (memory && !before.memory) wins.push('First clean take from memory at this tempo.');

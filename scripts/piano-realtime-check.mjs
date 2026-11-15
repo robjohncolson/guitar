@@ -97,7 +97,8 @@ const grandReady = s => s.until("document.getElementById('piece-piano-status').t
 const lastEvent = (s, type) => ev(s, `__tap.events.filter(e => e.type === '${type}').pop()`);
 const around = async (s, n0) => { await pause(500); return tap(s, n0); };
 const stopRunning = s => ev(s, "!document.getElementById('piece-stop').disabled");
-const openAbout = s => ev(s, "document.getElementById('piece-about').open = true");
+// "Hear the whole piece" lives in the menu dialog: open it with a real click (it closes when playback starts), then its About section.
+const openAbout = async s => { if (!await ev(s, "document.getElementById('piece-drawer').open")) await click(s, '#piece-menu'); await ev(s, "document.getElementById('piece-about').open = true"); };
 const med = a => { const b = [...a].sort((x, y) => x - y); return b.length ? b[Math.floor(b.length / 2)] : null; };
 const r1 = x => (x === null ? null : Math.round(x * 10) / 10);
 
@@ -144,7 +145,7 @@ try {
     // 2a: Escape stops within 100 ms; 2b: Stop button
     const stops = [];
     for (const how of ['Escape', 'button']) {
-      if (how === 'button') { await pause(300); await click(s, '#piece-listen'); await waitSound(s); await pause(800); }
+      if (how === 'button') { await pause(300); await openAbout(s); await click(s, '#piece-listen'); await waitSound(s); await pause(800); }
       const n1 = await count(s);
       if (how === 'Escape') { await keyDown(s, 'Escape'); await keyUp(s, 'Escape'); } else await click(s, '#piece-stop');
       await pause(800);
@@ -212,7 +213,7 @@ try {
     const peakDemo = peak(await tap(s, n0), 0, 1e9);
     await keyDown(s, 'Escape'); await keyUp(s, 'Escape'); await pause(600);
     // Afterwards the loaded grand piano is used by a new demo.
-    const s2 = await ev(s, '__tap.starts.length'); await click(s, '#piece-listen'); await waitSound(s); await pause(500);
+    const s2 = await ev(s, '__tap.starts.length'); await openAbout(s); await click(s, '#piece-listen'); await waitSound(s); await pause(500);
     const next = await startsOf(s, s2);
     check('5 while samples load the demo uses the simple voice, status shows loading, and the take keeps it', sounded && status === 'Loading piano…' && oscNotes(early) > 0 && bufs(early) === 0 && running && bufs(late) === 0 && oscNotes(late) > 0 && peakDemo > SOUND,
       { delayMs: DELAY, statusWhileLoading: status, mp3DoneAtSound: arrived0, demoStillRunningAfterArrival: running, pianoOscillatorsEarly: oscNotes(early), bufferStartsEarly: bufs(early), bufferStartsThroughArrival: bufs(late), pianoOscillatorsTotal: oscNotes(late), nextDemoBufferStarts: bufs(next), nextDemoPianoOscillators: oscNotes(next) });
