@@ -41,11 +41,22 @@ export const barAt = (ex: Exercise, beat: number) => {
 const where = (ex: Exercise, beat: number) => { const at = barAt(ex, beat); return `bar ${at.number}, beat ${at.beat}`; };
 
 /** Piano: spectral-flux attacks plus partial evidence. Unclear evidence never counts for or against. */
+/**
+ * How far from the beat an attack may land and still count as on time: the learner's choice in Sound & timing.
+ * Standard is 130 ms (less at fast tempos, 16% of a beat); the others scale both limits.
+ */
+export const LENIENCY = { tight: 0.65, standard: 1, relaxed: 1.6, loose: 2.2 } as const;
+export type Leniency = keyof typeof LENIENCY;
+let slack: number = LENIENCY.relaxed;
+export function setLeniency(level: Leniency | number): void { slack = typeof level === 'number' ? level : LENIENCY[level]; }
+/** The on-time window in seconds at this beat length, never wider than the reach used to pair attacks with beats. */
+export const timingWindow = (period: number) => Math.min(0.13 * slack, period * 0.16 * slack, Math.min(0.4, period * 0.45) * 0.9);
+
 export function gradePiano(ex: Exercise, bpm: number, take: TakeAudio, onsets: PianoOnset[], offset: number, checkPitch = true): PieceGrade {
   const period = 60 / bpm, graded = ex.events.map((e, index) => ({ e, index })).filter(x => x.e.grade !== 'none');
   const times = graded.map(x => take.playAt + offset + x.e.beat * period);
   const strong = onsets.filter(o => o.strength >= 0.12);
-  const pairs = match(times, strong.map(o => o.t), Math.min(0.4, period * 0.45)), window = Math.min(0.13, period * 0.16);
+  const pairs = match(times, strong.map(o => o.t), Math.min(0.4, period * 0.45)), window = timingWindow(period);
   // One analysis window per attack. It ends before the next expected event or the next clear attack, never at a weak
   // stray peak: a shortened window cannot separate semitones.
   const strengths = strong.map(o => o.strength).sort((a, b) => a - b), median = strengths[Math.floor(strengths.length / 2)] ?? 0;
@@ -128,7 +139,7 @@ export function gradeAttacks(ex: Exercise, bpm: number, attacks: Attack[], take:
   const period = 60 / bpm, graded = ex.events.map((e, index) => ({ e, index })).filter(x => x.e.grade !== 'none');
   const times = graded.map(x => x.e.beat * period);
   const shifted = attacks.map(a => ({ ...a, t: a.t - offset })).sort((a, b) => a.t - b.t);
-  const pairs = match(times, shifted.map(a => a.t), Math.min(0.4, period * 0.45)), window = Math.min(0.13, period * 0.16);
+  const pairs = match(times, shifted.map(a => a.t), Math.min(0.4, period * 0.45)), window = timingWindow(period);
   const used = new Set(pairs.values()), extras = shifted.filter((_, j) => !used.has(j)).length;
   let inTime = 0, heard = 0, wrongOrMissing = 0, unclear = 0;
   const offsets: number[] = [];
@@ -171,7 +182,7 @@ export interface KeyPress { t: number; midi: number; dur?: number }
  * tighter tier shown as information only; it never changes a score. together: presses this close form one attack.
  */
 export const keyReach = (period: number) => Math.min(0.4, period * 0.45);
-export const keyWindow = (period: number) => Math.min(0.13, period * 0.16);
+export const keyWindow = (period: number) => timingWindow(period);
 export const keyPerfect = (period: number) => Math.min(0.045, keyWindow(period) / 2);
 export const keyTogether = (period: number) => Math.min(0.08, period * 0.25);
 export type KeyTier = 'perfect' | 'good' | 'early' | 'late';

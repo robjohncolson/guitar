@@ -16,7 +16,7 @@ import { celebrate, chordBox, clearMoment, drawKeys, drawStrings, handColour, ke
 import { KeyInput, keyLabels, layoutFor, reaches } from './keys';
 import { noteKey, WaitRun } from './wait';
 import { chordSpans, prettyChord } from './analysis';
-import { barAt, keyPerfect, keyReach, keyWindow, type KeyLive, type PieceGrade } from './grade';
+import { barAt, keyPerfect, keyReach, keyWindow, LENIENCY, setLeniency, type KeyLive, type Leniency, type PieceGrade } from './grade';
 import { noteName, type Hand, type Score } from './score';
 import { barsText, isSpotId, pickSpot, slowerBpm, spotExercise, spotId, spotOffered, type SpotPick } from './spot';
 import { answerLines, capNote, comfortAsk, firstSentence, floorPct, nextLine, nextState, outcome, routeTake, takeStatus, type NextLine, type TakeFacts } from './loop';
@@ -70,7 +70,8 @@ const dropStale = () => { if (noticeFrom === 'loop' || noticeFrom === 'calibrati
 let lastTake = '', tooLoud = false, pop: { kind: 'pip' | 'climb'; until: number } | undefined, nextAction: NextLine['action'];
 // Computer keyboard and MIDI input: a per-browser preference, kept apart from practice progress.
 const INPUT = 'piece.input.v1';
-const inputPrefs = (() => { try { const v = JSON.parse(localStorage.getItem(INPUT) ?? '{}'); return { keys: v.keys === true, midiSound: v.midiSound !== false, calm: v.calm === true, piano: v.piano === 'simple' ? 'simple' as const : 'grand' as const, guitar: v.guitar === 'accompany' ? 'accompany' as const : 'piece' as const }; } catch { return { keys: false, midiSound: true, calm: false, piano: 'grand' as const, guitar: 'piece' as const }; } })();
+const inputPrefs = (() => { try { const v = JSON.parse(localStorage.getItem(INPUT) ?? '{}'); return { keys: v.keys === true, midiSound: v.midiSound !== false, calm: v.calm === true, piano: v.piano === 'simple' ? 'simple' as const : 'grand' as const, guitar: v.guitar === 'accompany' ? 'accompany' as const : 'piece' as const, leniency: (v.leniency in LENIENCY ? v.leniency : 'relaxed') as Leniency }; } catch { return { keys: false, midiSound: true, calm: false, piano: 'grand' as const, guitar: 'piece' as const, leniency: 'relaxed' as Leniency }; } })();
+audio.leniency = inputPrefs.leniency; setLeniency(inputPrefs.leniency);
 audio.piano = inputPrefs.piano;
 const saveInput = () => { try { localStorage.setItem(INPUT, JSON.stringify(inputPrefs)); } catch { /* preference lasts for this page */ } };
 let labels = keyLabels({ lower: 48, upper: 60 });
@@ -692,6 +693,8 @@ const warm = () => { window.removeEventListener('pointerdown', warm, true); wind
 window.addEventListener('pointerdown', warm, true); window.addEventListener('keydown', warm, true);
 el<HTMLSelectElement>('piece-piano').value = inputPrefs.piano;
 el<HTMLSelectElement>('piece-piano').onchange = () => { inputPrefs.piano = el<HTMLSelectElement>('piece-piano').value === 'simple' ? 'simple' : 'grand'; audio.piano = inputPrefs.piano; saveInput(); };
+el<HTMLSelectElement>('piece-leniency').value = inputPrefs.leniency;
+el<HTMLSelectElement>('piece-leniency').onchange = () => { const v = el<HTMLSelectElement>('piece-leniency').value; if (!(v in LENIENCY) || active()) { el<HTMLSelectElement>('piece-leniency').value = inputPrefs.leniency; return; } inputPrefs.leniency = v as Leniency; audio.leniency = inputPrefs.leniency; setLeniency(inputPrefs.leniency); saveInput(); };
 el<HTMLInputElement>('piece-midi-sound').onchange = () => { inputPrefs.midiSound = el<HTMLInputElement>('piece-midi-sound').checked; saveInput(); };
 el('piece-demo').onclick = () => { void start('demo'); };
 el('piece-listen').onclick = () => {

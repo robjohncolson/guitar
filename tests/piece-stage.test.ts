@@ -74,3 +74,14 @@ describe('Next in today\'s plan on stage', () => {
     ['practising', false, false], ['new', false, false], ['due', false, false], ['covered', false, false],
   ] as const)('%s, placed %s -> %s', (state, placed, show) => expect(stepFinished(state, placed)).toBe(show));
 });
+
+describe('timing leniency', () => {
+  it('scales the on-time window and never reaches the pairing reach', async () => {
+    const { setLeniency, timingWindow } = await import('../src/piece/grade');
+    setLeniency('standard'); expect(timingWindow(60 / 33)).toBeCloseTo(0.13);
+    setLeniency('relaxed'); expect(timingWindow(60 / 33)).toBeCloseTo(0.208);
+    setLeniency('loose'); expect(timingWindow(60 / 33)).toBeCloseTo(0.286);
+    setLeniency('loose'); expect(timingWindow(0.25)).toBeLessThan(0.25 * 0.45);
+    setLeniency('relaxed');
+  });
+});

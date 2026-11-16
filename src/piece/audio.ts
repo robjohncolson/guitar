@@ -6,7 +6,7 @@ import { loopWav } from '../audio/loop-wav';
 import { calibrate, pipOnsets, type Calibration } from '../trainer/calibration';
 import type { Ear } from '../audio/ear';
 import { analyzeTake } from '../trainer/analyze';
-import { gradeAttacks, gradeKeys, judgeKeys, type KeyJudgement, type KeyPress, type PieceGrade } from './grade';
+import { gradeAttacks, gradeKeys, judgeKeys, LENIENCY, type KeyJudgement, type KeyPress, type Leniency, type PieceGrade } from './grade';
 import { AudioClock } from './clock';
 import { planExercise, type PieceKind, type PiecePlan, type Sound } from './plan';
 import { PieceVoice } from './voice';
@@ -35,6 +35,8 @@ export class PieceAudio {
   offsetLatency: number | undefined;
   /** The output latency the browser reports now, in seconds (0 before audio starts). */
   get latencyNow(): number { return this.context ? outputDelay(this.context) : 0; }
+  /** How strictly attack timing is judged (Sound & timing). */
+  leniency: Leniency = 'relaxed';
   mode: OutputMode = 'headphones'; volume = 0.5; click = true; deviceKey = ''; checkPitch = true;
   /** mic: listen to an acoustic instrument. keys: grade the computer keyboard or MIDI presses; no microphone. */
   input: 'mic' | 'keys' = 'mic';
@@ -326,7 +328,7 @@ export class PieceAudio {
     let result: PieceGrade | undefined;
     try {
       if (current.exercise.instrument === 'piano') {
-        result = await this.analyse({ exercise: current.exercise, bpm: current.bpm, offset: current.offset, checkPitch: this.checkPitch, from: Math.max(0, playAt - 0.3), to: playAt + (plan.end - plan.playAt) + 0.4,
+        result = await this.analyse({ exercise: current.exercise, bpm: current.bpm, offset: current.offset, checkPitch: this.checkPitch, slack: LENIENCY[this.leniency], from: Math.max(0, playAt - 0.3), to: playAt + (plan.end - plan.playAt) + 0.4,
           take: { samples: capture.samples, rate, playAt, coverage, clipped: clipped / Math.max(1, capture.samples.length), interrupted, clicks: this.mode === 'speakers' && this.click } });
       } else {
         const pitched = current.exercise.events.some(e => e.grade === 'pitch');

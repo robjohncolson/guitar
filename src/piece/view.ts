@@ -59,6 +59,7 @@ export function pieceShell(): void {
         <label>Input processing <select id="piece-output"><option value="headphones">Headphones · clean input</option><option value="speakers">Speakers · echo cancellation</option></select></label>
         <label>Demo &amp; take volume <input id="piece-volume" type="range" min="0" max="1" step=".01" value=".5"><output id="piece-volume-value">50%</output></label>
         <label><input id="piece-click" type="checkbox" checked> Metronome during practice</label>
+        <label>Timing leniency <select id="piece-leniency"><option value="tight">Tight · about 85 ms</option><option value="standard">Standard · about 130 ms</option><option value="relaxed">Relaxed · about 210 ms</option><option value="loose">Loose · about 290 ms</option></select> <span class="muted">how far from the beat a note still counts as on time</span></label>
         <label>Piano sound <select id="piece-piano"><option value="grand">Grand piano</option><option value="simple">Simple</option></select> <span id="piece-piano-status" class="muted" role="status"></span></label>
         <label>Key feedback <select id="piece-effects"><option value="lively">Lively</option><option value="calm">Calm</option></select> <span id="piece-effects-help" class="muted"></span></label>
         <label><input id="piece-midi-sound" type="checkbox" checked> Sound for MIDI keys (turn off if your keyboard makes its own sound)</label>
