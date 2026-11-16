@@ -1088,7 +1088,7 @@ function paintNotice(): void {
 const html = (id: string, value: string) => { const k = `${id}:html`; if (shown.get(k) !== value) { shown.set(k, value); node(id).innerHTML = value; } };
 /**
  * The tempo ladder beside the BPM readout: one segment per rung (ahead ones pick a placement target), and pips for clean
- * takes in a row toward the next step (two) or, on a certification step, for the fading help (three). Both counts are
+ * takes at this tempo toward the next step (two, not necessarily in a row) or, on a certification step, for the fading help (three). Both counts are
  * saved with progress. Free tempo and spot practice dim the ladder and hide the pips.
  */
 function paintPips(p: UnitProgress): void {

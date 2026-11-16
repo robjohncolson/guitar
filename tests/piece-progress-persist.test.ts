@@ -56,7 +56,7 @@ it('keeps a needs-more-room take on a certification rung through a reload, and t
   // Rung 3 is the 80% certification rung. Help level 1 (notes hidden) has been reached when a needs-more-room take comes.
   for (const [score, comfortable] of [[0.5, true], [0.95, false]] as const) {
     const first = take({ ...initialUnit(), rung: 3, support: 1, clean: 1, attempts: 4, best: 0.7 }, score, comfortable);
-    expect(first.progress, `${score} ${comfortable}`).toMatchObject({ rung: 3, support: 1, hard: 1, clean: 0 });
+    expect(first.progress, `${score} ${comfortable}`).toMatchObject({ rung: 3, support: 1, hard: 1, clean: 1 });
     expect(first.event.kind, `${score} ${comfortable}`).toBe('hold');
     const back = reload(first.progress);
     expect(back, `${score} ${comfortable}: reloaded`).toMatchObject({ rung: 3, support: 1, hard: 1 });
@@ -98,4 +98,14 @@ describe('calibration latency', () => {
     expect(parsePieceProgress(JSON.stringify({ version: 1, offset: 0.12, calibrated: true, latency: 5 })).latency).toBe(1);
     expect(parsePieceProgress(JSON.stringify({ version: 1, offset: 0.12, calibrated: true })).latency).toBeUndefined();
   });
+});
+
+it('climbs after two clean takes at a step even with a weaker take between them', () => {
+  const one = take({ ...initialUnit(), rung: 1, attempts: 2 }, 0.95, true);
+  expect(one.progress).toMatchObject({ rung: 1, clean: 1 });
+  const weaker = take(one.progress, 0.8, true);
+  expect(weaker.progress).toMatchObject({ rung: 1, clean: 1, hard: 0 });
+  const two = take(weaker.progress, 0.93, true);
+  expect(two.progress).toMatchObject({ rung: 2, clean: 0 });
+  expect(two.event.kind).toBe('climb');
 });

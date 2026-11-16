@@ -6,7 +6,7 @@ export interface LadderView {
   rungs: LadderRung[]; at: number;
   /** Ahead rungs are placement-target buttons; target is the chosen one. */
   pick: boolean; target: number;
-  /** plain: clean takes in a row toward the next step (of 2); cert: fading help on a certification rung (support 0..2). Omitted = no pips. */
+  /** plain: clean takes at this tempo toward the next step (of 2, not necessarily in a row); cert: fading help on a certification rung (support 0..2). Omitted = no pips. */
   pips?: { kind: 'plain'; clean: number } | { kind: 'cert'; support: number };
   dim?: boolean;
   /** A confirmed clean answer just happened: 'pip' pops the newest filled pip, 'climb' slides the current segment. */
@@ -21,7 +21,7 @@ const pip = (on: boolean, pop: boolean) => `<span class="pip${on ? ' on' : ''}${
 function pipRow(pips: NonNullable<LadderView['pips']>, pop: boolean): string {
   if (pips.kind === 'plain') {
     const filled = Math.max(0, Math.min(2, pips.clean));
-    return `<div class="pip-row"><span class="pip-group" aria-hidden="true">${[0, 1].map(i => pip(i < filled, pop && i === filled - 1)).join('')}</span><span class="pip-caption">${filled} of 2 clean takes in a row</span></div>`;
+    return `<div class="pip-row"><span class="pip-group" aria-hidden="true">${[0, 1].map(i => pip(i < filled, pop && i === filled - 1)).join('')}</span><span class="pip-caption">${filled} of 2 clean takes</span></div>`;
   }
   const filled = Math.max(0, Math.min(3, pips.support));
   return `<div class="pip-row"><span class="pip-group" aria-hidden="true">${['Notes', 'Memory', 'Click'].map((name, i) => `<span class="pip-item">${pip(i < filled, pop && i === filled - 1)}${name}</span>`).join('')}</span><span class="pip-caption">Help level ${pips.support + 1} of 3</span></div>`;

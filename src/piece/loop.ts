@@ -112,7 +112,7 @@ function stepLine(unit: Unit, p: UnitProgress, now: number): [string, string] {
     return [`Last of 3 at ${bpm} BPM: notes hidden, a click on each bar only. ${top ? `A clean take certifies ${topName(unit, p)}.` : `A clean take certifies it and moves you ${upTo(unit, p, true)}.`}`, ''];
   }
   if (top) return [`Top step: ${bpm} BPM. Clean takes keep it steady.`, CLEAN_RULE];
-  return [p.clean >= 1 ? `One more clean take moves you ${upTo(unit, p)}.` : `Two clean takes in a row move you ${upTo(unit, p)}.`, CLEAN_RULE];
+  return [p.clean >= 1 ? `One more clean take moves you ${upTo(unit, p)}.` : `Two clean takes move you ${upTo(unit, p)}.`, CLEAN_RULE];
 }
 
 /** The answered take, as the ladder will see it. */
@@ -136,8 +136,7 @@ export function outcome(unit: Unit, before: UnitProgress, take: TakeFacts, comfo
   if (!result.trusted) return uncounted(clause(result.reason));
   if (!take.calibrated) return uncounted('timing is not calibrated');
   const change = advanceUnit(unit, before, result, comfortable, now, take.calibrated), { event, progress: after } = change;
-  const r = rungOf(unit, before), bpm = at(unit, before, r), plain = !certifies(unit, unit.rungs[r]);
-  const again = plain && before.clean >= 1 && !event.clean ? ' Two clean takes in a row are needed again.' : '';
+  const r = rungOf(unit, before), bpm = at(unit, before, r);
   const under = result.score < 0.65 ? 'Under 65%, so this counts as needing more room. ' : '';
   const out = (line: string, chip: string): Outcome => ({ route, event, after, line, chip });
   const slowest = `${bpm} BPM is the slowest step, so it stays.`;
@@ -167,10 +166,10 @@ export function outcome(unit: Unit, before: UnitProgress, take: TakeFacts, comfo
     if (top) return out(`Clean at ${bpm} BPM, the top step.`, `${pct} · ${event.overnight ? 'Clean: it stuck overnight' : `Clean at ${bpm} BPM`}`);
     return out(`Clean take 1 of 2. One more moves you ${upTo(unit, before)}.`, `${pct} · ${event.overnight ? 'Clean: it stuck overnight' : 'Clean, 1 of 2'}`);
   }
-  if (after.hard === 0) return out(`Kept at ${bpm} BPM: ${pct} is under the 90% a clean take needs.${again}`, `${pct} · Kept at ${bpm} BPM: under 90%`);
+  if (after.hard === 0) return out(`Kept at ${bpm} BPM: ${pct} is under the 90% a clean take needs.`, `${pct} · Kept at ${bpm} BPM: under 90%`);
   const lower = rungOf(unit, { ...before, rung: Math.max(0, before.rung - 1) });
   const stays = r === 0 ? `Stays at ${bpm} BPM, the slowest step.` : lower === r ? `Stays at ${bpm} BPM.` : at(unit, before, lower) === bpm ? `Stays at ${bpm} BPM, the slowest allowed.` : `Stays at ${bpm} BPM. A second one in a row makes room: one step slower.`;
-  return out(`${under}${stays}${again}`, `${pct} · Needs more room: stays at ${bpm} BPM`);
+  return out(`${under}${stays}`, `${pct} · Needs more room: stays at ${bpm} BPM`);
 }
 
 /** The card's two consequence lines, one per answer. */

@@ -110,15 +110,15 @@ function checkNext(rows: NextRow[]) {
 }
 
 const plainRows: NextRow[] = [
-  n('plain rung 0, 0 in a row', st(hand), 'Two clean takes in a row move you up to 40 BPM.', CLEAN_RULE),
+  n('plain rung 0, 0 in a row', st(hand), 'Two clean takes move you up to 40 BPM.', CLEAN_RULE),
   n('plain rung 0, 1 in a row', st(hand, { clean: 1 }), 'One more clean take moves you up to 40 BPM.', CLEAN_RULE),
-  n('plain rung 1', st(hand, { rung: 1 }), 'Two clean takes in a row move you up to 46 BPM.', CLEAN_RULE),
+  n('plain rung 1', st(hand, { rung: 1 }), 'Two clean takes move you up to 46 BPM.', CLEAN_RULE),
   n('plain rung 2, 1 in a row', st(hand, { rung: 2, clean: 1 }), 'One more clean take moves you up to 53 BPM.', CLEAN_RULE),
-  n('plain rung 4 of the full step', st(full, { rung: 4 }), 'Two clean takes in a row move you up to 62 BPM.', CLEAN_RULE),
+  n('plain rung 4 of the full step', st(full, { rung: 4 }), 'Two clean takes move you up to 62 BPM.', CLEAN_RULE),
   n('plain rung 5 of the full step, 1 in a row', st(full, { rung: 5, clean: 1 }), 'One more clean take moves you up to 66 BPM.', CLEAN_RULE),
-  n('20 BPM floor, 0 in a row', st(slow), 'Two clean takes in a row move you to the next step (still 20 BPM, the slowest allowed).', CLEAN_RULE),
+  n('20 BPM floor, 0 in a row', st(slow), 'Two clean takes move you to the next step (still 20 BPM, the slowest allowed).', CLEAN_RULE),
   n('20 BPM floor, 1 in a row', st(slow, { clean: 1 }), 'One more clean take moves you to the next step (still 20 BPM, the slowest allowed).', CLEAN_RULE),
-  n('past the floor the next tempo is named again', st(slow, { rung: 1 }), 'Two clean takes in a row move you up to 21 BPM.', CLEAN_RULE),
+  n('past the floor the next tempo is named again', st(slow, { rung: 1 }), 'Two clean takes move you up to 21 BPM.', CLEAN_RULE),
   // Not in the tables: loop.ts's sentence for a top step that has nothing to certify.
   n('top step with nothing to certify', st(steady, { rung: 2 }), 'Top step: 60 BPM. Clean takes keep it steady.', CLEAN_RULE),
 ];
@@ -235,7 +235,7 @@ const SAY = {
   calibrate: 'Takes will not move your tempo until timing is calibrated: 8 clicks, with an earcup held to the mic.',
   placing: 'Placement take at 53 BPM: one clean, comfortable take places you here. Otherwise nothing is recorded.',
   free: 'Free tempo: takes at 36 BPM do not move the ladder. Go back to 33 BPM to count takes.',
-  step: 'Two clean takes in a row move you up to 40 BPM.',
+  step: 'Two clean takes move you up to 40 BPM.',
 };
 const SPOT = { bars: 'bar 3', bpm: 28 };
 /** The flags of a calibrated microphone on a step that counts, with nothing playing and nothing owed. */
@@ -321,7 +321,8 @@ interface Row {
 }
 const UNDER = 'Under 65%, so this counts as needing more room. ';
 const ROOM = 'A second one in a row makes room: one step slower.';
-const AGAIN = ' Two clean takes in a row are needed again.';
+// Clean takes add up at a step without having to be in a row, so no answer line warns that the count starts again.
+const AGAIN: string = '';
 const STAYS = 'Your tempo step stays as it is.';
 const FLOOR_STAYS = 'Stays at 20 BPM, the slowest allowed.';
 const FLOOR_DOWN = 'One step slower (still 20 BPM, the slowest allowed).';
@@ -346,7 +347,7 @@ const REASONS: [string, string][] = [
 ];
 
 const ROWS: Row[] = [
-  // Plain rung: two clean takes in a row climb.
+  // Plain rung: two clean takes climb, not necessarily in a row.
   { name: 'plain rung 0, 92%, 0 clean so far', unit: hand, score: 0.92,
     yes: ['Clean take 1 of 2. One more moves you up to 40 BPM.', '92% · Clean, 1 of 2'],
     no: ['Stays at 33 BPM, the slowest step.', '92% · Needs more room: stays at 33 BPM'] },
@@ -650,7 +651,7 @@ const stepText = (unit: Unit, p: UnitProgress, at = now) => nextLine({ unit, p, 
 interface Promised { kind: 'climb' | 'certify' | 'help' | 'last' | 'learn' | 'today' | 'review' | 'review-up' | 'learned' | 'steady'; takes: number; bpm?: number; to?: number; top?: number; label?: string; days?: number }
 const COUNT = { One: 1, Two: 2, Three: 3 } as const;
 const RULES: [RegExp, (m: RegExpMatchArray) => Promised][] = [
-  [/^(Two clean takes in a row move|One more clean take moves) you (?:up to (\d+) BPM|to the next step \(still (\d+) BPM, the slowest allowed\))\.$/,
+  [/^(Two clean takes move|One more clean take moves) you (?:up to (\d+) BPM|to the next step \(still (\d+) BPM, the slowest allowed\))\.$/,
     m => ({ kind: 'climb', takes: m[1].startsWith('Two') ? 2 : 1, bpm: Number(m[2] ?? m[3]) })],
   [/^Three clean takes certify (\d+) BPM, each with less help\. This one: notes shown \(1 of 3\)\.$/, m => ({ kind: 'certify', takes: 3, bpm: Number(m[1]) })],
   [/^Take 2 of 3 at (\d+) BPM, notes hidden\. A clean take unlocks the last one: a click on each bar only\.$/, m => ({ kind: 'help', takes: 1, bpm: Number(m[1]) })],
@@ -842,7 +843,7 @@ function checkAnswer(unit: Unit, before: UnitProgress, got: Outcome, bad: string
     if (second.rung !== got.after.rung - 1 || rungBpm(unit, second) >= current) failLine(`promises a slower step, but a second needs-more-room take ends on rung ${second.rung} at ${rungBpm(unit, second)} BPM`);
   }
   if (got.line.includes('It comes back quickly.') && (!got.after.learned || got.after.interval !== 1 || got.after.due !== now + DAY)) failLine('says it comes back quickly, but the review is not due tomorrow');
-  if (got.line.includes(AGAIN.trim())) {
+  if (AGAIN && got.line.includes(AGAIN.trim())) {
     const [, one, two] = cleanTakes(unit, got.after, 2);
     if (one.rung !== got.after.rung || two.rung !== got.after.rung + 1) failLine('says two clean takes in a row are needed, but they do not climb');
   }
@@ -856,14 +857,15 @@ it('keeps the claims of every answer line: the tempo it reaches, a slower step, 
     for (const [answer, comfortable] of answers(r)) {
       const got = outcome(r.unit, before, take, comfortable, now);
       checkAnswer(r.unit, before, got, bad, () => `${r.name}, ${answer}`, { tally });
-      room += Number(got.line.includes(ROOM)); quick += Number(got.line.includes('It comes back quickly.')); again += Number(got.line.includes(AGAIN.trim()));
+      room += Number(got.line.includes(ROOM)); quick += Number(got.line.includes('It comes back quickly.')); again += Number(Boolean(AGAIN) && got.line.includes(AGAIN.trim()));
     }
   }
   expect(bad).toEqual([]);
   expect(tally.reached).toBeGreaterThan(30);
   expect(tally.next).toBeGreaterThan(10);
   expect(tally.at).toBeGreaterThan(60);
-  expect([room, quick, again].every(count => count > 5)).toBe(true);
+  expect([room, quick].every(count => count > 5)).toBe(true);
+  expect(again).toBe(0);
 });
 
 // ---- the other lines the page writes: firstSentence, clause, capNote, takeStatus, comfortAsk, UNANSWERED ----

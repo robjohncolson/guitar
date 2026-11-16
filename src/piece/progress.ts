@@ -102,7 +102,8 @@ function ladder(unit: Unit, before: UnitProgress, result: { trusted: boolean; sc
   // One hand alone stops at 80%: its top step is not the goal tempo, and the messages say so.
   const topName = fraction >= 1 - 1e-9 ? 'the goal tempo' : `${Math.round(fraction * 100)}%, the top step for one hand`;
   const clean = result.score >= 0.9 && comfortable, hard = result.score < 0.65 || !comfortable;
-  if (clean) { p.clean++; p.hard = 0; p.best = Math.max(p.best, fraction); } else { p.clean = 0; p.hard = hard ? p.hard + 1 : 0; }
+  // Clean takes add up at this tempo, not necessarily in a row; a step down (below) starts the count again.
+  if (clean) { p.clean++; p.hard = 0; p.best = Math.max(p.best, fraction); } else p.hard = hard ? p.hard + 1 : 0;
   if (p.learned && p.due <= now) {
     if (clean && top) { p.interval = REVIEW_DAYS[Math.min(REVIEW_DAYS.length - 1, REVIEW_DAYS.indexOf(p.interval) + 1)] ?? 1; p.due = now + p.interval * DAY; return { progress: p, message: `Review passed. Next review in ${p.interval} day${p.interval === 1 ? '' : 's'}.` }; }
     if (hard) { p.interval = 1; p.due = now + DAY; p.hard = 0; p.rung = Math.max(0, p.rung - 1); return { progress: p, message: 'It has faded a little. One step slower; it will come back quickly.' }; }

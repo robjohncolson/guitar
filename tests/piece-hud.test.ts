@@ -115,14 +115,14 @@ it('has no pip row without pips', () => {
   expect(ladderHtml(view({ pips: undefined })).endsWith('</div>')).toBe(true);
 });
 
-it('shows the clean takes in a row as two pips with a caption that carries the words', () => {
+it('shows the clean takes as two pips with a caption that carries the words', () => {
   const row = (filled: string[], caption: string) => `<div class="pip-row"><span class="pip-group" aria-hidden="true">${filled.map(c => `<span class="${c}"></span>`).join('')}</span><span class="pip-caption">${caption}</span></div>`;
   const after = (clean: number, o: Partial<LadderView> = {}) => ladderHtml(view({ pips: { kind: 'plain', clean }, ...o })).split('</div>')[1] + '</div>';
-  expect(after(0)).toBe(row(['pip', 'pip'], '0 of 2 clean takes in a row'));
-  expect(after(1)).toBe(row(['pip on', 'pip'], '1 of 2 clean takes in a row'));
-  expect(after(2)).toBe(row(['pip on', 'pip on'], '2 of 2 clean takes in a row'));
-  expect(after(3)).toBe(row(['pip on', 'pip on'], '2 of 2 clean takes in a row'));
-  expect(after(-1)).toBe(row(['pip', 'pip'], '0 of 2 clean takes in a row'));
+  expect(after(0)).toBe(row(['pip', 'pip'], '0 of 2 clean takes'));
+  expect(after(1)).toBe(row(['pip on', 'pip'], '1 of 2 clean takes'));
+  expect(after(2)).toBe(row(['pip on', 'pip on'], '2 of 2 clean takes'));
+  expect(after(3)).toBe(row(['pip on', 'pip on'], '2 of 2 clean takes'));
+  expect(after(-1)).toBe(row(['pip', 'pip'], '0 of 2 clean takes'));
 });
 
 it('lists the pip row after the ladder, outside it', () => {
