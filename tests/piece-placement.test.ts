@@ -31,7 +31,7 @@ it('places at a certification step with support 1, the notes-shown take counted'
 
 it('records nothing for a take that does not place', () => {
   const before = { ...initialUnit(), rung: 1, hard: 1, attempts: 3, best: 0.6, last: now - DAY, clean: 1 };
-  for (const [over, comfortable] of [[{ score: 0.85 }, true], [{}, false], [{ score: 0.2 }, false]] as const) {
+  for (const [over, comfortable] of [[{ score: 0.75 }, true], [{}, false], [{ score: 0.2 }, false]] as const) {
     const r = place(together, before, at(together, 0.88), over, comfortable);
     expect(r.placed).toBe(false);
     expect(r.progress).toEqual(before);

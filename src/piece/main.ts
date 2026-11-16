@@ -8,7 +8,7 @@ import { buildCurriculum, exerciseFor, STAGES, type Curriculum, type Unit } from
 import { arrange, guitarExerciseFor, guitarUnits, GUITAR_STAGES, melodyBacking, type Arrangement } from './guitar';
 import { fromBars, sliceExercise, type Exercise, type XEvent } from './exercise';
 import { arrangePiece, guitarPieceUnits, otherLayer, pieceExercise, PIECE_STAGES, type PieceArrangement } from './solo';
-import { advanceUnit, canPlace, dayOf, initialUnit, logDay, parsePieceProgress, pieceProgressKey, placeHands, placeUnit, progressId, ready, rowDone, rungBpm, suggestToday, unitState, week, type AdvanceEvent, type PieceProgress, type PlanRow, type UnitProgress } from './progress';
+import { advanceUnit, canPlace, CLEAN, dayOf, initialUnit, logDay, parsePieceProgress, pieceProgressKey, placeHands, placeUnit, progressId, ready, rowDone, rungBpm, suggestToday, unitState, week, type AdvanceEvent, type PieceProgress, type PlanRow, type UnitProgress } from './progress';
 import { pieceMap } from './map';
 import { bestKey, compareTake, keyStats, pruneBests, tightness, timingSummary } from './bests';
 import { PieceAudio, type PieceTake } from './audio';
@@ -469,7 +469,7 @@ audio.onTake = take => {
   el('piece-result').hidden = false; persist();
   focusAnswer = !isSpot;
   const beats = result.events.map(e => e.beat), first = Math.min(...beats, 0), last = Math.max(...beats, 0);
-  reveal = { start: performance.now(), ms: Math.min(1200, 400 + 45 * result.events.length), first, last, final, celebrate: trusted && result.score >= 0.9 };
+  reveal = { start: performance.now(), ms: Math.min(1200, 400 + 45 * result.events.length), first, last, final, celebrate: trusted && result.score >= CLEAN };
   el('piece-result').classList.add('revealing');
   if (!trusted || !lively()) endReveal(); else stepReveal();
 };
@@ -541,7 +541,7 @@ function nextTake(comfortable: boolean): AdvanceEvent | undefined {
   if (route === 'place') return placeTake(u, done, comfortable);
   if (route === 'free') { done.entry.clean = false; persist(); paintToday(); ladderSaid = `Free tempo: tempo steps count at ${rungBpm(u, done.before)} BPM, the tempo you are on.`; return; }
   const change = advanceUnit(u, done.before, done.take.result, comfortable, Date.now(), timed(done.take));
-  // Clean is the ladder's own judgement: trusted, calibrated, 90% or better and comfortable.
+  // Clean is the ladder's own judgement: trusted, calibrated, 80% or better and comfortable.
   done.entry.clean = change.event.clean;
   if (change.event.clean) progress.log = logDay(progress.log, Date.now(), { clean: 1 });
   progress.units[key(u.id)] = change.progress; ladderSaid = change.message;

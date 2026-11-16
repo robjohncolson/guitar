@@ -183,7 +183,7 @@ const flagRows: NextRow[] = [
 const NEXT_ROWS = [...plainRows, ...certRows, ...doneRows, ...coverRows, ...flagRows];
 
 it('states the clean rule as the muted line, word for word', () => {
-  expect(CLEAN_RULE).toBe('Clean = 90% or better, and you say it felt comfortable.');
+  expect(CLEAN_RULE).toBe('Clean = 80% or better, and you say it felt comfortable.');
 });
 
 it('NEXT TAKE on a plain rung names the next tempo and the clean rule', () => checkNext(plainRows));
@@ -367,21 +367,21 @@ const ROWS: Row[] = [
     yes: ['Clean at 60 BPM, the top step.', '92% · Clean at 60 BPM'],
     no: [`Stays at 60 BPM. ${ROOM}`, '92% · Needs more room: stays at 60 BPM'] },
 
-  // 65 to 89%: held at the tempo. Under 65% counts as needing more room whichever way it felt.
-  { name: 'plain rung 0, 84%', unit: hand, score: 0.84,
-    yes: ['Kept at 33 BPM: 84% is under the 90% a clean take needs.', '84% · Kept at 33 BPM: under 90%'],
-    no: ['Stays at 33 BPM, the slowest step.', '84% · Needs more room: stays at 33 BPM'] },
-  { name: 'plain rung 1, 84%', unit: hand, before: { rung: 1 }, score: 0.84,
-    yes: ['Kept at 40 BPM: 84% is under the 90% a clean take needs.', '84% · Kept at 40 BPM: under 90%'],
-    no: [`Stays at 40 BPM. ${ROOM}`, '84% · Needs more room: stays at 40 BPM'] },
-  { name: 'plain rung 1, 84%, 1 clean so far', unit: hand, before: { ...lately, rung: 1, clean: 1 }, score: 0.84,
-    yes: [`Kept at 40 BPM: 84% is under the 90% a clean take needs.${AGAIN}`, '84% · Kept at 40 BPM: under 90%'],
-    no: [`Stays at 40 BPM. ${ROOM}${AGAIN}`, '84% · Needs more room: stays at 40 BPM'] },
-  { name: '89.6% prints as 89%, never 90%', unit: hand, score: 0.896,
-    yes: ['Kept at 33 BPM: 89% is under the 90% a clean take needs.', '89% · Kept at 33 BPM: under 90%'],
-    no: ['Stays at 33 BPM, the slowest step.', '89% · Needs more room: stays at 33 BPM'] },
+  // 65 to 79%: held at the tempo. Under 65% counts as needing more room whichever way it felt.
+  { name: 'plain rung 0, 74%', unit: hand, score: 0.74,
+    yes: ['Kept at 33 BPM: 74% is under the 80% a clean take needs.', '74% · Kept at 33 BPM: under 80%'],
+    no: ['Stays at 33 BPM, the slowest step.', '74% · Needs more room: stays at 33 BPM'] },
+  { name: 'plain rung 1, 74%', unit: hand, before: { rung: 1 }, score: 0.74,
+    yes: ['Kept at 40 BPM: 74% is under the 80% a clean take needs.', '74% · Kept at 40 BPM: under 80%'],
+    no: [`Stays at 40 BPM. ${ROOM}`, '74% · Needs more room: stays at 40 BPM'] },
+  { name: 'plain rung 1, 74%, 1 clean so far', unit: hand, before: { ...lately, rung: 1, clean: 1 }, score: 0.74,
+    yes: [`Kept at 40 BPM: 74% is under the 80% a clean take needs.${AGAIN}`, '74% · Kept at 40 BPM: under 80%'],
+    no: [`Stays at 40 BPM. ${ROOM}${AGAIN}`, '74% · Needs more room: stays at 40 BPM'] },
+  { name: '79.6% prints as 79%, never 80%', unit: hand, score: 0.796,
+    yes: ['Kept at 33 BPM: 79% is under the 80% a clean take needs.', '79% · Kept at 33 BPM: under 80%'],
+    no: ['Stays at 33 BPM, the slowest step.', '79% · Needs more room: stays at 33 BPM'] },
   { name: 'exactly 65% is kept, not under 65%', unit: hand, before: { rung: 1 }, score: 0.65,
-    yes: ['Kept at 40 BPM: 65% is under the 90% a clean take needs.', '65% · Kept at 40 BPM: under 90%'],
+    yes: ['Kept at 40 BPM: 65% is under the 80% a clean take needs.', '65% · Kept at 40 BPM: under 80%'],
     no: [`Stays at 40 BPM. ${ROOM}`, '65% · Needs more room: stays at 40 BPM'] },
   { name: 'just under 65% counts as needing more room', unit: hand, before: { rung: 1 }, score: 0.649,
     ...both(`${UNDER}Stays at 40 BPM. ${ROOM}`, '64% · Needs more room: stays at 40 BPM') },
@@ -411,9 +411,9 @@ const ROWS: Row[] = [
   { name: 'certified on a second day is learned', unit: full, before: { ...lately, rung: 6, certified: [0.8, 1], days: [earlier], support: 2, clean: 2 }, score: 0.92,
     yes: ['Clean. Certified on a second day: learned.', '92% · Learned'],
     no: [`Stays at 66 BPM. ${ROOM}`, '92% · Needs more room: stays at 66 BPM'] },
-  { name: 'certification rung, 84%: no "in a row" count there', unit: full, before: { ...lately, rung: 3, support: 1, clean: 1 }, score: 0.84,
-    yes: ['Kept at 53 BPM: 84% is under the 90% a clean take needs.', '84% · Kept at 53 BPM: under 90%'],
-    no: [`Stays at 53 BPM. ${ROOM}`, '84% · Needs more room: stays at 53 BPM'] },
+  { name: 'certification rung, 74%: no "in a row" count there', unit: full, before: { ...lately, rung: 3, support: 1, clean: 1 }, score: 0.74,
+    yes: ['Kept at 53 BPM: 74% is under the 80% a clean take needs.', '74% · Kept at 53 BPM: under 80%'],
+    no: [`Stays at 53 BPM. ${ROOM}`, '74% · Needs more room: stays at 53 BPM'] },
   { name: 'certification rung, 50%', unit: full, before: { ...lately, rung: 3, support: 1, clean: 1 }, score: 0.5,
     ...both(`${UNDER}Stays at 53 BPM. ${ROOM}`, '50% · Needs more room: stays at 53 BPM') },
 
@@ -432,8 +432,8 @@ const ROWS: Row[] = [
     ...both(`${UNDER}33 BPM is the slowest step, so it stays.`, 'Needs more room twice in a row · 33 BPM is the slowest step, so it stays') },
   { name: 'second needs-more-room in a row on a certification rung drops the help too', unit: full, before: { ...lately, rung: 3, hard: 1, support: 1, clean: 1 }, score: 0.92,
     no: ['One step slower: 46 BPM.', 'Needs more room twice in a row · one step slower: 46 BPM'] },
-  { name: 'a pending needs-more-room is cleared by a middling take', unit: hand, before: { ...lately, rung: 1, hard: 1 }, score: 0.84,
-    yes: ['Kept at 40 BPM: 84% is under the 90% a clean take needs.', '84% · Kept at 40 BPM: under 90%'],
+  { name: 'a pending needs-more-room is cleared by a middling take', unit: hand, before: { ...lately, rung: 1, hard: 1 }, score: 0.74,
+    yes: ['Kept at 40 BPM: 74% is under the 80% a clean take needs.', '74% · Kept at 40 BPM: under 80%'],
     no: ['One step slower: 33 BPM.', 'Needs more room twice in a row · one step slower: 33 BPM'] },
 
   // Review due: one clean take at the top passes; needing more room moves one step slower, after a single take.
@@ -462,8 +462,8 @@ const ROWS: Row[] = [
     yes: ['Clean. Certifies 53 BPM and moves you up to 58 BPM.', '92% · Clean: it stuck overnight'] },
   { name: 'overnight, a top step with nothing to certify', unit: steady, before: { ...yesterday, rung: 2 }, score: 0.92,
     yes: ['Clean at 60 BPM, the top step.', '92% · Clean: it stuck overnight'] },
-  { name: 'overnight, but a middling take is only kept', unit: hand, before: { ...yesterday, rung: 1 }, score: 0.84,
-    yes: ['Kept at 40 BPM: 84% is under the 90% a clean take needs.', '84% · Kept at 40 BPM: under 90%'] },
+  { name: 'overnight, but a middling take is only kept', unit: hand, before: { ...yesterday, rung: 1 }, score: 0.74,
+    yes: ['Kept at 40 BPM: 74% is under the 80% a clean take needs.', '74% · Kept at 40 BPM: under 80%'] },
   { name: 'a first take ever is not overnight, whatever last says', unit: hand, before: { attempts: 0, last: now - DAY, rung: 1 }, score: 0.92,
     yes: ['Clean take 1 of 2. One more moves you up to 46 BPM.', '92% · Clean, 1 of 2'] },
   { name: 'a take with no recorded time is not overnight', unit: hand, before: { attempts: 3, last: 0, rung: 1 }, score: 0.92,
@@ -534,15 +534,15 @@ const ROWS: Row[] = [
   { name: 'placement on one hand stops at its top step', unit: hand, score: 0.92, bpm: 53, place: 6, route: 'place',
     yes: ['Places you at 53 BPM.', 'Placed at 53 BPM'],
     no: ['Not placed. Nothing is recorded.', 'Not placed · nothing recorded'] },
-  { name: 'placement, 84%', unit: full, score: 0.84, bpm: 53, place: 3, route: 'place',
-    yes: ['Not placed: 84% is under 90%. Nothing is recorded.', 'Not placed · nothing recorded'],
+  { name: 'placement, 74%', unit: full, score: 0.74, bpm: 53, place: 3, route: 'place',
+    yes: ['Not placed: 74% is under 80%. Nothing is recorded.', 'Not placed · nothing recorded'],
     no: ['Not placed. Nothing is recorded.', 'Not placed · nothing recorded'] },
-  { name: 'placement, 89.6% prints as 89%', unit: full, score: 0.896, bpm: 53, place: 3, route: 'place',
-    yes: ['Not placed: 89% is under 90%. Nothing is recorded.', 'Not placed · nothing recorded'],
+  { name: 'placement, 79.6% prints as 79%', unit: full, score: 0.796, bpm: 53, place: 3, route: 'place',
+    yes: ['Not placed: 79% is under 80%. Nothing is recorded.', 'Not placed · nothing recorded'],
     no: ['Not placed. Nothing is recorded.', 'Not placed · nothing recorded'] },
-  { name: 'placement, unclear recording', unit: full, score: 0.84, trusted: false, reason: interrupted, bpm: 53, place: 3, route: 'place',
+  { name: 'placement, unclear recording', unit: full, score: 0.74, trusted: false, reason: interrupted, bpm: 53, place: 3, route: 'place',
     ...both('Not placed. Nothing is recorded.', 'Not placed · nothing recorded') },
-  { name: 'placement, timing not calibrated', unit: full, score: 0.84, calibrated: false, bpm: 53, place: 3, route: 'place',
+  { name: 'placement, timing not calibrated', unit: full, score: 0.74, calibrated: false, bpm: 53, place: 3, route: 'place',
     ...both('Not placed. Nothing is recorded.', 'Not placed · nothing recorded') },
   { name: 'placement at a step it is already past', unit: full, before: { ...lately, rung: 4 }, score: 0.92, bpm: 53, place: 3, route: 'place',
     ...both('Not placed. Nothing is recorded.', 'Not placed · nothing recorded') },
@@ -580,7 +580,7 @@ it('covers every chip of the A3.3 table', () => {
     ['clean', /^\d+% · Clean, 1 of 2$/], ['climb', /^\d+% · Up to \d+ BPM$/],
     ['fade, notes hidden', /^\d+% · Clean: next take hides the notes$/], ['fade, click only', /^\d+% · Clean: next take has a click on each bar only$/],
     ['certified', /^\d+% · Certified at \d+ BPM$/], ['learned', /^\d+% · Learned$/], ['review passed', /^\d+% · Review passed$/], ['overnight', /^\d+% · Clean: it stuck overnight$/],
-    ['hold', /^\d+% · Kept at \d+ BPM: under 90%$/], ['needs more room', /^\d+% · Needs more room: stays at \d+ BPM$/],
+    ['hold', /^\d+% · Kept at \d+ BPM: under 80%$/], ['needs more room', /^\d+% · Needs more room: stays at \d+ BPM$/],
     ['step-down after two', /^Needs more room twice in a row · one step slower: \d+ BPM$/],
     ['step-down after two, slowest step', /^Needs more room twice in a row · \d+ BPM is the slowest step, so it stays$/],
     ['step-down in review', /^Needs more room · one step slower: \d+ BPM\. It comes back quickly\.$/],
@@ -923,9 +923,9 @@ it('explains the one-hand cap in the step note, and nowhere else', () => {
 
 it('writes the result card status line once per take: the score rounded down, or that it was not scored', () => {
   for (const [score, pct] of [[0.896, 89], [0.9, 90], [1, 100], [0, 0], [0.65, 65], [0.29, 29]] as const) expect(takeStatus({ trusted: true, score }), `${score}`).toBe(`Take finished: ${pct}%. Answer with ↑ or ↓.`);
-  for (const score of [0, 0.5, 0.896, 1]) expect(takeStatus({ trusted: false, score }), `${score}`).toBe('Take finished. Not scored.');
+  for (const score of [0, 0.5, 0.796, 1]) expect(takeStatus({ trusted: false, score }), `${score}`).toBe('Take finished. Not scored.');
   // The status line and the LAST TAKE chip never print different percentages for one take.
-  for (const score of [0, 0.29, 0.5, 0.649, 0.65, 0.84, 0.896, 0.9, 0.999, 1]) for (const comfortable of [true, false]) {
+  for (const score of [0, 0.29, 0.5, 0.649, 0.65, 0.84, 0.796, 0.9, 0.999, 1]) for (const comfortable of [true, false]) {
     const got = outcome(hand, prog({ rung: 1 }), { bpm: 40, result: { trusted: true, score, reason: '' }, calibrated: true }, comfortable, now);
     expect(takeStatus({ trusted: true, score }), `${score}`).toBe(`Take finished: ${got.chip.split(' · ')[0]}. Answer with ↑ or ↓.`);
   }
@@ -1044,7 +1044,7 @@ it('never uses a banned word, in any sentence, line, action, chip, status or not
     ...GUARDS.flatMap(g => { const line = nextLine(nextState(lf(g.unit ?? hand, g.flags))); return [line.text, line.muted, line.action?.label ?? '']; }),
     ...Object.values(SAY),
     nextLine(st(tiny, { rung: 3, support: 2 })).text,
-    UNANSWERED, comfortAsk(true), comfortAsk(false), takeStatus({ trusted: true, score: 0.896 }), takeStatus({ trusted: false, score: 0 }),
+    UNANSWERED, comfortAsk(true), comfortAsk(false), takeStatus({ trusted: true, score: 0.796 }), takeStatus({ trusted: false, score: 0 }),
     capNote(hand), capNote(slow),
   ].filter(text => text !== '');
   expect(strings.length).toBeGreaterThan(300);

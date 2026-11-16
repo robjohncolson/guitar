@@ -6,7 +6,7 @@ export interface UnitProgress {
   rung: number; clean: number; hard: number; support: 0 | 1 | 2; best: number; certified: number[];
   attempts: number; last: number; due: number; interval: number; days: string[]; learned: boolean;
 }
-/** clean: set when the take is answered (trusted, 90% or better and comfortable); absent until then. */
+/** clean: set when the take is answered (trusted, 80% or better and comfortable); absent until then. */
 export interface PieceTake { date: number; piece: string; unit: string; bpm: number; score: number; trusted: boolean; clean?: boolean }
 /** One practised day: every take, the clean ones, and seconds of playing (takes and Wait for me runs). */
 export interface DayLog { day: string; takes: number; clean: number; seconds: number }
@@ -83,9 +83,12 @@ export const reached = (p: UnitProgress | undefined, fraction: number) => Boolea
  */
 export type AdvanceKind = 'uncounted' | 'hold' | 'climb' | 'fade' | 'certified' | 'learned' | 'review' | 'step-down' | 'placed';
 export interface AdvanceEvent { kind: AdvanceKind; clean: boolean; overnight: boolean }
-/** Between attempts only. Clean = trusted, 90% or better and comfortable. Two clean takes climb a rung; certification rungs fade support over three. */
+/** A take counts as clean at this score or better (with the learner's comfortable answer). */
+export const CLEAN = 0.8;
+
+/** Between attempts only. Clean = trusted, 80% or better and comfortable. Two clean takes climb a rung; certification rungs fade support over three. */
 export function advanceUnit(unit: Unit, before: UnitProgress, result: { trusted: boolean; score: number }, comfortable: boolean, now: number, calibrated: boolean): { progress: UnitProgress; message: string; event: AdvanceEvent } {
-  const step = ladder(unit, before, result, comfortable, now, calibrated), counted = result.trusted && calibrated, clean = counted && result.score >= 0.9 && comfortable;
+  const step = ladder(unit, before, result, comfortable, now, calibrated), counted = result.trusted && calibrated, clean = counted && result.score >= CLEAN && comfortable;
   const overnight = clean && before.attempts > 0 && before.last > 0 && dayOf(before.last) !== dayOf(now);
   const m = step.message, p = step.progress;
   const kind: AdvanceKind = !counted ? 'uncounted' : m.startsWith('Review passed') ? 'review' : p.learned && !before.learned ? 'learned'
@@ -101,7 +104,7 @@ function ladder(unit: Unit, before: UnitProgress, result: { trusted: boolean; sc
   const fraction = unit.rungs[Math.min(p.rung, unit.rungs.length - 1)], top = p.rung >= unit.rungs.length - 1;
   // One hand alone stops at 80%: its top step is not the goal tempo, and the messages say so.
   const topName = fraction >= 1 - 1e-9 ? 'the goal tempo' : `${Math.round(fraction * 100)}%, the top step for one hand`;
-  const clean = result.score >= 0.9 && comfortable, hard = result.score < 0.65 || !comfortable;
+  const clean = result.score >= CLEAN && comfortable, hard = result.score < 0.65 || !comfortable;
   // Clean takes add up at this tempo, not necessarily in a row; a step down (below) starts the count again.
   if (clean) { p.clean++; p.hard = 0; p.best = Math.max(p.best, fraction); } else p.hard = hard ? p.hard + 1 : 0;
   if (p.learned && p.due <= now) {
@@ -139,7 +142,7 @@ export function canPlace(unit: Unit, p: UnitProgress | undefined, target = unit.
 
 /**
  * One take started from the placement control, at the target tempo step with notes shown. A clean take (trusted, calibrated,
- * 90% or better, comfortable) moves the step to the target and counts as its first clean take there; certification and the
+ * 80% or better, comfortable) moves the step to the target and counts as its first clean take there; certification and the
  * two-day rule are untouched. Anything else records nothing: no attempt, no hard take, no step-down.
  */
 export function placeUnit(unit: Unit, before: UnitProgress, target: number, result: { trusted: boolean; score: number }, comfortable: boolean, now: number, calibrated: boolean, goal = unit.goalBpm): { placed: boolean; progress: UnitProgress; message: string; event: AdvanceEvent } {
@@ -149,7 +152,7 @@ export function placeUnit(unit: Unit, before: UnitProgress, target: number, resu
   const fraction = unit.rungs[t], at = `${Math.round(fraction * 100)}%: ${rungBpm(unit, { ...before, rung: t }, goal)} BPM`;
   if (!result.trusted) return missed('Not placed. An unclear recording does not count either way; nothing was recorded.');
   if (!calibrated) return missed('Not placed. Calibrate timing first; nothing was recorded.');
-  if (result.score < 0.9 || !comfortable) return missed(`Not placed at ${at}. Nothing was recorded: practise from the current step, or try a lower one.`);
+  if (result.score < CLEAN || !comfortable) return missed(`Not placed at ${at}. Nothing was recorded: practise from the current step, or try a lower one.`);
   const step = ladder(unit, { ...stay, rung: t, clean: 0, hard: 0, support: 0 }, result, true, now, true);
   const overnight = before.attempts > 0 && before.last > 0 && dayOf(before.last) !== dayOf(now);
   const certify = unit.certify.some(c => Math.abs(c - fraction) < 1e-9), next = unit.certify.find(c => c > fraction) ?? unit.rungs[unit.rungs.length - 1];

@@ -44,12 +44,12 @@ export function ladderHtml(v: LadderView): string {
 
 export interface ScoreView { trusted: boolean; reason: string; score: number; timing: number; pitch: number | null; keys: boolean; estimate: boolean }
 
-const MARKS = '<span class="score-tick" style="left:65%"></span><span class="score-tick clean" style="left:90%"></span>';
-const bar = (s: number) => `<div class="score-bar" role="img" aria-label="${s}%, with marks at 65% and 90%. 90% counts as clean."><span class="score-fill" style="width:${Math.max(0, Math.min(100, s))}%"></span>${MARKS}</div><div class="score-ticks" aria-hidden="true"><span style="left:65%">65%</span><span style="left:90%">90%</span></div><p class="score-rule">90% counts as clean</p>`;
+const MARKS = '<span class="score-tick" style="left:65%"></span><span class="score-tick clean" style="left:80%"></span>';
+const bar = (s: number) => `<div class="score-bar" role="img" aria-label="${s}%, with marks at 65% and 80%. 80% counts as clean."><span class="score-fill" style="width:${Math.max(0, Math.min(100, s))}%"></span>${MARKS}</div><div class="score-ticks" aria-hidden="true"><span style="left:65%">65%</span><span style="left:80%">80%</span></div><p class="score-rule">80% counts as clean</p>`;
 
 /**
  * The take's score card: the big number (the lower of timing and notes), what each part scored with the lower one marked,
- * and a bar with marks at 65% and 90%. A take that could not be judged shows its reason and no bar. Every percentage is
+ * and a bar with marks at 65% and 80%. A take that could not be judged shows its reason and no bar. Every percentage is
  * rounded down (floorPct), so "90%" always means 90.0% or better.
  */
 export function scoreHtml(v: ScoreView): string {

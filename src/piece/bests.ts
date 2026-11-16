@@ -1,6 +1,6 @@
 import type { EventResult } from './grade';
 import { floorPct } from './pct';
-import type { TakeBest } from './progress';
+import { CLEAN, type TakeBest } from './progress';
 
 /**
  * Personal bests and take-over-take changes, per step, tempo (absolute BPM) and input. Microphone and keys records
@@ -44,7 +44,7 @@ export interface TakeFacts { score: number; timing: number; tight?: number; supp
 export function compareTake(before: TakeBest | undefined, take: TakeFacts, trusted: boolean, approx = false): { after: TakeBest | undefined; wins: string[] } {
   if (!trusted) return { after: before, wins: [] };
   const pct = (x: number) => `${floorPct(x)}%`, wins: string[] = [], about = approx ? 'about ' : '';
-  const memory = take.support >= 1 && take.score >= 0.9;
+  const memory = take.support >= 1 && take.score >= CLEAN;
   if (!before) {
     wins.push(`First counted take at this tempo: ${pct(take.score)}.`);
     if (memory) wins.push('Clean from memory on the first counted take at this tempo.');

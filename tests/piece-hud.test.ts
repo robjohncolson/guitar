@@ -156,13 +156,13 @@ it('shows fading help on a certification rung as three labelled pips', () => {
 });
 
 const take = (o: Partial<ScoreView> = {}): ScoreView => ({ trusted: true, reason: '', score: 0.92, timing: 0.94, pitch: 0.92, keys: false, estimate: false, ...o });
-const BAR_TICKS = '<span class="score-tick" style="left:65%"></span><span class="score-tick clean" style="left:90%"></span></div>'
-  + '<div class="score-ticks" aria-hidden="true"><span style="left:65%">65%</span><span style="left:90%">90%</span></div><p class="score-rule">90% counts as clean</p>';
+const BAR_TICKS = '<span class="score-tick" style="left:65%"></span><span class="score-tick clean" style="left:80%"></span></div>'
+  + '<div class="score-ticks" aria-hidden="true"><span style="left:65%">65%</span><span style="left:80%">80%</span></div><p class="score-rule">80% counts as clean</p>';
 
 it('shows a scored take as a big number, the lower of two, and a bar', () => {
   expect(scoreHtml(take())).toBe('<div class="score-head scored"><strong class="score-num">92%</strong><div class="score-meta">'
     + '<p class="score-label">Score: the lower of the two</p><p class="score-split">94% on time · <strong class="lower">92% notes heard</strong></p></div></div>'
-    + '<div class="score-bar" role="img" aria-label="92%, with marks at 65% and 90%. 90% counts as clean."><span class="score-fill" style="width:92%"></span>' + BAR_TICKS);
+    + '<div class="score-bar" role="img" aria-label="92%, with marks at 65% and 80%. 80% counts as clean."><span class="score-fill" style="width:92%"></span>' + BAR_TICKS);
 });
 
 it('marks the lower of the two, timing when they are equal', () => {
@@ -190,7 +190,7 @@ it('scores timing alone when the notes were not checked', () => {
   expect(html).not.toContain('score-split');
   expect(html).not.toContain('notes heard');
   expect(html).toContain('<div class="score-bar"');
-  expect(html.endsWith('<p class="score-rule">90% counts as clean</p>')).toBe(true);
+  expect(html.endsWith('<p class="score-rule">80% counts as clean</p>')).toBe(true);
 });
 
 it('does not score a take that could not be judged', () => {
@@ -237,8 +237,8 @@ it('fills the bar to the score and never past the end', () => {
 it('marks 65% and 90% on the bar and spells the rule out', () => {
   const html = scoreHtml(take());
   expect(html).toContain(BAR_TICKS);
-  expect(html).toContain('role="img" aria-label="92%, with marks at 65% and 90%. 90% counts as clean."');
-  expect(scoreHtml(take({ score: 0.5, timing: 0.5, pitch: 0.7 }))).toContain('aria-label="50%, with marks at 65% and 90%. 90% counts as clean."');
+  expect(html).toContain('role="img" aria-label="92%, with marks at 65% and 80%. 80% counts as clean."');
+  expect(scoreHtml(take({ score: 0.5, timing: 0.5, pitch: 0.7 }))).toContain('aria-label="50%, with marks at 65% and 80%. 80% counts as clean."');
 });
 
 it('keeps the big number readable, because no other line states it', () => {

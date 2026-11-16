@@ -103,7 +103,7 @@ describe('calibration latency', () => {
 it('climbs after two clean takes at a step even with a weaker take between them', () => {
   const one = take({ ...initialUnit(), rung: 1, attempts: 2 }, 0.95, true);
   expect(one.progress).toMatchObject({ rung: 1, clean: 1 });
-  const weaker = take(one.progress, 0.8, true);
+  const weaker = take(one.progress, 0.7, true);
   expect(weaker.progress).toMatchObject({ rung: 1, clean: 1, hard: 0 });
   const two = take(weaker.progress, 0.93, true);
   expect(two.progress).toMatchObject({ rung: 2, clean: 0 });

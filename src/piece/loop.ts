@@ -1,5 +1,5 @@
 import type { Unit } from './curriculum';
-import { advanceUnit, DAY, dayOf, placeUnit, rungBpm, type AdvanceEvent, type UnitProgress } from './progress';
+import { advanceUnit, CLEAN, DAY, dayOf, placeUnit, rungBpm, type AdvanceEvent, type UnitProgress } from './progress';
 import { floorPct } from './pct';
 
 export { floorPct };
@@ -34,7 +34,7 @@ export const takeStatus = (result: { trusted: boolean; score: number }) => resul
 /** The comfort question over the two answer buttons, naming what Space answers. */
 export const comfortAsk = (comfortable: boolean) => `How did that feel? Space = ${comfortable ? 'felt comfortable' : 'needs more room'}`;
 
-export const CLEAN_RULE = 'Clean = 90% or better, and you say it felt comfortable.';
+export const CLEAN_RULE = 'Clean = 80% or better, and you say it felt comfortable.';
 
 export interface NextState {
   unit: Unit; p: UnitProgress; now: number;
@@ -129,8 +129,8 @@ export function outcome(unit: Unit, before: UnitProgress, take: TakeFacts, comfo
   if (route === 'place') {
     const r = placeUnit(unit, before, take.place!, result, comfortable, now, take.calibrated), bpm = at(unit, before, Math.min(take.place!, topOf(unit)));
     if (r.placed) return { route, event: r.event, after: r.progress, line: `Places you at ${bpm} BPM.`, chip: `Placed at ${bpm} BPM` };
-    const under = comfortable && result.trusted && take.calibrated && result.score < 0.9;
-    return { route, event: r.event, after: before, line: under ? `Not placed: ${pct} is under 90%. Nothing is recorded.` : 'Not placed. Nothing is recorded.', chip: 'Not placed · nothing recorded' };
+    const under = comfortable && result.trusted && take.calibrated && result.score < CLEAN;
+    return { route, event: r.event, after: before, line: under ? `Not placed: ${pct} is under 80%. Nothing is recorded.` : 'Not placed. Nothing is recorded.', chip: 'Not placed · nothing recorded' };
   }
   if (route === 'free') return uncounted('free tempo');
   if (!result.trusted) return uncounted(clause(result.reason));
@@ -166,7 +166,7 @@ export function outcome(unit: Unit, before: UnitProgress, take: TakeFacts, comfo
     if (top) return out(`Clean at ${bpm} BPM, the top step.`, `${pct} · ${event.overnight ? 'Clean: it stuck overnight' : `Clean at ${bpm} BPM`}`);
     return out(`Clean take 1 of 2. One more moves you ${upTo(unit, before)}.`, `${pct} · ${event.overnight ? 'Clean: it stuck overnight' : 'Clean, 1 of 2'}`);
   }
-  if (after.hard === 0) return out(`Kept at ${bpm} BPM: ${pct} is under the 90% a clean take needs.`, `${pct} · Kept at ${bpm} BPM: under 90%`);
+  if (after.hard === 0) return out(`Kept at ${bpm} BPM: ${pct} is under the 80% a clean take needs.`, `${pct} · Kept at ${bpm} BPM: under 80%`);
   const lower = rungOf(unit, { ...before, rung: Math.max(0, before.rung - 1) });
   const stays = r === 0 ? `Stays at ${bpm} BPM, the slowest step.` : lower === r ? `Stays at ${bpm} BPM.` : at(unit, before, lower) === bpm ? `Stays at ${bpm} BPM, the slowest allowed.` : `Stays at ${bpm} BPM. A second one in a row makes room: one step slower.`;
   return out(`${under}${stays}`, `${pct} · Needs more room: stays at ${bpm} BPM`);
