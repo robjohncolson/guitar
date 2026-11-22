@@ -1,5 +1,6 @@
 import type { Unit } from './curriculum';
 import type { Score } from './score';
+import { hasStars, stepStars } from './game';
 import { unitState, type UnitProgress } from './progress';
 
 /**
@@ -56,9 +57,10 @@ export function pieceMap(
     const r = resolve(u),
       p = get(r.id),
       state = unitState(r, p, now),
-      due = state === 'due';
-    const title = `${label} · ${r.title} · ${pct(p)}${state === 'learned' ? ' · learned' : due ? ' · review due' : ''}`;
-    return `<button class="map-cell ${band(r, p)}${due ? ' due' : ''}" data-unit="${escape(r.id)}"${r.id === current ? ' aria-current="true"' : ''} title="${escape(title)}" aria-label="${escape(title)}"></button>`;
+      due = state === 'due',
+      stars = hasStars(r) ? stepStars(r, p).stars : 0;
+    const title = `${label} · ${r.title} · ${pct(p)}${stars ? ` · ${stars} of 3 stars` : ''}${state === 'learned' ? ' · learned' : due ? ' · review due' : ''}`;
+    return `<button class="map-cell ${band(r, p)}${stars ? ` s${stars}` : ''}${due ? ' due' : ''}" data-unit="${escape(r.id)}"${r.id === current ? ' aria-current="true"' : ''} title="${escape(title)}" aria-label="${escape(title)}"></button>`;
   };
   const sections = score.sections.length
     ? score.sections
@@ -112,12 +114,12 @@ export function pieceMap(
   const started = counted.filter((u) => get(resolve(u).id)?.attempts).length;
   const due = units.filter((u) => !u.sameAs && unitState(u, get(u.id), now) === 'due').length;
   const headline = `${atGoal} of ${counted.length} bars at goal tempo${instrument === 'piano' ? ' hands together' : ''}${started > atGoal ? ` · ${started} started` : ''}${due ? ` · ${due} review${due > 1 ? 's' : ''} due` : ''}`;
-  const legend = `<div class="map-legend"><span><i class="map-cell new"></i>not started</span><span><i class="map-cell begun"></i>started</span><span><i class="map-cell low"></i>50–70%</span><span><i class="map-cell mid"></i>80–94%</span><span><i class="map-cell goal"></i>goal tempo</span><span><i class="map-cell new due"></i>review due</span></div>`;
+  const legend = `<div class="map-legend"><span><i class="map-cell new"></i>not started</span><span><i class="map-cell begun"></i>started</span><span><i class="map-cell low"></i>50–70%</span><span><i class="map-cell mid"></i>80–94%</span><span><i class="map-cell goal"></i>goal tempo</span><span><i class="map-cell new due"></i>review due</span><span><i class="map-cell mid s2"></i>stars earned</span></div>`;
   const note =
     instrument === 'piano'
-      ? '<p class="muted map-note">Colour is the fastest tempo step reached. One hand alone stops at 80%; hands together goes on to the goal tempo. Choose a cell to practise that step.</p>'
+      ? '<p class="muted map-note">Colour is the fastest tempo step reached; the small stars inside count a first clean take, a certified step and the top step certified. One hand alone stops at 80%; hands together goes on to the goal tempo. Choose a cell to practise that step.</p>'
       : pieceGuitar
-        ? '<p class="muted map-note">Colour is the fastest tempo step reached. Melody and bass stop at 80%; together goes on to the goal tempo. A single string is checked for pitch. Choose a cell to practise that step.</p>'
-        : '<p class="muted map-note">Colour is the fastest tempo step reached. Guitar takes check timing only. Choose a cell to practise that step.</p>';
+        ? '<p class="muted map-note">Colour is the fastest tempo step reached; the small stars inside count a first clean take, a certified step and the top step certified. Melody and bass stop at 80%; together goes on to the goal tempo. A single string is checked for pitch. Choose a cell to practise that step.</p>'
+        : '<p class="muted map-note">Colour is the fastest tempo step reached; the small stars inside count a first clean take, a certified step and the top step certified. Guitar takes check timing only. Choose a cell to practise that step.</p>';
   return { headline, html: `<div class="map-sections">${blocks}</div>${stripHtml}${legend}${note}` };
 }

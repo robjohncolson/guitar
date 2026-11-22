@@ -1,11 +1,15 @@
 import { expect, it } from 'vitest';
 import {
   ladderHtml as drawLadder,
+  metricsHtml as drawMetrics,
   scoreHtml as drawScore,
+  starsHtml as drawStars,
   type LadderRung,
   type LadderView,
+  type MetricsView,
   type ScoreView,
 } from '../src/piece/hud';
+import type { StepStars } from '../src/piece/game';
 
 // Every markup string the tests below make is kept, so the last test can check the words of all of them.
 const made: string[] = [];
@@ -16,6 +20,16 @@ const ladderHtml = (v: LadderView) => {
 };
 const scoreHtml = (v: ScoreView) => {
   const html = drawScore(v);
+  made.push(html);
+  return html;
+};
+const metricsHtml = (v: MetricsView) => {
+  const html = drawMetrics(v);
+  made.push(html);
+  return html;
+};
+const starsHtml = (v: StepStars) => {
+  const html = drawStars(v);
   made.push(html);
   return html;
 };
@@ -203,9 +217,13 @@ const BAR_TICKS =
   '<span class="score-tick" style="left:65%"></span><span class="score-tick clean" style="left:80%"></span></div>' +
   '<div class="score-ticks" aria-hidden="true"><span style="left:65%">65%</span><span style="left:80%">80%</span></div><p class="score-rule">80% counts as clean</p>';
 
-it('shows a scored take as a big number, the lower of two, and a bar', () => {
+const STAR = (on: boolean) => `<span class="star${on ? ' on' : ''}" aria-hidden="true"></span>`;
+const STARS = (n: number, label = `${n} of 3 stars`, cls = '') =>
+  `<span class="stars take-stars${cls}" role="img" aria-label="${label}">${[0, 1, 2].map((i) => STAR(i < n)).join('')}</span>`;
+
+it('shows a scored take as stars first, the percentage beside them, the lower of two, and a bar', () => {
   expect(scoreHtml(take())).toBe(
-    '<div class="score-head scored"><strong class="score-num">92%</strong><div class="score-meta">' +
+    `<div class="score-head scored"><div class="score-top">${STARS(2)}<strong class="score-num">92%</strong></div><div class="score-meta">` +
       '<p class="score-label">Score: the lower of the two</p><p class="score-split">94% on time · <strong class="lower">92% notes heard</strong></p></div></div>' +
       '<div class="score-bar" role="img" aria-label="92%, with marks at 65% and 80%. 80% counts as clean."><span class="score-fill" style="width:92%"></span>' +
       BAR_TICKS,
@@ -240,6 +258,44 @@ it('scores timing alone when the notes were not checked', () => {
   expect(html.endsWith('<p class="score-rule">80% counts as clean</p>')).toBe(true);
 });
 
+it('gives stars at 65%, 80% and 95% as the card prints them (rounded down)', () => {
+  const stars = (score: number) =>
+    scoreHtml(take({ score, timing: score, pitch: null })).match(/aria-label="(\d) of 3 stars/)![1];
+  expect([0, 0.3, 0.6499, 0.65, 0.7999, 0.8, 0.9499, 0.95, 1].map(stars)).toEqual([
+    '0',
+    '0',
+    '0',
+    '1',
+    '1',
+    '2',
+    '2',
+    '3',
+    '3',
+  ]);
+  // A take shown as 79% never has two stars, and one shown as 94% never has three.
+  const shown79 = scoreHtml(take({ score: 0.7999, timing: 0.7999, pitch: null }));
+  expect(shown79).toContain(`${STARS(1)}<strong class="score-num">79%</strong>`);
+  const shown94 = scoreHtml(take({ score: 0.9499, timing: 0.9499, pitch: null }));
+  expect(shown94).toContain(`${STARS(2)}<strong class="score-num">94%</strong>`);
+});
+
+it('shows a low take as empty stars and its plain percentage', () => {
+  const html = scoreHtml(take({ score: 0.31, timing: 0.31, pitch: null }));
+  expect(html).toContain(`${STARS(0)}<strong class="score-num">31%</strong>`);
+});
+
+it('labels the stars of an uncalibrated take as an estimate', () => {
+  expect(scoreHtml(take({ estimate: true }))).toContain(STARS(2, '2 of 3 stars, estimate', ' estimate'));
+});
+
+it('adds the longest run for a keys take from 5 up, and never for a microphone take', () => {
+  expect(scoreHtml(take({ keys: true, run: 12 }))).toContain('<p class="score-run">Longest run: 12</p>');
+  expect(scoreHtml(take({ keys: true, run: 5 }))).toContain('<p class="score-run">Longest run: 5</p>');
+  expect(scoreHtml(take({ keys: true, run: 4 }))).not.toContain('score-run');
+  expect(scoreHtml(take({ keys: false, run: 12 }))).not.toContain('score-run');
+  expect(scoreHtml(take({ keys: true, trusted: false, run: 12 }))).not.toContain('Longest run');
+});
+
 it('does not score a take that could not be judged', () => {
   const html = scoreHtml(
     take({ trusted: false, reason: 'The microphone recording had gaps. This take could not be judged.', score: 0.7 }),
@@ -247,7 +303,7 @@ it('does not score a take that could not be judged', () => {
   expect(html).toBe(
     '<div class="score-head"><strong class="score-num">Not scored</strong><p class="score-why">The microphone recording had gaps. This take could not be judged.</p></div>',
   );
-  for (const part of ['score-bar', 'score-tick', 'score-rule', '70%', 'lower of the two'])
+  for (const part of ['score-bar', 'score-tick', 'score-rule', '70%', 'lower of the two', 'star', '%'])
     expect(html).not.toContain(part);
   expect(scoreHtml(take({ trusted: false, reason: 'Gaps.', estimate: true }))).not.toContain('estimate');
 });
@@ -313,9 +369,38 @@ it('keeps the big number readable, because no other line states it', () => {
     expect(html).not.toMatch(/<strong class="score-num"[^>]*aria-hidden/);
 });
 
+it('shows no percentage in the metrics of an unscored take', () => {
+  const v: MetricsView = { trusted: true, timing: 0.876, pitch: 0.92, keys: false, timed: true, piano: true };
+  expect(metricsHtml(v)).toBe(
+    '<span><strong id="piece-count" aria-hidden="true">87%</strong><span class="sr-only">87%</span> on time</span><span><strong>92%</strong> notes heard right</span>',
+  );
+  expect(metricsHtml({ ...v, keys: true })).toContain('<strong>92%</strong> right keys');
+  expect(metricsHtml({ ...v, timed: false })).toContain(' on time · estimate</span>');
+  expect(metricsHtml({ ...v, pitch: null })).toContain('<span>Notes mostly unchecked</span>');
+  expect(metricsHtml({ ...v, pitch: null, piano: false })).toContain('<span>Timing only</span>');
+  expect(metricsHtml({ ...v, trusted: false })).toBe('<span>Not scored</span>');
+});
+
+it('lists a step with its stars and, once learned, a seal that a due review puts a clock on', () => {
+  const html = starsHtml({ stars: 2, learned: false, due: false });
+  expect(html).toBe(
+    `<span class="stars step-stars" role="img" aria-label="2 of 3 stars">${STAR(true)}${STAR(true)}${STAR(false)}</span>`,
+  );
+  const learned = starsHtml({ stars: 3, learned: true, due: false });
+  expect(learned).toContain('aria-label="3 of 3 stars, learned"');
+  expect(learned).toContain('<svg class="seal"');
+  expect(times(learned, /class="star on"/g)).toBe(3);
+  const due = starsHtml({ stars: 3, learned: true, due: true });
+  expect(due).toContain('aria-label="3 of 3 stars, learned, review due"');
+  expect(due).toContain('<svg class="seal due"');
+  // A due review never dims or hides a star.
+  expect(times(due, /class="star on"/g)).toBe(3);
+  expect(starsHtml({ stars: 0, learned: false, due: false })).not.toContain('star on');
+});
+
 // ---- wording rules: the same words as tests/piece-loop.test.ts ----
 
-const BANNED = [/\b(lost|reset|failed|streaks?|points?|badges?|xp|notifications?)\b/i, /hard take/i];
+const BANNED = [/\b(lost|reset|failed|streaks?|combos?|points?|badges?|xp|notifications?)\b/i, /hard take/i];
 /** What a learner reads: the text between the tags, and the spoken labels inside them. Class names and styles are not words. */
 const words = (html: string) => [
   html.replace(/<[^>]*>/g, ' '),
@@ -353,8 +438,16 @@ it('uses no banned word in anything the ladder or the score card shows', () => {
         for (const estimate of [false, true])
           for (const score of [0, 0.5, 0.896, 1]) {
             for (const reason of reasons)
-              scoreHtml(take({ trusted, pitch, keys, estimate, score, timing: score, reason }));
+              scoreHtml(take({ trusted, pitch, keys, estimate, score, timing: score, reason, run: 12 }));
+            metricsHtml({ trusted, timing: score, pitch, keys, timed: !estimate, piano: !keys });
           }
+  for (const stars of [0, 1, 2, 3] as const)
+    for (const [learned, due] of [
+      [false, false],
+      [true, false],
+      [true, true],
+    ])
+      starsHtml({ stars, learned, due });
   expect(made.length).toBeGreaterThan(500);
   expect(toneErrors(made)).toEqual([]);
   // The check itself bites, on the text between tags and on spoken labels, and not on class names.

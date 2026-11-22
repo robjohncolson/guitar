@@ -687,7 +687,7 @@ main.piece .result-card {
   gap: 2px;
 }
 main.piece .result-card .score-head.scored .score-num {
-  font-size: 40px;
+  font-size: 28px;
 }
 main.piece .result-card .score-bar {
   margin-top: 6px;
@@ -1234,7 +1234,7 @@ main.piece:not(.calm) .drawer[open] {
     grid-column: 1 / -1;
   }
   main.piece .result-card .score-head.scored .score-num {
-    font-size: 56px;
+    font-size: 34px;
   }
   main.piece .result-card .comfort-ask {
     margin-top: 0;

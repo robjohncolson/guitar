@@ -1,3 +1,4 @@
+import { runLine, takeStars, type Stars, type StepStars } from './game';
 import { floorPct } from './loop';
 
 /** One segment of the tempo ladder. pct is the rung's share of the goal tempo, in whole percent. */
@@ -61,6 +62,8 @@ export interface ScoreView {
   pitch: number | null;
   keys: boolean;
   estimate: boolean;
+  /** Keys and MIDI takes: the longest run of right, on-time attacks (keyStats). Shown from 5 up. */
+  run?: number;
 }
 
 const MARKS =
@@ -68,13 +71,18 @@ const MARKS =
 const bar = (s: number) =>
   `<div class="score-bar" role="img" aria-label="${s}%, with marks at 65% and 80%. 80% counts as clean."><span class="score-fill" style="width:${Math.max(0, Math.min(100, s))}%"></span>${MARKS}</div><div class="score-ticks" aria-hidden="true"><span style="left:65%">65%</span><span style="left:80%">80%</span></div><p class="score-rule">80% counts as clean</p>`;
 
+/** Three stars, filled or empty, drawn by CSS (no glyphs); the label carries the words. */
+const starSpans = (stars: Stars) =>
+  [0, 1, 2].map((i) => `<span class="star${i < stars ? ' on' : ''}" aria-hidden="true"></span>`).join('');
+
 /**
- * The take's score card: the big number (the lower of timing and notes), what each part scored with the lower one marked,
- * and a bar with marks at 65% and 80%. A take that could not be judged shows its reason and no bar. Every percentage is
- * rounded down (floorPct), so "90%" always means 90.0% or better.
+ * The take's score card: a row of three stars first, the score (the lower of timing and notes) beside it, what each part
+ * scored with the lower one marked, and a bar with marks at 65% and 80%. A take that could not be judged shows its reason
+ * and no stars, no percentage and no bar. Every percentage is rounded down (floorPct), so "90%" always means 90.0% or better.
  */
 export function scoreHtml(v: ScoreView): string {
-  if (!v.trusted)
+  const stars = takeStars(v.score, v.trusted, !v.estimate);
+  if (!stars)
     return `<div class="score-head"><strong class="score-num">Not scored</strong><p class="score-why">${esc(v.reason)}</p></div>`;
   const s = floorPct(v.score),
     t = floorPct(v.timing),
@@ -89,5 +97,38 @@ export function scoreHtml(v: ScoreView): string {
     label = 'Score: the lower of the two';
     split = `<p class="score-split">${lowerIsPitch ? timing : `<strong class="lower">${timing}</strong>`} · ${lowerIsPitch ? `<strong class="lower">${notes}</strong>` : notes}</p>`;
   }
-  return `<div class="score-head scored"><strong class="score-num">${s}%</strong><div class="score-meta"><p class="score-label">${label}${estimate}</p>${split}</div></div>${bar(s)}`;
+  const run = v.keys && v.run !== undefined ? runLine(v.run) : undefined,
+    row = `<span class="stars take-stars${stars.estimate ? ' estimate' : ''}" role="img" aria-label="${stars.stars} of 3 stars${stars.estimate ? ', estimate' : ''}">${starSpans(stars.stars)}</span>`;
+  return `<div class="score-head scored"><div class="score-top">${row}<strong class="score-num">${s}%</strong></div><div class="score-meta"><p class="score-label">${label}${estimate}</p>${split}${run ? `<p class="score-run">${run}</p>` : ''}</div></div>${bar(s)}`;
+}
+
+export interface MetricsView {
+  trusted: boolean;
+  timing: number;
+  pitch: number | null;
+  keys: boolean;
+  timed: boolean;
+  piano: boolean;
+}
+/**
+ * The take details' metrics line: the on-time share (its number counts up during the reveal) and the notes. An unscored
+ * take shows no percentage at all, only that it was not scored.
+ */
+export function metricsHtml(v: MetricsView): string {
+  if (!v.trusted) return '<span>Not scored</span>';
+  const final = floorPct(v.timing);
+  return `<span><strong id="piece-count" aria-hidden="true">${final}%</strong><span class="sr-only">${final}%</span> on time${v.timed ? '' : ' · estimate'}</span>${v.pitch === null ? `<span>${v.piano ? 'Notes mostly unchecked' : 'Timing only'}</span>` : `<span><strong>${floorPct(v.pitch)}%</strong> ${v.keys ? 'right keys' : 'notes heard right'}</span>`}`;
+}
+
+const SEAL =
+  '<svg class="seal" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7"/><path d="M4.6 8.3l2.2 2.2 4.6-4.7"/></svg>';
+const SEAL_DUE =
+  '<svg class="seal due" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7"/><path d="M8 4.2V8l2.7 1.7"/></svg>';
+/**
+ * A step's stars where steps are listed: three stars from saved progress, then a seal when it is learned. A review that is
+ * due puts a small clock on the seal; the stars never dim or go. The label carries the words.
+ */
+export function starsHtml(s: StepStars): string {
+  const label = `${s.stars} of 3 stars${s.learned ? ', learned' : ''}${s.due ? ', review due' : ''}`;
+  return `<span class="stars step-stars" role="img" aria-label="${label}">${starSpans(s.stars)}${s.learned ? (s.due ? SEAL_DUE : SEAL) : ''}</span>`;
 }

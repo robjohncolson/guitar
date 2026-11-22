@@ -366,7 +366,7 @@ main.piece .score-num {
   color: var(--amber);
 }
 main.piece .score-head.scored .score-num {
-  font-size: 56px;
+  font-size: 32px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--lime);
@@ -518,7 +518,7 @@ main.piece .comfort-note {
     font-size: 19px;
   }
   main.piece .score-head.scored .score-num {
-    font-size: 64px;
+    font-size: 36px;
   }
 }
 @media (max-width: 399px) {
@@ -539,6 +539,136 @@ main.piece .comfort-note {
 @media (prefers-reduced-motion: reduce) {
   main.piece .pip.pop,
   main.piece .rung.now.slide {
+    animation: none;
+  }
+}
+
+/* Stars: read-outs of the grade (the card) and of saved progress (step lists, the HUD). Drawn by CSS, labelled in words. */
+main.piece .stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  vertical-align: middle;
+}
+main.piece .star {
+  display: block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  /* An empty star: 3:1 or better on the page, the card and the current course row (#263528). */
+  background: #71826a;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+main.piece .star.on {
+  background: var(--gold);
+}
+main.piece .stars .seal {
+  width: 14px;
+  height: 14px;
+  margin-left: 3px;
+  flex: none;
+}
+main.piece .stars .seal circle {
+  fill: var(--gold);
+}
+main.piece .stars .seal.due circle {
+  fill: #e1ad88;
+}
+main.piece .stars .seal path {
+  fill: none;
+  stroke: #141b16;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+main.piece .step-stars {
+  margin-right: 6px;
+}
+/* A phone: the stars take their own line under the step's name, so the state on the right keeps its width. The state's
+   span lets its text and its stars into the row's grid; the text lands top right, the stars under the name. */
+@media (max-width: 420px) {
+  main.piece .course-lesson {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 15px;
+    row-gap: 3px;
+    align-items: start;
+    justify-items: end;
+  }
+  main.piece .course-lesson > span:first-child {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: stretch;
+  }
+  main.piece .course-lesson > span:last-child {
+    display: contents;
+  }
+  main.piece .course-lesson .step-stars {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+    margin-right: 0;
+  }
+}
+main.piece .unit-stars {
+  display: inline-flex;
+  flex: none;
+  padding: 0 4px;
+}
+main.piece .unit-stars .star {
+  width: 16px;
+  height: 16px;
+}
+main.piece .unit-stars .seal {
+  width: 17px;
+  height: 17px;
+}
+main.piece .unit-stars .step-stars {
+  margin-right: 0;
+}
+main.piece .score-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+main.piece .take-stars {
+  gap: 3px;
+}
+main.piece .take-stars .star {
+  width: 28px;
+  height: 28px;
+}
+main.piece .take-stars .star.on.later {
+  background: #71826a;
+}
+main.piece:not(.calm) .take-stars.filling .star.on:not(.later) {
+  animation: piece-star-in 320ms ease-out;
+}
+@keyframes piece-star-in {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+main.piece .score-run {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.35;
+}
+@media (max-width: 420px) {
+  main.piece .take-stars .star {
+    width: 24px;
+    height: 24px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  main.piece .take-stars.filling .star.on:not(.later) {
     animation: none;
   }
 }

@@ -79,7 +79,23 @@ import {
   type NextLine,
   type TakeFacts,
 } from './loop';
-import { ladderHtml, scoreHtml } from './hud';
+import { ladderHtml, metricsHtml, scoreHtml, starsHtml } from './hud';
+import {
+  countUp,
+  keyWin,
+  liveRun,
+  pieceStars,
+  revealStars,
+  runEvidence,
+  starChip,
+  starCount,
+  starMoment,
+  starNews,
+  starsFor,
+  starTitle,
+  takeRun,
+  type RunEvidence,
+} from './game';
 import { audioNotice, notice as noticeFor, type Notice, type NoticeDetail, type NoticeSource } from './notice';
 import { keyAllowed, laneHeight, overlayOpen, statusChip, stepFinished, todayChip } from './stage';
 import { saveTracked } from '../account/changes';
@@ -388,9 +404,14 @@ const active = () => Boolean(wait || audio.plan || audio.busy || audio.playing |
 // Live feedback for keys: which notes have been played (so only they glow) and when each wrong key went down.
 let wait: WaitRun | undefined;
 const wrong = new Map<number, number>();
-/** A timed keys take, live: each played note's judgement (the same rules as the grade) and on-time notes in a row. */
+/**
+ * A timed keys take, live: each played note's judgement (the same rules as the grade) and on-time notes in a row (streak,
+ * which warms the hit line). runFrom: what the visible run counter is read from (game.ts liveRun counts attacks, like
+ * the card's "Longest run").
+ */
 let tiers = new Map<string, KeyLive>(),
-  streak = 0;
+  streak = 0,
+  runFrom: { ex: Exercise; period: number; ev: RunEvidence } | undefined;
 const lively = () => !inputPrefs.calm && !reduced.matches;
 let lastFrame = 0;
 /**
@@ -417,10 +438,13 @@ function judgePress(midi: number, recorded: boolean): void {
     streak = tier === 'perfect' || tier === 'good' ? streak + 1 : tier === 'played' ? streak : 0;
   }
   tiers = judged.notes;
+  const k = audio.keyTake;
+  runFrom = k ? { ex: k.exercise, period: 60 / k.bpm, ev: runEvidence(k.exercise, k.bpm, k.presses) } : undefined;
 }
 function resetLive(): void {
   tiers = new Map();
   streak = 0;
+  runFrom = undefined;
   wrong.clear();
 }
 function startWait(): void {
@@ -631,12 +655,18 @@ function paintCourse(): void {
   const list = units(),
     stages = stagesNow(),
     now = Date.now();
-  el('course-count').textContent = `· all ${list.filter((u) => !u.sameAs).length} steps`;
+  const earned = pieceStars(list, get),
+    stars = (u: Unit) => {
+      const s = starsFor(list, u, get, now);
+      return s ? starsHtml(s) : '';
+    };
+  el('course-count').textContent = `· all ${list.filter((u) => !u.sameAs).length} steps · ${starCount(earned)}`;
+  if (unit) el('unit-stars').innerHTML = stars(unit);
   el('course-list').innerHTML = stages
     .map((name, i) => {
       const members = list.filter((u) => u.stage === i);
       if (!members.length) return '';
-      return `<div class="course-stage">${i + 1} · ${escape(name)}</div>${members.map((u) => `<button class="course-lesson${u.sameAs ? ' covered' : ''}" data-unit="${escape(u.id)}" aria-current="${u.id === unit?.id}"><span>${escape(u.title)}${!u.sameAs && !ready(u, get) ? ' <span class="muted">· later</span>' : ''}${u.optional ? ' <span class="muted">· optional</span>' : ''}</span><span>${escape(stateLabel(u))}</span></button>`).join('')}`;
+      return `<div class="course-stage">${i + 1} · ${escape(name)}</div>${members.map((u) => `<button class="course-lesson${u.sameAs ? ' covered' : ''}" data-unit="${escape(u.id)}" aria-current="${u.id === unit?.id}"><span>${escape(u.title)}${!u.sameAs && !ready(u, get) ? ' <span class="muted">· later</span>' : ''}${u.optional ? ' <span class="muted">· optional</span>' : ''}</span><span>${stars(u)}${escape(stateLabel(u))}</span></button>`).join('')}`;
     })
     .join('');
   // The headline progress: a map of the piece from saved progress only.
@@ -902,7 +932,9 @@ function showTake(take: PieceTake): void {
  * colours in a quick sweep while the on-time share counts up, then the callouts appear. Any key or click skips to the
  * end. Untrusted takes, the calm look and reduced motion show the final state at once and are never celebrated.
  */
-let reveal: { start: number; ms: number; first: number; last: number; final: number; celebrate: boolean } | undefined,
+let reveal:
+    | { start: number; ms: number; first: number; last: number; final: number; score: number; celebrate: boolean }
+    | undefined,
   revealBeat = 0;
 const defaultComfort = () => {
   const r = pending?.take.result;
@@ -962,12 +994,11 @@ audio.onTake = (take) => {
   const autoCount = take.presses ? autoKeys.size : 0,
     period = 60 / take.bpm;
   if (keys && trusted) {
-    const k = keyStats(result.events);
-    if (k.run > 1 || k.perfect)
-      wins.push(
-        `Longest on-time run: ${k.run} in a row${k.perfect ? ` · ${k.perfect} note${k.perfect > 1 ? 's' : ''} within ${Math.round(keyPerfect(period) * 1000)} ms of the beat` : ''}.`,
-      );
+    const line = keyWin(keyStats(result.events).perfect, Math.round(keyPerfect(period) * 1000));
+    if (line) wins.push(line);
   }
+  // The card's longest run is the live counter's own count at the end of the take, so the two always agree.
+  const run = keys && trusted && take.presses ? takeRun(take.exercise, take.bpm, take.presses) : undefined;
   const placed = result.events.filter((e) => e.mark === 'good').length;
   if (trusted && !wins.length) wins.push(`${placed} of ${result.events.length} attacks on time.`);
   const clean =
@@ -1024,6 +1055,7 @@ audio.onTake = (take) => {
     pitch: result.pitch,
     keys,
     estimate: !timed(take),
+    run,
   });
   paintToday();
   const notes = result.events.flatMap((e) => e.notes),
@@ -1031,8 +1063,14 @@ audio.onTake = (take) => {
   const marks = result.events.map((e) => e.mark),
     mark = (m: string) => marks.filter((x) => x === m).length;
   const final = floorPct(result.timing);
-  el('piece-metrics').innerHTML =
-    `<span><strong id="piece-count" aria-hidden="true">${final}%</strong><span class="sr-only">${final}%</span> on time${timed(take) ? '' : ' · estimate'}</span>${result.pitch === null ? `<span>${instrument === 'piano' ? 'Notes mostly unchecked' : 'Timing only'}</span>` : `<span><strong>${floorPct(result.pitch)}%</strong> ${take.presses ? 'right keys' : 'notes heard right'}</span>`}${result.trusted ? '' : '<span>Not scored</span>'}`;
+  el('piece-metrics').innerHTML = metricsHtml({
+    trusted: result.trusted,
+    timing: result.timing,
+    pitch: result.pitch,
+    keys,
+    timed: timed(take),
+    piano: instrument === 'piano',
+  });
   el('piece-verdicts').innerHTML = [
     ['heard', 'heard', count('heard')],
     ['wrong', 'wrong or missing', count('wrong') + count('not-heard')],
@@ -1086,11 +1124,16 @@ audio.onTake = (take) => {
     first,
     last,
     final,
+    score: result.score,
     celebrate: trusted && result.score >= CLEAN,
   };
   el('piece-result').classList.add('revealing');
   if (!trusted || !lively()) endReveal();
-  else stepReveal();
+  else {
+    // Lively: the stars fill one by one as the count rises (stepReveal); calm and reduced motion show them filled.
+    el('piece-score').querySelector('.take-stars')?.classList.add('filling');
+    stepReveal();
+  }
 };
 /** The per-attack timing strip: early above the line, late below, the on-time band shaded. Unsure attacks stay neutral. */
 function timingStrip(result: PieceGrade, period: number, approx: boolean): string {
@@ -1123,8 +1166,12 @@ function stepReveal(): void {
   }
   revealBeat = reveal.first + (reveal.last - reveal.first + 0.001) * t;
   const count = document.getElementById('piece-count'),
-    shownCount = `${Math.floor(reveal.final * (1 - (1 - t) * (1 - t)))}%`;
+    shownCount = `${Math.floor(reveal.final * countUp(t))}%`;
   if (count && count.textContent !== shownCount) count.textContent = shownCount;
+  const filled = revealStars(reveal.score, t);
+  el('piece-score')
+    .querySelectorAll('.take-stars .star.on')
+    .forEach((star, i) => star.classList.toggle('later', i >= filled));
   const hidden = shown.get('strip-beat'),
     at = String(Math.floor(revealBeat * 4));
   if (hidden !== at) {
@@ -1143,6 +1190,7 @@ function endReveal(): void {
   const count = document.getElementById('piece-count');
   if (count) count.textContent = `${r.final}%`;
   for (const c of el('piece-strip').querySelectorAll('.later')) c.classList.remove('later');
+  for (const star of el('piece-score').querySelectorAll('.star.later')) star.classList.remove('later');
   el('piece-result').classList.remove('revealing');
   layoutDirty = true;
   if (r.celebrate && lively()) celebrate('small');
@@ -1254,14 +1302,19 @@ function answer(comfortable: boolean): void {
   ladderSaid = '';
   notice = undefined;
   placedNow = false;
+  const starsBefore = pending!.before;
   const event = nextTake(comfortable),
     message = ladderSaid;
+  // A new star is named only when the saved progress (a counted, confirmed answer) earned it.
+  const news = owner && event ? starNews(owner, starsBefore, get(owner.id) ?? starsBefore) : undefined;
   if (event?.kind === 'placed') placedNow = true;
-  if (chip) lastTake = chip;
+  // Every look names the new star on the Last take line, and a screen reader hears it; the lively look also shows it below.
+  if (chip) lastTake = starChip(chip, news);
+  if (news) el('piece-take-status').textContent = starTitle(undefined, news);
   (document.activeElement as HTMLElement | null)?.blur();
   const pct = (f: number) => `${Math.round(f * 100)}%`,
     last = current().certified[current().certified.length - 1];
-  const moment = !event
+  const earlier = !event
     ? undefined
     : event.kind === 'learned'
       ? {
@@ -1288,6 +1341,7 @@ function answer(comfortable: boolean): void {
                 : event.kind === 'fade'
                   ? { title: 'Less help next take', ms: 1200, size: 'small' as const, next: true }
                   : undefined;
+  const moment = starMoment(earlier, news);
   // No reward effect in a microphone take: a mic take's count-in starts at once unless a milestone moment holds it.
   pop =
     event?.clean && lively() && (usingKeys() || moment)
@@ -2733,6 +2787,7 @@ function live(): Parameters<typeof drawKeys>[8] {
     auto: scoring ? autoKeys : undefined,
     wrong,
     streak: scoring ? streak : 0,
+    run: scoring && runFrom && plan ? liveRun(runFrom.ex, runFrom.period, runFrom.ev, audio.now - plan.playAt).run : 0,
   };
 }
 paintLocal();

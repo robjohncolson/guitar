@@ -22,6 +22,7 @@ import {
   type Rgb,
 } from './light';
 import { glLight, type LightLayer } from './lightgl';
+import { runCounter, runPlace, type RunMemo, type RunShow } from './game';
 
 const ICON_MENU =
   '<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
@@ -38,7 +39,7 @@ export function pieceShell(): void {
     <header class="trainer-header topbar"><button id="piece-menu" type="button" class="icon-btn" aria-label="Open menu" aria-haspopup="dialog">${ICON_MENU}</button><div class="brand"><h1 id="piece-title">Learn a piece</h1><span id="piece-composer" class="composer"></span></div><button id="piece-today-chip" type="button" class="chip" aria-haspopup="dialog">${ICON_RING}<span id="piece-today-long" class="long"></span><span id="piece-today-short" class="short"></span></button><button id="piece-status-chip" type="button" class="chip status-chip" aria-haspopup="dialog"><span class="dot" aria-hidden="true"></span><span id="piece-status-long" class="long"></span><span id="piece-status-short" class="short"></span></button></header>
     <section class="lesson-card stage" aria-labelledby="unit-title">
       <div class="hud">
-        <div class="hud-passage"><span id="unit-stage" class="eyebrow"></span><div class="passage-row"><h2 id="unit-title"></h2><details id="piece-about-step" class="about-step"><summary aria-label="About this step">${ICON_INFO}</summary><div class="about-body"><p id="unit-goal"></p><p id="unit-why" class="unit-why"></p><div id="lane-help"></div><p id="piece-about-muted" class="about-muted"></p></div></details></div><p id="unit-caption" class="unit-caption"></p></div>
+        <div class="hud-passage"><span id="unit-stage" class="eyebrow"></span><div class="passage-row"><h2 id="unit-title"></h2><span id="unit-stars" class="unit-stars"></span><details id="piece-about-step" class="about-step"><summary aria-label="About this step">${ICON_INFO}</summary><div class="about-body"><p id="unit-goal"></p><p id="unit-why" class="unit-why"></p><div id="lane-help"></div><p id="piece-about-muted" class="about-muted"></p></div></details></div><p id="unit-caption" class="unit-caption"></p></div>
         <div class="hud-tempo" id="piece-tempo">
           <div class="readout"><span id="piece-bpm-num" class="bpm-num"></span><div class="bpm-side"><div class="side-row"><span class="bpm-unit">BPM</span><span id="piece-free-tag" class="free-tag" hidden>free</span><button id="piece-free-open" type="button" class="icon-btn pencil" aria-label="Free tempo" aria-expanded="false" aria-controls="piece-free">${ICON_PEN}</button></div><p class="goal-row"><span id="piece-tempo-help"></span><span id="piece-goal-sub" class="goal-sub"></span></p></div>
             <div id="piece-free" class="free-pop" role="group" aria-label="Free tempo" hidden><div class="stepper"><button id="piece-bpm-down" type="button" aria-label="Slower">−</button><input id="piece-bpm" type="number" min="20" max="240" step="1" inputmode="numeric" aria-label="Tempo in BPM" aria-describedby="piece-free-line piece-bpm-error"><button id="piece-bpm-up" type="button" aria-label="Faster">+</button></div><p id="piece-free-line">Free tempo: takes here do not move the ladder</p><p id="piece-bpm-error" class="free-error"></p><button id="piece-free-back" type="button" class="free-back" hidden></button><button id="piece-free-done" type="button" class="free-done">Done</button></div>
@@ -364,7 +365,8 @@ export function lightProbe(): { backend: 'gl' | '2d'; shapes: number; particles:
  * Keys and MIDI input on the lane. held: keys down now. labels: computer-key letters. tiers: during a timed keys take,
  * each played note's live judgement (judgeKeys), the same rules as the final grade. hits: notes played in Wait for me
  * or a replay. auto: notes the app plays. wrong: when each wrong key was pressed (performance.now ms). expect: keys to
- * press now, pulsing. beat: a lane position that overrides the plan (wait mode). streak: on-time notes in a row.
+ * press now, pulsing. beat: a lane position that overrides the plan (wait mode). streak: on-time notes in a row (it
+ * warms the hit line). run: right, on-time attacks in a row by the card's rule (game.ts liveRun), for the run counter.
  */
 export interface LiveKeys {
   held: ReadonlySet<number>;
@@ -377,6 +379,7 @@ export interface LiveKeys {
   beat?: number;
   message?: string;
   streak?: number;
+  run?: number;
 }
 /** lively: flashes, pops and sparks; calm: colour changes only. level: microphone level, for a neutral ring that is no verdict. */
 /** quiet: a microphone take or a demo is playing, so no reward light at all. */
@@ -482,7 +485,31 @@ function drawMoment(p: CanvasRenderingContext2D, w: number, h: number, small: bo
 }
 /** Whether the lane still has something moving on its own (sparks, a flash fading, a banner), so a static lane must keep drawing. */
 export const laneAnimating = () =>
-  bursts.length > 0 || effects.length > 0 || Math.abs(haze - 28) > 0.5 || moment !== undefined;
+  bursts.length > 0 || effects.length > 0 || Math.abs(haze - 28) > 0.5 || moment !== undefined || runMoving;
+/** The run counter between frames (game.ts decides what it shows). */
+let runMemo: RunMemo = { last: 0 },
+  runMoving = false;
+/**
+ * The run counter: a small ink label at the top left of the lane (runPlace), where the notes are still beats away from
+ * the hit line, on a dark backing so the light never washes it out. Returns its box so the WebGL light keeps off it.
+ */
+function drawRun(p: CanvasRenderingContext2D, show: RunShow, small: boolean, avoid: readonly Rect[]): Rect {
+  const size = (small ? 14 : 16) * show.scale;
+  p.font = `600 ${size}px Segoe UI`;
+  const { x, y, w: tw, h: th } = runPlace(p.measureText(show.text).width + 20, size + 12, avoid);
+  p.globalAlpha = show.alpha;
+  p.fillStyle = 'rgba(12,16,14,.62)';
+  p.beginPath();
+  p.roundRect(x, y, tw, th, th / 2);
+  p.fill();
+  p.fillStyle = '#e8efd9';
+  p.textAlign = 'center';
+  p.textBaseline = 'middle';
+  p.fillText(show.text, x + tw / 2, y + th / 2 + 1);
+  p.textAlign = 'left';
+  p.globalAlpha = 1;
+  return { x, y, w: tw, h: th };
+}
 const ease = (t: number) => 1 - (1 - t) * (1 - t);
 type Note = Exercise['events'][number]['notes'][number];
 const ranges = new WeakMap<
@@ -914,9 +941,22 @@ export function drawKeys(
   ]);
   p.fillRect(0, kbTop, w, 10);
   drawMoment(p, w, hitY, small, lively);
+  // The run counter: keys and MIDI timed takes only (the run is 0 otherwise), never in a microphone take or a demo.
+  // Drawn last, so it can keep clear of the message pill and the moment as they are this frame.
+  const run = runCounter(runMemo, look.quiet ? 0 : (live?.run ?? 0), clock, lively);
+  runMemo = look.quiet ? { last: 0 } : run.memo;
+  runMoving = run.moving && !look.quiet;
+  const runBox =
+    run.show && !look.quiet
+      ? drawRun(p, run.show, small, [
+          ...(live?.message ? [pillBox(p, live.message, w, small)] : []),
+          ...(momentBox ? [momentBox] : []),
+        ])
+      : undefined;
   if (gl) {
     if (live?.message) frame.keepOut.push(pillBox(p, live.message, w, small));
     if (momentBox) frame.keepOut.push(momentBox);
+    if (runBox) frame.keepOut.push(runBox);
     gl.draw(frame, w, height);
   }
 }

@@ -142,6 +142,12 @@ export class PieceAudio {
   judge(): KeyJudgement | undefined {
     return this.presses && this.current ? judgeKeys(this.current.exercise, this.current.bpm, this.presses) : undefined;
   }
+  /** During a keys take: what is played, at what tempo, and the presses so far (read only), for the run counter. */
+  get keyTake(): { exercise: Exercise; bpm: number; presses: readonly KeyPress[] } | undefined {
+    return this.presses && this.current
+      ? { exercise: this.current.exercise, bpm: this.current.bpm, presses: this.presses }
+      : undefined;
+  }
   get pressCount(): number {
     return this.presses?.length ?? 0;
   }

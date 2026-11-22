@@ -241,6 +241,8 @@ export interface AdvanceEvent {
 }
 /** A take counts as clean at this score or better (with the learner's comfortable answer). */
 export const CLEAN = 0.8;
+/** Below this score a take counts as needing more room (a hard take). */
+export const ROOM = 0.65;
 
 /** Between attempts only. Clean = trusted, 80% or better and comfortable. Two clean takes climb a rung; certification rungs fade support over three. */
 export function advanceUnit(
