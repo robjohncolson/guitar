@@ -1,0 +1,15 @@
+node_modules
+dist
+public
+tests/fixtures
+design
+src/piece/packs
+smoke-artifacts
+.gitnexus
+.claude
+.vercel
+.cache
+package-lock.json
+*.md
+*.html
+*.json

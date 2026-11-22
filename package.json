@@ -16,7 +16,11 @@
     "check:piano": "node scripts/check-piano-samples.mjs",
     "check:piano-voice": "node scripts/piano-voice-check.mjs",
     "check:piano-realtime": "node scripts/piano-realtime-check.mjs",
-    "check:piece-sound": "node scripts/piece-sound-check.mjs"
+    "check:piece-sound": "node scripts/piece-sound-check.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json",
+    "verify": "npm run format:check && npm test && npm run build"
   },
   "dependencies": {
     "@tensorflow/tfjs": "4.22.0",
@@ -25,6 +29,7 @@
   "devDependencies": {
     "@types/node": "22.20.5",
     "@types/pg": "8.23.1",
+    "prettier": "3.10.1",
     "typescript": "7.0.2",
     "vite": "8.2.2",
     "vitest": "5.0.0"
