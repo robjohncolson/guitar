@@ -1,15 +1,30 @@
 export type Occupancy = 'empty' | 'player' | 'companion';
-export interface Slot { index: number; startTime: number; endTime: number; occupancy: Occupancy }
+export interface Slot {
+  index: number;
+  startTime: number;
+  endTime: number;
+  occupancy: Occupancy;
+}
 export const mod = (n: number, d: number) => ((n % d) + d) % d;
 
 export class Grid {
   private slots = new Map<number, Slot>();
-  constructor(public t0: number, public period: number) {}
-  indexAt(t: number): number { return Math.floor((t - this.t0) / this.period); }
+  constructor(
+    public t0: number,
+    public period: number,
+  ) {}
+  indexAt(t: number): number {
+    return Math.floor((t - this.t0) / this.period);
+  }
   slot(index: number): Slot {
     let slot = this.slots.get(index);
     if (!slot) {
-      slot = { index, startTime: this.t0 + index * this.period, endTime: this.t0 + (index + 1) * this.period, occupancy: 'empty' };
+      slot = {
+        index,
+        startTime: this.t0 + index * this.period,
+        endTime: this.t0 + (index + 1) * this.period,
+        occupancy: 'empty',
+      };
       this.slots.set(index, slot);
     }
     return slot;

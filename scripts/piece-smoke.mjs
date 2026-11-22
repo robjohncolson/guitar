@@ -9,9 +9,12 @@ const pianoWav = (await readFile(new URL('../tests/fixtures/piano-notes.wav', im
 const guitar = JSON.parse(await readFile(new URL('../tests/fixtures/guitar-plucks.json', import.meta.url), 'utf8'));
 const guitarWav = (await readFile(new URL('../tests/fixtures/guitar-plucks.wav', import.meta.url))).toString('base64');
 await mkdir(new URL('../smoke-artifacts/', import.meta.url), { recursive: true });
-const browser = await chromeSession(), { send, evaluate, until } = browser, results = [];
+const browser = await chromeSession(),
+  { send, evaluate, until } = browser,
+  results = [];
 try {
-  await send('Page.addScriptToEvaluateOnNewDocument', { source: `
+  await send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `
     window.__piece = { contexts: [], records: [], tracks: [], errors: [], calibration: false, delay: 0.12, scenario: 'clean', score: [] };
     const Context = AudioContext, Worklet = AudioWorkletNode, connect = AudioNode.prototype.connect;
     window.AudioContext = class extends Context { constructor(...a) { super(...a); __piece.contexts.push(this); } };
@@ -51,36 +54,78 @@ try {
         if (name === 'guitar-looper') { const post = this.port.postMessage.bind(this.port); this.port.postMessage = message => { if (message.type === 'record') { __piece.records.push(message); __piece.feed(message); } post(message); }; }
       }
     };
-  ` });
+  `,
+  });
   await send('Page.navigate', { url: `${origin}/piece.html` });
   await until("document.getElementById('piece-title')?.textContent === 'Gymnopédie No. 1'", 30000);
-  const counts = await evaluate("({ units: document.querySelectorAll('#course-list [data-unit]').length, today: document.querySelectorAll('#today-list [data-unit]').length })");
-  assert.ok(counts.units > 80, `course has ${counts.units} units`); assert.ok(counts.today >= 3);
-  await evaluate("document.getElementById('piece-settings').open = true; __piece.calibration = true; document.getElementById('piece-calibrate').click()");
+  const counts = await evaluate(
+    "({ units: document.querySelectorAll('#course-list [data-unit]').length, today: document.querySelectorAll('#today-list [data-unit]').length })",
+  );
+  assert.ok(counts.units > 80, `course has ${counts.units} units`);
+  assert.ok(counts.today >= 3);
+  await evaluate(
+    "document.getElementById('piece-settings').open = true; __piece.calibration = true; document.getElementById('piece-calibrate').click()",
+  );
   await until("document.getElementById('piece-calibration-feedback').textContent.startsWith('Timing measured')", 20000);
-  await evaluate("__piece.calibration = false");
+  await evaluate('__piece.calibration = false');
   const stored = await evaluate("JSON.parse(localStorage.getItem('piece.trainer.v1'))");
-  assert.equal(stored.calibrated, true); console.log(JSON.stringify({ phase: 'calibrated', offset: stored.offset }));
+  assert.equal(stored.calibrated, true);
+  console.log(JSON.stringify({ phase: 'calibrated', offset: stored.offset }));
   // Independent score of bars 1-4, left hand: [beat, midis, beats held].
-  const intro = [[0, [43], 3], [1, [59, 62, 66], 2], [3, [38], 3], [4, [57, 61, 66], 2], [6, [43], 3], [7, [59, 62, 66], 2], [9, [38], 3], [10, [57, 61, 66], 2]].map(x => [...x, 'piano']);
+  const intro = [
+    [0, [43], 3],
+    [1, [59, 62, 66], 2],
+    [3, [38], 3],
+    [4, [57, 61, 66], 2],
+    [6, [43], 3],
+    [7, [59, 62, 66], 2],
+    [9, [38], 3],
+    [10, [57, 61, 66], 2],
+  ].map((x) => [...x, 'piano']);
   const take = async (scenario, setup) => {
     const before = await evaluate("document.getElementById('piece-trace').href");
-    await evaluate(`__piece.scenario = ${JSON.stringify(scenario)}; ${setup ?? ''}; document.getElementById('piece-start').click()`);
-    await until(`document.getElementById('piece-trace').href.startsWith('blob:') && document.getElementById('piece-trace').href !== ${JSON.stringify(before)}`, 120000);
+    await evaluate(
+      `__piece.scenario = ${JSON.stringify(scenario)}; ${setup ?? ''}; document.getElementById('piece-start').click()`,
+    );
+    await until(
+      `document.getElementById('piece-trace').href.startsWith('blob:') && document.getElementById('piece-trace').href !== ${JSON.stringify(before)}`,
+      120000,
+    );
     const trace = await evaluate("fetch(document.getElementById('piece-trace').href).then(r => r.json())");
-    assert.equal(await evaluate("__piece.tracks.every(t => t.readyState === 'ended')"), true, 'Mic stayed open after a take');
-    results.push({ scenario, ...trace }); return trace;
+    assert.equal(
+      await evaluate("__piece.tracks.every(t => t.readyState === 'ended')"),
+      true,
+      'Mic stayed open after a take',
+    );
+    results.push({ scenario, ...trace });
+    return trace;
   };
   // An answer starts the next take by itself, and Start will not drop an unanswered take: stop the automatic take so each scenario starts its own.
   // A struggling answer may instead offer trouble-spot choices; "Next take as usual" is the old flow.
   const halt = async () => {
-    await until("(!document.getElementById('piece-choices')?.hidden && !!document.querySelector('#piece-choices button[data-choice=next]')) || !document.getElementById('piece-stop').disabled");
-    if (await evaluate("!document.getElementById('piece-choices')?.hidden && !!document.querySelector('#piece-choices button[data-choice=next]')")) await evaluate("document.querySelector('#piece-choices button[data-choice=next]').click()");
-    await until("!document.getElementById('piece-stop').disabled"); await evaluate("document.getElementById('piece-stop').click()"); await until("document.getElementById('piece-stop').disabled && !document.getElementById('piece-start').disabled"); };
-  const answer = async id => { await evaluate(`document.getElementById('${id}').click()`); await halt(); };
+    await until(
+      "(!document.getElementById('piece-choices')?.hidden && !!document.querySelector('#piece-choices button[data-choice=next]')) || !document.getElementById('piece-stop').disabled",
+    );
+    if (
+      await evaluate(
+        "!document.getElementById('piece-choices')?.hidden && !!document.querySelector('#piece-choices button[data-choice=next]')",
+      )
+    )
+      await evaluate("document.querySelector('#piece-choices button[data-choice=next]').click()");
+    await until("!document.getElementById('piece-stop').disabled");
+    await evaluate("document.getElementById('piece-stop').click()");
+    await until("document.getElementById('piece-stop').disabled && !document.getElementById('piece-start').disabled");
+  };
+  const answer = async (id) => {
+    await evaluate(`document.getElementById('${id}').click()`);
+    await halt();
+  };
   const select = async (id, bpm) => {
     await evaluate(`document.querySelector('[data-unit="${id}"]').click()`);
-    if (bpm) await evaluate(`{ const b = document.getElementById('piece-bpm'); b.value = '${bpm}'; b.dispatchEvent(new Event('input')); }`);
+    if (bpm)
+      await evaluate(
+        `{ const b = document.getElementById('piece-bpm'); b.value = '${bpm}'; b.dispatchEvent(new Event('input')); }`,
+      );
     // Hear it once (then stop) so the next take starts with the count-in, not a demonstration. The first Hear it can leave the page
     // unpainted for a moment (the piano recordings decode and the lane draws its first frames), so wait until the page shows it is
     // playing before pressing Stop, then until it is idle again.
@@ -93,36 +138,67 @@ try {
   await select('L:1-4', 66);
   await evaluate(`__piece.score = ${JSON.stringify(intro)}; __piece.period = 60 / 66`);
   const clean = await take('clean');
-  const verdicts = clean.result.events.flatMap(e => e.notes.map(n => n.verdict));
-  console.log(JSON.stringify({ phase: 'clean piano take', timing: clean.result.timing, pitch: clean.result.pitch, trusted: clean.result.trusted, marks: clean.result.events.map(e => e.mark), verdicts, tuning: clean.result.tuning }));
-  assert.equal(clean.result.trusted, true); assert.equal(clean.result.timing, 1);
-  assert.equal(verdicts.filter(v => v === 'wrong' || v === 'not-heard').length, 0, 'A played note was accused');
-  assert.ok(verdicts.filter(v => v === 'heard').length >= 10);
+  const verdicts = clean.result.events.flatMap((e) => e.notes.map((n) => n.verdict));
+  console.log(
+    JSON.stringify({
+      phase: 'clean piano take',
+      timing: clean.result.timing,
+      pitch: clean.result.pitch,
+      trusted: clean.result.trusted,
+      marks: clean.result.events.map((e) => e.mark),
+      verdicts,
+      tuning: clean.result.tuning,
+    }),
+  );
+  assert.equal(clean.result.trusted, true);
+  assert.equal(clean.result.timing, 1);
+  assert.equal(verdicts.filter((v) => v === 'wrong' || v === 'not-heard').length, 0, 'A played note was accused');
+  assert.ok(verdicts.filter((v) => v === 'heard').length >= 10);
   await evaluate("document.getElementById('piece-comfortable').click()");
   // A take at a free tempo is answered but never moves the ladder: LAST TAKE says it was not counted.
   await until("/Not counted · free tempo/.test(document.getElementById('piece-last-text').textContent)");
   await halt();
   const wrong = await take('wrong');
-  const target = wrong.result.events.find(e => e.beat === 10).notes.find(n => n.midi === 61);
+  const target = wrong.result.events.find((e) => e.beat === 10).notes.find((n) => n.midi === 61);
   await pause(150);
-  console.log(JSON.stringify({ phase: 'wrong chord tone', verdict: target.verdict, heardAs: target.heardAs, feedback: await evaluate("document.getElementById('piece-feedback').textContent") }));
+  console.log(
+    JSON.stringify({
+      phase: 'wrong chord tone',
+      verdict: target.verdict,
+      heardAs: target.heardAs,
+      feedback: await evaluate("document.getElementById('piece-feedback').textContent"),
+    }),
+  );
   assert.notEqual(target.verdict, 'heard', 'A wrong note was confirmed');
   await answer('piece-struggling');
   const silent = await take('silence');
-  console.log(JSON.stringify({ phase: 'silence', marks: silent.result.events.map(e => e.mark), score: silent.result.score }));
-  assert.ok(silent.result.events.every(e => e.mark === 'missed')); assert.equal(silent.result.score, 0);
+  console.log(
+    JSON.stringify({ phase: 'silence', marks: silent.result.events.map((e) => e.mark), score: silent.result.score }),
+  );
+  assert.ok(silent.result.events.every((e) => e.mark === 'missed'));
+  assert.equal(silent.result.score, 0);
   await answer('piece-struggling');
   // At the tempo step itself (50% of 66 = 33 BPM) a clean, comfortable take counts toward the ladder.
-  await evaluate(`{ const b = document.getElementById('piece-bpm'); b.value = '33'; b.dispatchEvent(new Event('input')); __piece.period = 60 / 33; }`);
+  await evaluate(
+    `{ const b = document.getElementById('piece-bpm'); b.value = '33'; b.dispatchEvent(new Event('input')); __piece.period = 60 / 33; }`,
+  );
   const step = await take('clean');
-  assert.equal(step.bpm, 33); assert.equal(step.result.timing, 1);
+  assert.equal(step.bpm, 33);
+  assert.equal(step.result.timing, 1);
   await evaluate("document.getElementById('piece-comfortable').click()");
   await until("JSON.parse(localStorage.getItem('piece.trainer.v1')).units['gymnopedie-1|L:1-4']?.attempts === 1");
   await pause(100);
   const p1 = await evaluate("JSON.parse(localStorage.getItem('piece.trainer.v1')).units['gymnopedie-1|L:1-4']");
-  console.log(JSON.stringify({ phase: 'ladder', progress: p1, feedback: await evaluate("document.getElementById('piece-feedback').textContent") }));
+  console.log(
+    JSON.stringify({
+      phase: 'ladder',
+      progress: p1,
+      feedback: await evaluate("document.getElementById('piece-feedback').textContent"),
+    }),
+  );
   await halt();
-  assert.equal(p1.attempts, 1); assert.equal(p1.best, 0.5);
+  assert.equal(p1.attempts, 1);
+  assert.equal(p1.best, 0.5);
   await browser.screenshot('smoke-artifacts/piece-piano.png');
   // Guitar: a muted strum pattern graded by timing only, then a shape with each string's pitch checked by real CREPE.
   await evaluate("document.getElementById('inst-accompany').click()");
@@ -131,33 +207,86 @@ try {
   const strums = Array.from({ length: 12 }, (_, i) => [i, [55], 0.15, 'strum']);
   await evaluate(`__piece.score = ${JSON.stringify(strums)}; __piece.period = 60 / 66`);
   const muted = await take('clean');
-  console.log(JSON.stringify({ phase: 'guitar strums', timing: muted.result.timing, marks: muted.result.events.map(e => e.mark), trusted: muted.result.trusted }));
-  assert.equal(muted.result.trusted, true); assert.ok(muted.result.timing >= 0.9);
+  console.log(
+    JSON.stringify({
+      phase: 'guitar strums',
+      timing: muted.result.timing,
+      marks: muted.result.events.map((e) => e.mark),
+      trusted: muted.result.trusted,
+    }),
+  );
+  assert.equal(muted.result.trusted, true);
+  assert.ok(muted.result.timing >= 0.9);
   await select('g-shape:Em', 60);
-  const em = [[0, [40], 0.7, 'guitar'], [1, [47], 0.7, 'guitar'], [2, [52], 0.7, 'guitar'], [3, [55], 0.7, 'guitar'], [4, [59], 0.7, 'guitar'], [5, [64], 0.7, 'guitar'], [7, [64], 1.5, 'strum']];
+  const em = [
+    [0, [40], 0.7, 'guitar'],
+    [1, [47], 0.7, 'guitar'],
+    [2, [52], 0.7, 'guitar'],
+    [3, [55], 0.7, 'guitar'],
+    [4, [59], 0.7, 'guitar'],
+    [5, [64], 0.7, 'guitar'],
+    [7, [64], 1.5, 'strum'],
+  ];
   await evaluate(`__piece.score = ${JSON.stringify(em)}; __piece.period = 1`);
   const shape = await take('clean');
-  const plucks = shape.result.events.flatMap(e => e.notes).filter(n => n.verdict !== 'unchecked');
-  console.log(JSON.stringify({ phase: 'guitar shape with CREPE', model: await evaluate("document.getElementById('piece-model').textContent"), plucks: plucks.map(n => [n.midi, n.verdict, n.heardAs ?? '']), timing: shape.result.timing, trusted: shape.result.trusted }));
-  assert.ok(plucks.filter(n => n.verdict === 'heard').length >= 4, 'CREPE heard too few of the shape strings');
-  assert.equal(plucks.filter(n => n.verdict === 'wrong').length, 0);
+  const plucks = shape.result.events.flatMap((e) => e.notes).filter((n) => n.verdict !== 'unchecked');
+  console.log(
+    JSON.stringify({
+      phase: 'guitar shape with CREPE',
+      model: await evaluate("document.getElementById('piece-model').textContent"),
+      plucks: plucks.map((n) => [n.midi, n.verdict, n.heardAs ?? '']),
+      timing: shape.result.timing,
+      trusted: shape.result.trusted,
+    }),
+  );
+  assert.ok(plucks.filter((n) => n.verdict === 'heard').length >= 4, 'CREPE heard too few of the shape strings');
+  assert.equal(plucks.filter((n) => n.verdict === 'wrong').length, 0);
   await browser.screenshot('smoke-artifacts/piece-guitar.png');
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   // The panels live in the menu dialog: open it, open every section, and check nothing in it scrolls sideways.
   await evaluate("document.getElementById('piece-menu').click()");
   assert.equal(await evaluate("document.getElementById('piece-drawer').open"), true, 'Menu did not open');
-  for (const panel of ['piece-today', 'piece-map', 'piece-course', 'piece-setup', 'piece-settings', 'piece-about', 'piece-add', 'piece-last', 'piece-journal', 'piece-keys']) await evaluate(`document.getElementById('${panel}').open = true`);
+  for (const panel of [
+    'piece-today',
+    'piece-map',
+    'piece-course',
+    'piece-setup',
+    'piece-settings',
+    'piece-about',
+    'piece-add',
+    'piece-last',
+    'piece-journal',
+    'piece-keys',
+  ])
+    await evaluate(`document.getElementById('${panel}').open = true`);
   await pause(300);
-  assert.equal(await evaluate("[...document.querySelectorAll('#piece-drawer details')].every(d => d.open)"), true, 'A menu section stayed closed');
-  assert.equal(await evaluate("(() => { const d = document.getElementById('piece-drawer'), b = d.querySelector('.drawer-body'); return d.scrollWidth <= d.clientWidth && b.scrollWidth <= b.clientWidth; })()"), true, 'Menu overflow');
+  assert.equal(
+    await evaluate("[...document.querySelectorAll('#piece-drawer details')].every(d => d.open)"),
+    true,
+    'A menu section stayed closed',
+  );
+  assert.equal(
+    await evaluate(
+      "(() => { const d = document.getElementById('piece-drawer'), b = d.querySelector('.drawer-body'); return d.scrollWidth <= d.clientWidth && b.scrollWidth <= b.clientWidth; })()",
+    ),
+    true,
+    'Menu overflow',
+  );
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true, 'Mobile overflow');
   await browser.screenshot('smoke-artifacts/piece-mobile.png');
-  assert.equal(await evaluate('__piece.contexts.length'), 1); assert.deepEqual(await evaluate('__piece.errors'), []); assert.deepEqual(browser.errors, []);
-  assert.ok(browser.requests.filter(u => /^https?:/.test(u)).every(u => u.startsWith(origin)), 'External runtime request');
+  assert.equal(await evaluate('__piece.contexts.length'), 1);
+  assert.deepEqual(await evaluate('__piece.errors'), []);
+  assert.deepEqual(browser.errors, []);
+  assert.ok(
+    browser.requests.filter((u) => /^https?:/.test(u)).every((u) => u.startsWith(origin)),
+    'External runtime request',
+  );
   await writeFile('smoke-artifacts/piece-results.json', JSON.stringify(results, null, 2));
   console.log(JSON.stringify({ phase: 'complete', takes: results.length, errors: browser.errors.length }));
 } catch (error) {
   await browser.screenshot('smoke-artifacts/piece-failed.png').catch(() => {});
   await writeFile('smoke-artifacts/piece-failed.json', JSON.stringify({ error: String(error), results }, null, 2));
   throw error;
-} finally { await browser.close(); }
+} finally {
+  await browser.close();
+}

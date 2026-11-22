@@ -1,7 +1,11 @@
 import type { UnitState } from './progress';
 
 /** The top bar's status chip: the input, and its worst state. A phone shows the one-word form. */
-export interface Chip { long: string; short: string; warn: boolean }
+export interface Chip {
+  long: string;
+  short: string;
+  warn: boolean;
+}
 export function statusChip(s: { keys: boolean; midi: boolean; tooLoud: boolean; calibrated: boolean }): Chip {
   if (s.keys) return { long: s.midi ? 'Keys · MIDI' : 'Keys', short: 'Keys', warn: false };
   if (s.tooLoud) return { long: 'Mic too loud', short: 'Too loud', warn: true };
@@ -13,7 +17,12 @@ export function statusChip(s: { keys: boolean; midi: boolean; tooLoud: boolean; 
 export function todayChip(done: number, total: number): Chip & { label: string } {
   if (total <= 0) return { long: 'Today', short: 'Today', warn: false, label: "Today's practice" };
   const d = Math.max(0, Math.min(done, total));
-  return { long: `Today ${d} of ${total}`, short: `${d}/${total}`, warn: false, label: `Today ${d} of ${total}: steps of today's practice done` };
+  return {
+    long: `Today ${d} of ${total}`,
+    short: `${d}/${total}`,
+    warn: false,
+    label: `Today ${d} of ${total}: steps of today's practice done`,
+  };
 }
 
 /** True while the menu or the free-tempo box is open. */
@@ -28,7 +37,15 @@ export const keyAllowed = (open: boolean, code: string) => !open || code === 'Es
  * block's height, on desktop the distance from the lane's bottom to the bottom of Start (or the answer buttons).
  * running: on a phone, while something plays the HUD folds away and the lane takes all the room there is.
  */
-export function laneHeight(v: { phone: boolean; vh: number; laneTop: number; below: number; card: boolean; notice: boolean; running?: boolean }): number {
+export function laneHeight(v: {
+  phone: boolean;
+  vh: number;
+  laneTop: number;
+  below: number;
+  card: boolean;
+  notice: boolean;
+  running?: boolean;
+}): number {
   const fit = Math.floor(v.vh - v.laneTop - v.below - 8);
   if (v.phone) {
     if (v.running) return Math.max(180, fit);

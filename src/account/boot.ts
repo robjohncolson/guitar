@@ -7,7 +7,11 @@ import { isFirstVisit, showWelcome } from './welcome';
 export async function startPage(page: string, app: () => Promise<unknown>): Promise<void> {
   installErrorReporting(page);
   const firstVisit = isFirstVisit();
-  try { await bootSync(); } catch (error) { console.error('[guitar] sync failed to start', error); }
+  try {
+    await bootSync();
+  } catch (error) {
+    console.error('[guitar] sync failed to start', error);
+  }
   await app();
   mountAccountUi();
   if (firstVisit) showWelcome();

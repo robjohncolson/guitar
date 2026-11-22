@@ -1,17 +1,21 @@
 // Real CREPE and native worklets. Known input is transformed recorded guitar, never injected note events.
-import {readFile,writeFile} from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import {chromeSession,pause} from './chrome-session.mjs';
-const origin=process.env.SMOKE_ORIGIN || 'http://127.0.0.1:4173',quick=process.env.SMOKE_TRAINER_QUICK==='1',course=process.env.SMOKE_TRAINER_COURSE==='1';
-const fixture=JSON.parse(await readFile(new URL('../tests/fixtures/guitar-plucks.json',import.meta.url),'utf8'));
-const wav=(await readFile(new URL('../tests/fixtures/guitar-plucks.wav',import.meta.url))).toString('base64');
-const browser=await chromeSession(),{send,evaluate,until}=browser;
-const results=[];
+import { chromeSession, pause } from './chrome-session.mjs';
+const origin = process.env.SMOKE_ORIGIN || 'http://127.0.0.1:4173',
+  quick = process.env.SMOKE_TRAINER_QUICK === '1',
+  course = process.env.SMOKE_TRAINER_COURSE === '1';
+const fixture = JSON.parse(await readFile(new URL('../tests/fixtures/guitar-plucks.json', import.meta.url), 'utf8'));
+const wav = (await readFile(new URL('../tests/fixtures/guitar-plucks.wav', import.meta.url))).toString('base64');
+const browser = await chromeSession(),
+  { send, evaluate, until } = browser;
+const results = [];
 try {
-  await send('Page.addScriptToEvaluateOnNewDocument',{source:`
+  await send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `
     window.__trainer={contexts:[],records:[],tracks:[],errors:[],sounds:[],sources:[],calibration:false,scenario:'clean',delay:.12};
     const Context=AudioContext,Worklet=AudioWorkletNode,connect=AudioNode.prototype.connect,startOsc=OscillatorNode.prototype.start;
-    window.AudioContext=class extends Context{constructor(...args){super(...args);__trainer.contexts.push(this);if(${process.env.SMOKE_NEGATIVE_LATENCY==='1'})Object.defineProperty(this,"outputLatency",{get:()=>.35});}};
+    window.AudioContext=class extends Context{constructor(...args){super(...args);__trainer.contexts.push(this);if(${process.env.SMOKE_NEGATIVE_LATENCY === '1'})Object.defineProperty(this,"outputLatency",{get:()=>.35});}};
     const data=Uint8Array.from(atob(${JSON.stringify(wav)}),c=>c.charCodeAt(0)),view=new DataView(data.buffer),fixture=${JSON.stringify(fixture)};
     navigator.mediaDevices.getUserMedia=async constraints=>{
       const context=__trainer.contexts[0],destination=context.createMediaStreamDestination();__trainer.mic=destination;__trainer.tracks.push(...destination.stream.getTracks());
@@ -49,93 +53,205 @@ try {
         if(name==='guitar-looper'){const post=this.port.postMessage.bind(this.port);this.port.postMessage=message=>{if(message.type==='record'){__trainer.records.push({...message,now:context.currentTime});__trainer.feed(message);}post(message);};}
       }
     };
-  `});
-  await send('Page.navigate',{url:origin});await until("document.getElementById('trainer-model')?.textContent==='CREPE ready (tiny)'",60000);
-  assert.equal(await evaluate("document.querySelectorAll('[data-lesson]').length"),13);
-  await evaluate("document.getElementById('trainer-settings').open=true;__trainer.calibration=true;document.getElementById('trainer-calibrate').click()");
-  await until("document.getElementById('calibration-feedback').textContent.startsWith('Timing measured')",15000);
-  const calibration=await evaluate("JSON.parse(localStorage.getItem('guitar.trainer.v1'))");assert.equal(calibration.calibrated,true);assert.ok(Math.abs(calibration.offset)<.3);
-  await evaluate("__trainer.calibration=false;document.getElementById('trainer-first-demo').checked=false;document.getElementById('trainer-settings').open=false;document.getElementById('trainer-bpm').value='60';document.getElementById('trainer-bpm').dispatchEvent(new Event('input'))");
-  const take=async scenario=>{
-    const previous=await evaluate("document.getElementById('trainer-trace').href");
+  `,
+  });
+  await send('Page.navigate', { url: origin });
+  await until("document.getElementById('trainer-model')?.textContent==='CREPE ready (tiny)'", 60000);
+  assert.equal(await evaluate("document.querySelectorAll('[data-lesson]').length"), 13);
+  await evaluate(
+    "document.getElementById('trainer-settings').open=true;__trainer.calibration=true;document.getElementById('trainer-calibrate').click()",
+  );
+  await until("document.getElementById('calibration-feedback').textContent.startsWith('Timing measured')", 15000);
+  const calibration = await evaluate("JSON.parse(localStorage.getItem('guitar.trainer.v1'))");
+  assert.equal(calibration.calibrated, true);
+  assert.ok(Math.abs(calibration.offset) < 0.3);
+  await evaluate(
+    "__trainer.calibration=false;document.getElementById('trainer-first-demo').checked=false;document.getElementById('trainer-settings').open=false;document.getElementById('trainer-bpm').value='60';document.getElementById('trainer-bpm').dispatchEvent(new Event('input'))",
+  );
+  const take = async (scenario) => {
+    const previous = await evaluate("document.getElementById('trainer-trace').href");
     await evaluate(`__trainer.scenario=${JSON.stringify(scenario)};document.getElementById('trainer-start').click()`);
-    await until(`document.getElementById('trainer-trace').href.startsWith('blob:') && document.getElementById('trainer-trace').href!==${JSON.stringify(previous)}`,50000);
-    const trace=await evaluate("fetch(document.getElementById('trainer-trace').href).then(r=>r.json())");results.push({scenario,...trace});
-    assert.equal(await evaluate('__trainer.tracks.every(t=>t.readyState===\'ended\')'),true,'Mic stayed open after a take');
+    await until(
+      `document.getElementById('trainer-trace').href.startsWith('blob:') && document.getElementById('trainer-trace').href!==${JSON.stringify(previous)}`,
+      50000,
+    );
+    const trace = await evaluate("fetch(document.getElementById('trainer-trace').href).then(r=>r.json())");
+    results.push({ scenario, ...trace });
+    assert.equal(
+      await evaluate("__trainer.tracks.every(t=>t.readyState==='ended')"),
+      true,
+      'Mic stayed open after a take',
+    );
     return trace;
   };
-  const first=await take('clean');console.log(JSON.stringify({phase:'first graded guitar take',calibration:calibration.offset,...first}));
-  assert.equal(first.calibrated,true);assert.equal(first.result.trusted,true);assert.equal(first.result.score,1);assert.equal(first.result.notes.length,4);
-  const wavInfo=await evaluate("fetch(document.getElementById('trainer-download').href).then(r=>r.arrayBuffer()).then(b=>({length:b.byteLength,rate:new DataView(b).getUint32(24,true)}))");
-  assert.equal(wavInfo.length,44+wavInfo.rate*8*2);
+  const first = await take('clean');
+  console.log(JSON.stringify({ phase: 'first graded guitar take', calibration: calibration.offset, ...first }));
+  assert.equal(first.calibrated, true);
+  assert.equal(first.result.trusted, true);
+  assert.equal(first.result.score, 1);
+  assert.equal(first.result.notes.length, 4);
+  const wavInfo = await evaluate(
+    "fetch(document.getElementById('trainer-download').href).then(r=>r.arrayBuffer()).then(b=>({length:b.byteLength,rate:new DataView(b).getUint32(24,true)}))",
+  );
+  assert.equal(wavInfo.length, 44 + wavInfo.rate * 8 * 2);
   await browser.screenshot(process.env.SMOKE_SCREENSHOT || 'smoke-artifacts/trainer-local.png');
-  if(!quick && !course){
+  if (!quick && !course) {
     await evaluate("document.getElementById('trainer-comfortable').click()");
-    for(let i=1;i<9;i++){
-      const result=await take('clean');assert.equal(result.result.score,1);assert.equal(result.result.trusted,true);
+    for (let i = 1; i < 9; i++) {
+      const result = await take('clean');
+      assert.equal(result.result.score, 1);
+      assert.equal(result.result.trusted, true);
       await evaluate("document.getElementById('trainer-comfortable').click()");
-      if(i===2 || i===5 || i===8)console.log(JSON.stringify({phase:'progression',take:i+1,skill:await evaluate("JSON.parse(localStorage.getItem('guitar.trainer.v1')).skills.pulse")}));
+      if (i === 2 || i === 5 || i === 8)
+        console.log(
+          JSON.stringify({
+            phase: 'progression',
+            take: i + 1,
+            skill: await evaluate("JSON.parse(localStorage.getItem('guitar.trainer.v1')).skills.pulse"),
+          }),
+        );
     }
-    const skill=await evaluate("JSON.parse(localStorage.getItem('guitar.trainer.v1')).skills.pulse");assert.equal(skill.best,60);assert.equal(skill.bpm,62);assert.equal(skill.support,2);assert.equal(skill.mastered,true);
-    for(const scenario of ['wrong','late','extra','silence','noise']){
-      const result=await take(scenario);console.log(JSON.stringify({phase:'honest grading',scenario,result:result.result}));
-      if(scenario==='noise')assert.equal(result.result.trusted,false);else {assert.equal(result.result.trusted,true);assert.ok(result.result.score<.9);}
-      if(scenario==='wrong')assert.ok(result.result.notes.some(n=>n.mark==='wrong'));
-      if(scenario==='late')assert.ok(result.result.notes.some(n=>n.mark==='late'));
-      if(scenario==='extra')assert.ok(result.result.extras>0);
-      if(scenario==='silence')assert.ok(result.result.notes.every(n=>n.mark==='missed'));
+    const skill = await evaluate("JSON.parse(localStorage.getItem('guitar.trainer.v1')).skills.pulse");
+    assert.equal(skill.best, 60);
+    assert.equal(skill.bpm, 62);
+    assert.equal(skill.support, 2);
+    assert.equal(skill.mastered, true);
+    for (const scenario of ['wrong', 'late', 'extra', 'silence', 'noise']) {
+      const result = await take(scenario);
+      console.log(JSON.stringify({ phase: 'honest grading', scenario, result: result.result }));
+      if (scenario === 'noise') assert.equal(result.result.trusted, false);
+      else {
+        assert.equal(result.result.trusted, true);
+        assert.ok(result.result.score < 0.9);
+      }
+      if (scenario === 'wrong') assert.ok(result.result.notes.some((n) => n.mark === 'wrong'));
+      if (scenario === 'late') assert.ok(result.result.notes.some((n) => n.mark === 'late'));
+      if (scenario === 'extra') assert.ok(result.result.extras > 0);
+      if (scenario === 'silence') assert.ok(result.result.notes.every((n) => n.mark === 'missed'));
     }
-    await evaluate("document.querySelector('[data-lesson=\"two-notes\"]').click()");
-    const two=await take('clean');assert.equal(two.result.trusted,true);assert.equal(two.result.score,1);
+    await evaluate('document.querySelector(\'[data-lesson="two-notes"]\').click()');
+    const two = await take('clean');
+    assert.equal(two.result.trusted, true);
+    assert.equal(two.result.score, 1);
   }
-  if(course){
-    for(const id of ['quarters','two-notes','crossing','rests','phrase','minor','major','offbeats','strum','fingerpick','ear','transfer']){
-      await evaluate(`document.querySelector('[data-lesson="${id}"]').click();document.getElementById("trainer-bpm").value="60";document.getElementById("trainer-bpm").dispatchEvent(new Event("input"))`);
-      const result=await take('clean');console.log(JSON.stringify({phase:'course',lesson:id,result:result.result}));
-      assert.equal(result.result.trusted,true,id+' untrusted');assert.equal(result.result.score,1,id+' inaccurate');
-      if(id==='strum')assert.equal(result.result.pitch,null);
-      if(id==='rests')assert.equal(result.result.articulation,1);
+  if (course) {
+    for (const id of [
+      'quarters',
+      'two-notes',
+      'crossing',
+      'rests',
+      'phrase',
+      'minor',
+      'major',
+      'offbeats',
+      'strum',
+      'fingerpick',
+      'ear',
+      'transfer',
+    ]) {
+      await evaluate(
+        `document.querySelector('[data-lesson="${id}"]').click();document.getElementById("trainer-bpm").value="60";document.getElementById("trainer-bpm").dispatchEvent(new Event("input"))`,
+      );
+      const result = await take('clean');
+      console.log(JSON.stringify({ phase: 'course', lesson: id, result: result.result }));
+      assert.equal(result.result.trusted, true, id + ' untrusted');
+      assert.equal(result.result.score, 1, id + ' inaccurate');
+      if (id === 'strum') assert.equal(result.result.pitch, null);
+      if (id === 'rests') assert.equal(result.result.articulation, 1);
     }
     await evaluate(`document.querySelector('[data-lesson="rests"]').click()`);
-    const long=await take('long');assert.equal(long.result.trusted,true);assert.ok(long.result.articulation<.9);
-    const previous=await evaluate('document.getElementById("trainer-trace").href');
+    const long = await take('long');
+    assert.equal(long.result.trusted, true);
+    assert.ok(long.result.articulation < 0.9);
+    const previous = await evaluate('document.getElementById("trainer-trace").href');
     await evaluate('__trainer.scenario="clean";document.getElementById("trainer-create").click()');
-    await until('document.getElementById("trainer-trace").href!=='+JSON.stringify(previous),30000);
-    const creative=await evaluate('fetch(document.getElementById("trainer-trace").href).then(r=>r.json())');assert.equal(creative.kind,'creative');assert.equal(creative.result,undefined);
-    await evaluate('document.getElementById("trainer-latest").click()');await pause(200);assert.equal(await evaluate('__trainer.tracks.every(t=>t.readyState==="ended")'),true);
-    await evaluate('document.getElementById("trainer-stop").click();document.getElementById("trainer-previous").click()');await pause(200);assert.equal(await evaluate('document.getElementById("trainer-player").paused'),false);
-    await evaluate('document.getElementById("trainer-stop").click();document.getElementById("trainer-finish").click()');assert.equal(await evaluate('document.getElementById("session-summary").hidden'),false);
+    await until('document.getElementById("trainer-trace").href!==' + JSON.stringify(previous), 30000);
+    const creative = await evaluate('fetch(document.getElementById("trainer-trace").href).then(r=>r.json())');
+    assert.equal(creative.kind, 'creative');
+    assert.equal(creative.result, undefined);
+    await evaluate('document.getElementById("trainer-latest").click()');
+    await pause(200);
+    assert.equal(await evaluate('__trainer.tracks.every(t=>t.readyState==="ended")'), true);
+    await evaluate(
+      'document.getElementById("trainer-stop").click();document.getElementById("trainer-previous").click()',
+    );
+    await pause(200);
+    assert.equal(await evaluate('document.getElementById("trainer-player").paused'), false);
+    await evaluate('document.getElementById("trainer-stop").click();document.getElementById("trainer-finish").click()');
+    assert.equal(await evaluate('document.getElementById("session-summary").hidden'), false);
   }
-  if(process.env.SMOKE_TRAINER_PLACEMENT==='1'){
+  if (process.env.SMOKE_TRAINER_PLACEMENT === '1') {
     await evaluate("__trainer.scenario='clean';document.getElementById('trainer-placement').click()");
-    await until("!document.getElementById('take-result').hidden && document.getElementById('trainer-comfortable').textContent.includes('starting-point')",40000);
+    await until(
+      "!document.getElementById('take-result').hidden && document.getElementById('trainer-comfortable').textContent.includes('starting-point')",
+      40000,
+    );
     await until("!document.getElementById('trainer-comfortable').disabled");
     await evaluate("document.getElementById('trainer-comfortable').click()");
-    await until("document.getElementById('lesson-title').textContent==='Across two strings' && !document.getElementById('take-result').hidden",40000);
+    await until(
+      "document.getElementById('lesson-title').textContent==='Across two strings' && !document.getElementById('take-result').hidden",
+      40000,
+    );
     await until("!document.getElementById('trainer-comfortable').disabled");
     await evaluate("document.getElementById('trainer-comfortable').click()");
-    assert.equal(await evaluate("document.getElementById('lesson-title').textContent"),'A beginning and an ending');
-    console.log(JSON.stringify({phase:'starting-point check',recommended:'phrase'}));
+    assert.equal(await evaluate("document.getElementById('lesson-title').textContent"), 'A beginning and an ending');
+    console.log(JSON.stringify({ phase: 'starting-point check', recommended: 'phrase' }));
   }
-  await evaluate("document.getElementById('trainer-loop').click()");await pause(250);assert.equal(await evaluate('__trainer.tracks.every(t=>t.readyState===\'ended\')'),true);
-  await evaluate("document.getElementById('trainer-stop').click()");await until("!document.getElementById('trainer-start').disabled");
+  await evaluate("document.getElementById('trainer-loop').click()");
+  await pause(250);
+  assert.equal(await evaluate("__trainer.tracks.every(t=>t.readyState==='ended')"), true);
+  await evaluate("document.getElementById('trainer-stop').click()");
+  await until("!document.getElementById('trainer-start').disabled");
   await evaluate("__trainer.permissionDelay=500;document.getElementById('trainer-start').click()");
-  await until("!document.getElementById('trainer-stop').disabled");await evaluate("document.getElementById('trainer-stop').click()");await pause(700);
-  assert.equal(await evaluate('__trainer.tracks.every(t=>t.readyState===\'ended\')'),true,'Late mic permission was not closed');
-  const records=await evaluate('__trainer.records.length');
+  await until("!document.getElementById('trainer-stop').disabled");
+  await evaluate("document.getElementById('trainer-stop').click()");
+  await pause(700);
+  assert.equal(
+    await evaluate("__trainer.tracks.every(t=>t.readyState==='ended')"),
+    true,
+    'Late mic permission was not closed',
+  );
+  const records = await evaluate('__trainer.records.length');
   await until("!document.getElementById('trainer-start').disabled");
   await evaluate("__trainer.permissionDelay=0;document.getElementById('trainer-start').click()");
-  await until(`__trainer.records.length>${records}`);await until("!document.getElementById('trainer-stop').disabled");
-  await evaluate("document.getElementById('trainer-stop').click()");await pause(200);
-  assert.equal(await evaluate('__trainer.tracks.every(t=>t.readyState===\'ended\')'),true,'Stop left an active recorder open');
-  await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
-  for(const panel of ['lesson-help','trainer-course','trainer-settings','trainer-journal'])await evaluate(`document.getElementById('${panel}').open=true`);
-  assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,'Mobile overflow');
+  await until(`__trainer.records.length>${records}`);
+  await until("!document.getElementById('trainer-stop').disabled");
+  await evaluate("document.getElementById('trainer-stop').click()");
+  await pause(200);
+  assert.equal(
+    await evaluate("__trainer.tracks.every(t=>t.readyState==='ended')"),
+    true,
+    'Stop left an active recorder open',
+  );
+  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  for (const panel of ['lesson-help', 'trainer-course', 'trainer-settings', 'trainer-journal'])
+    await evaluate(`document.getElementById('${panel}').open=true`);
+  assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'), true, 'Mobile overflow');
   await browser.screenshot('smoke-artifacts/trainer-mobile.png');
-  assert.equal(await evaluate('__trainer.contexts.length'),1);assert.deepEqual(await evaluate('__trainer.errors'),[]);assert.deepEqual(browser.errors,[]);
-  assert.ok(browser.requests.filter(u=>/^https?:/.test(u)).every(u=>u.startsWith(origin)),'External runtime request');
-  const progress=await evaluate("JSON.parse(localStorage.getItem('guitar.trainer.v1'))");assert.ok(!('samples' in progress));
-  await send('Page.reload');await until("document.getElementById('lesson-title')?.textContent");assert.equal(await evaluate("document.getElementById('take-review').hidden"),true);assert.equal(await evaluate('__trainer.contexts.length'),0);
-  await writeFile('smoke-artifacts/trainer-results.json',JSON.stringify({origin,quick,calibration:calibration.offset,results,progress},null,2));
-  console.log(JSON.stringify({phase:'complete',origin,quick,takes:results.length,errors:browser.errors.length}));
-}catch(error){await browser.screenshot('smoke-artifacts/trainer-failed.png').catch(()=>{});await writeFile('smoke-artifacts/trainer-failed.json',JSON.stringify({error:String(error),results},null,2));throw error;}finally{await browser.close();}
+  assert.equal(await evaluate('__trainer.contexts.length'), 1);
+  assert.deepEqual(await evaluate('__trainer.errors'), []);
+  assert.deepEqual(browser.errors, []);
+  assert.ok(
+    browser.requests.filter((u) => /^https?:/.test(u)).every((u) => u.startsWith(origin)),
+    'External runtime request',
+  );
+  const progress = await evaluate("JSON.parse(localStorage.getItem('guitar.trainer.v1'))");
+  assert.ok(!('samples' in progress));
+  await send('Page.reload');
+  await until("document.getElementById('lesson-title')?.textContent");
+  assert.equal(await evaluate("document.getElementById('take-review').hidden"), true);
+  assert.equal(await evaluate('__trainer.contexts.length'), 0);
+  await writeFile(
+    'smoke-artifacts/trainer-results.json',
+    JSON.stringify({ origin, quick, calibration: calibration.offset, results, progress }, null, 2),
+  );
+  console.log(
+    JSON.stringify({ phase: 'complete', origin, quick, takes: results.length, errors: browser.errors.length }),
+  );
+} catch (error) {
+  await browser.screenshot('smoke-artifacts/trainer-failed.png').catch(() => {});
+  await writeFile('smoke-artifacts/trainer-failed.json', JSON.stringify({ error: String(error), results }, null, 2));
+  throw error;
+} finally {
+  await browser.close();
+}
