@@ -14,23 +14,35 @@ export interface Spectrum {
   seconds: number;
 }
 
-const twiddles = new Map<number, { cos: Float64Array; sin: Float64Array }>();
-/** In-place iterative radix-2 FFT. */
-export function fft(re: Float64Array, im: Float64Array): void {
-  const n = re.length;
+const twiddles = new Map<number, { cos: Float64Array; sin: Float64Array; reverse: Uint32Array }>();
+/** Twiddle factors and the bit-reversal permutation for one size, computed once. */
+function fftTables(n: number) {
   let table = twiddles.get(n);
   if (!table) {
-    table = { cos: new Float64Array(n / 2), sin: new Float64Array(n / 2) };
+    table = { cos: new Float64Array(n / 2), sin: new Float64Array(n / 2), reverse: new Uint32Array(n) };
     for (let i = 0; i < n / 2; i++) {
       table.cos[i] = Math.cos((-2 * Math.PI * i) / n);
       table.sin[i] = Math.sin((-2 * Math.PI * i) / n);
     }
+    for (let i = 1, j = 0; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      table.reverse[i] = j;
+    }
     twiddles.set(n, table);
   }
-  for (let i = 1, j = 0; i < n; i++) {
-    let bit = n >> 1;
-    for (; j & bit; bit >>= 1) j ^= bit;
-    j ^= bit;
+  return table;
+}
+/**
+ * In-place iterative radix-2 FFT. The butterflies of one stage touch disjoint pairs, so running them twiddle by
+ * twiddle (one cos/sin load each) gives bit-identical results to running them block by block.
+ */
+export function fft(re: Float64Array, im: Float64Array): void {
+  const n = re.length,
+    { cos, sin, reverse } = fftTables(n);
+  for (let i = 1; i < n; i++) {
+    const j = reverse[i];
     if (i < j) {
       let t = re[i];
       re[i] = re[j];
@@ -43,19 +55,21 @@ export function fft(re: Float64Array, im: Float64Array): void {
   for (let len = 2; len <= n; len <<= 1) {
     const half = len >> 1,
       step = n / len;
-    for (let i = 0; i < n; i += len)
-      for (let j = 0; j < half; j++) {
-        const c = table.cos[j * step],
-          s = table.sin[j * step],
-          a = i + j,
-          b = a + half;
-        const br = re[b] * c - im[b] * s,
-          bi = re[b] * s + im[b] * c;
+    for (let j = 0; j < half; j++) {
+      const c = cos[j * step],
+        s = sin[j * step];
+      for (let a = j; a < n; a += len) {
+        const b = a + half,
+          xr = re[b],
+          xi = im[b];
+        const br = xr * c - xi * s,
+          bi = xr * s + xi * c;
         re[b] = re[a] - br;
         im[b] = im[a] - bi;
         re[a] += br;
         im[a] += bi;
       }
+    }
   }
 }
 const pow2 = (n: number) => 2 ** Math.ceil(Math.log2(Math.max(2, n)));
@@ -147,8 +161,12 @@ export function pianoOnsets(
     times.push((at + size / 2) / rate);
   }
   // Decibels make a rise mean the same at any recording level; the floor (a fraction of the take's median band power) keeps silent bands from flickering.
-  const all = powers.flatMap((p) => Array.from(p)).sort((a, b) => a - b),
-    quiet = (all[Math.floor(all.length * 0.5)] ?? 0) * 0.5 + 1e-14;
+  // Band powers are sums of squares, never -0 (and finite for finite input): the typed array's numeric sort orders them as (a, b) => a - b would.
+  // analysis.worker.ts passes the take's recorded Web Audio samples unchanged, which are finite; a NaN would sort differently.
+  const all = new Float64Array(powers.length * bands.length);
+  powers.forEach((p, i) => all.set(p, i * bands.length));
+  all.sort();
+  const quiet = (all[Math.floor(all.length * 0.5)] ?? 0) * 0.5 + 1e-14;
   const flux: number[] = [],
     wide: number[][] = [],
     lag = 3;
@@ -254,9 +272,22 @@ export function eventContext(
  * RULES.noAttack and RULES.attack that is treated as unsure.
  */
 export function attackRise(ctx: EventContext): number {
-  const rises = peakRises(ctx);
-  return rises.length > 1 ? rises[1] : -99;
+  const memo = riseMemo.get(ctx);
+  if (memo && memo.pre === ctx.pre && memo.post === ctx.post && memo.floors === ctx.floors) return memo.rise;
+  const rises = peakRises(ctx),
+    rise = rises.length > 1 ? rises[1] : -99;
+  riseMemo.set(ctx, { pre: ctx.pre, post: ctx.post, floors: ctx.floors, rise });
+  return rise;
 }
+/**
+ * gradePiano asks for an attack's rise, then verifyEvent asks again for the same context. A repeat reads the same
+ * spectra and the same floor-cache entries (the first call filled every entry it reads, and entries are never
+ * replaced), so the remembered value is exactly what a recomputation would give.
+ */
+const riseMemo = new WeakMap<
+  EventContext,
+  { pre: Spectrum; post: Spectrum; floors: Map<number, number>; rise: number }
+>();
 /** Rises (dB) of the post-attack spectral peaks over the pre-attack level nearby, largest first. */
 export function peakRises(ctx: EventContext): number[] {
   const rises: number[] = [],
@@ -296,7 +327,8 @@ function floorAt(spec: Spectrum, hz: number, cache?: Map<number, number>): numbe
   if (cached !== undefined) return cached;
   const lo = Math.max(1, Math.floor(hz / 1.12 / spec.binHz)),
     hi = Math.min(spec.mag.length - 1, Math.ceil((hz * 1.12) / spec.binHz));
-  const values = Array.from(spec.mag.subarray(lo, hi + 1)).sort((a, b) => a - b),
+  // Magnitudes are 2 * hypot / window sum, never -0 (and finite for finite input): the typed array's numeric sort orders them as (a, b) => a - b would.
+  const values = spec.mag.slice(lo, hi + 1).sort(),
     floor = values[Math.floor(values.length * 0.5)] ?? 0;
   cache?.set(key, floor);
   return floor;
