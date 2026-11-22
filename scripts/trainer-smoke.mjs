@@ -119,8 +119,18 @@ try {
     for (const scenario of ['wrong', 'late', 'extra', 'silence', 'noise']) {
       const result = await take(scenario);
       console.log(JSON.stringify({ phase: 'honest grading', scenario, result: result.result }));
-      if (scenario === 'noise') assert.equal(result.result.trusted, false);
-      else {
+      if (scenario === 'noise') {
+        assert.equal(result.result.trusted, false);
+        // An unscored take shows "Not scored" and its reason, no grade and no comfort question.
+        const card = await evaluate(
+          "({headline:!document.getElementById('grade-headline').hidden && document.getElementById('grade-headline-title').textContent,reason:document.getElementById('grade-reason').textContent,metrics:document.getElementById('grade-metrics').hidden,comfort:document.getElementById('trainer-comfort').hidden,text:document.getElementById('take-result').innerText})",
+        );
+        assert.equal(card.headline, 'Not scored');
+        assert.equal(card.reason, result.result.reason);
+        assert.equal(card.metrics, true);
+        assert.equal(card.comfort, true);
+        assert.ok(!/%|missed/i.test(card.text), card.text);
+      } else {
         assert.equal(result.result.trusted, true);
         assert.ok(result.result.score < 0.9);
       }

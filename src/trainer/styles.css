@@ -150,6 +150,18 @@
   color: #c3d1b5;
   margin: 22px 0 2px;
 }
+.grade-headline {
+  margin: 18px 0 8px;
+}
+.grade-headline strong {
+  font-size: 17px;
+  color: #e5eeda;
+}
+.grade-headline p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: #c3d1b5;
+}
 .grade-metrics {
   display: flex;
   flex-wrap: wrap;

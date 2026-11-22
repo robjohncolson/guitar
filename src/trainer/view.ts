@@ -1,6 +1,7 @@
 import { cueMidi, openStrings, type Lesson } from './curriculum';
 import type { TrainerTake } from './audio';
 import type { SessionPlan } from './session';
+import { laneMarks } from './result';
 import { noteNames } from '../music/notes';
 export const nameOf = (midi: number) =>
   `${noteNames[((Math.round(midi) % 12) + 12) % 12]}${Math.floor(Math.round(midi) / 12) - 1}`;
@@ -17,7 +18,7 @@ export function trainerShell(): void {
       <p id="phrase-text" class="sr-only"></p><div id="phrase-preview" class="phrase-preview" aria-label="Phrase notes"></div>
       <div class="trainer-actions"><button id="trainer-start" class="primary">Start practice</button><button id="trainer-demo">Hear the phrase</button><button id="trainer-create">Make it yours</button></div>
       <p id="trainer-feedback" class="coach" role="status">One phrase, at a pace that leaves room to listen.</p>
-      <div id="take-result" hidden><div id="grade-metrics" class="grade-metrics"></div><p id="grade-details" class="muted"></p><div class="comfort-actions"><button id="trainer-comfortable" class="primary">Felt comfortable</button><button id="trainer-struggling">Needs more room</button></div></div>
+      <div id="take-result" hidden><div id="grade-headline" class="grade-headline" hidden><strong id="grade-headline-title"></strong><p id="grade-reason"></p></div><div id="grade-metrics" class="grade-metrics"></div><p id="grade-details" class="muted"></p><div id="trainer-comfort" class="comfort-actions"><button id="trainer-comfortable" class="primary">Felt comfortable</button><button id="trainer-struggling">Needs more room</button></div></div>
       <div id="take-review" hidden><div class="review-heading"><span>Hear yourself</span><span id="take-description" class="muted"></span></div><audio id="trainer-player" controls></audio><div class="review-actions"><button id="trainer-previous">Hear previous take</button><button id="trainer-latest">Hear latest take</button><button id="trainer-loop">Loop latest · play along</button><a id="trainer-download" download="guitar-practice.wav">Download WAV</a><a id="trainer-trace" download="guitar-practice.json">Note details</a></div><p class="muted">Playback stops the microphone. Looping is free play, with no score. Takes stay in this page.</p></div>
     </section>
     <div class="trainer-secondary">
@@ -110,7 +111,8 @@ export function drawLane(
       const x = moving ? hit + (cue.beat - beat) * scale : 76 + ((cue.beat - previewFrom) / previewBeats) * (w - 98),
         y = yOf(cue.string);
       if (x < 60 || x > w - 12) return;
-      const graded = !plan && take?.lesson === lesson.id ? take.result?.notes[index] : undefined;
+      // Only a scored take colours the notes; an unscored one must not read as a grade.
+      const graded = !plan && take?.lesson === lesson.id ? laneMarks(take.result)?.[index] : undefined;
       const colour = graded
         ? graded.mark === 'good'
           ? '#c8d8a7'

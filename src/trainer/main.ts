@@ -3,6 +3,7 @@ import './styles.css';
 import { TrainerAudio, type TrainerTake } from './audio';
 import { lessons, lessonById, stages, cueMidi, openStrings } from './curriculum';
 import { advance, initialSkill, loadProgress, recommended, saveProgress, type Skill } from './progress';
+import { resultView } from './result';
 import { drawLane, fretGuide, nameOf, trainerShell } from './view';
 import { TapTempo } from '../audio/tap-tempo';
 import type { SessionKind } from './session';
@@ -53,7 +54,7 @@ function paintCourse(): void {
       .reverse()
       .map(
         (h) =>
-          `<div class="journal-entry"><span>${lessonById(h.lesson).title}</span><span>${h.bpm} BPM · ${h.trusted ? Math.round(h.score * 100) + '%' : 'unscored'}</span></div>`,
+          `<div class="journal-entry"><span>${lessonById(h.lesson).title}</span><span>${h.bpm} BPM · ${h.trusted ? Math.round(h.score * 100) + '%' : 'not scored'}</span></div>`,
       )
       .join('') || '<p class="muted">Your completed practice takes will appear here.</p>';
 }
@@ -177,21 +178,20 @@ audio.onTake = (take) => {
     trusted: result.trusted && progress.calibrated,
   });
   progress.history = progress.history.slice(-60);
-  feedback = result.feedback;
-  if (!progress.calibrated)
-    feedback += ' Timing is an estimate until you calibrate; this take will not change your level.';
+  const view = resultView(result, progress.calibrated);
+  feedback = view.status;
   if (placement !== undefined) feedback = 'Starting-point check: ' + feedback;
   el('take-result').hidden = false;
-  el('grade-metrics').innerHTML =
-    `<span><strong>${Math.round(result.timing * 100)}%</strong> timing${progress.calibrated ? '' : ' · estimate'}</span><span>${result.pitch === null ? 'Rhythm only · no pitch score' : `<strong>${Math.round(result.pitch * 100)}%</strong> notes`}</span>${result.articulation === null ? '' : `<span><strong>${Math.round(result.articulation * 100)}%</strong> releases</span>`}`;
-  el('grade-details').textContent =
-    result.notes
-      .map(
-        (n, i) =>
-          `${i + 1}: ${n.mark}${n.offset === undefined ? '' : ` (${n.offset >= 0 ? '+' : ''}${Math.round(n.offset * 1000)} ms)`}`,
-      )
-      .join(' · ') +
-    `${result.extras ? ` · ${result.extras} extra attacks` : ''}${!result.trusted ? ' · Unscored: ' + result.reason : ''}`;
+  el('grade-headline').hidden = view.scored;
+  el('grade-headline-title').textContent = view.headline;
+  el('grade-reason').textContent = view.reason;
+  el('grade-metrics').hidden = !view.metrics.length;
+  el('grade-metrics').innerHTML = view.metrics
+    .map((m) => `<span>${m.value === null ? '' : `<strong>${m.value}</strong> `}${m.label}</span>`)
+    .join('');
+  el('grade-details').textContent = view.details;
+  // An unscored take changes nothing whichever way it is answered; Start begins the next take without an answer.
+  el('trainer-comfort').hidden = !view.comfort;
   el('trainer-comfortable').textContent =
     placement !== undefined ? 'Continue starting-point check' : 'Felt comfortable';
   paintCourse();
