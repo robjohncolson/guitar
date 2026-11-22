@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TapTempo } from '../src/audio/tap-tempo';
 import { Grid } from '../src/audio/grid';
-import { fireTime } from '../src/audio/scheduler';
 
 describe('tap clock', () => {
   it('four taps 500 ms apart set 120 BPM', () => {
@@ -36,10 +35,5 @@ describe('grid', () => {
     grid.maintain(10);
     expect(grid.slot(12).startTime).toBe(6);
     expect(grid.slot(28).startTime).toBe(14);
-  });
-  it('compensates output latency and skips genuinely late notes', () => {
-    expect(fireTime(1, 0.7, 0.2)).toBe(0.8);
-    expect(fireTime(1, 0.81, 0.2)).toBe(0.81);
-    expect(fireTime(1, 0.83, 0.2)).toBeNull();
   });
 });

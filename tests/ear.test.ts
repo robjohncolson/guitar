@@ -4,8 +4,7 @@ import { OnsetDetector } from '../src/audio/onset';
 import { FrameBuffer } from '../src/audio/frame-buffer';
 import { AttackDetector } from '../src/audio/attack';
 import { Grid } from '../src/audio/grid';
-import { SelfMask } from '../src/audio/self-mask';
-import type { NoteEnd } from '../src/music/notes';
+import { hzToMidi, type NoteEnd } from '../src/music/notes';
 
 describe('CREPE official contract', () => {
   it('reconstructs a known bin to within 1%', () => {
@@ -132,12 +131,11 @@ describe('capture and attacks', () => {
     for (let i = 0; i < 10; i++)
       expect(unstable.process(i * 0.02, { hz: [220, 330, 440][i % 3], confidence: 0.9 }, 0.02)).toBeNull();
   });
-  it('a masked reply cannot split the player sustain or invent a rest', () => {
+  it('a rejected note (the accepts hook) cannot split the player sustain or invent a rest', () => {
     const ends: NoteEnd[] = [],
-      detector = new OnsetDetector((note) => ends.push(note)),
-      mask = new SelfMask();
-    detector.accepts = (note) => !mask.drops(note);
-    mask.arm(0.4, 0.3, 64);
+      detector = new OnsetDetector((note) => ends.push(note));
+    // Reject E4 (MIDI 64) between 0.395 s and 0.78 s, as a caller masking its own output would.
+    detector.accepts = (note) => !(note.t >= 0.395 && note.t <= 0.78 && Math.abs(hzToMidi(note.hz) - 64) <= 0.5);
     const notes = [];
     for (let i = 0; i < 60; i++) {
       if (i === 20) detector.attack(0.4);

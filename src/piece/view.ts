@@ -23,6 +23,7 @@ import {
 } from './light';
 import { glLight, type LightLayer } from './lightgl';
 import { runCounter, runPlace, type RunMemo, type RunShow } from './game';
+import { siteNav } from '../ui/nav';
 
 const ICON_MENU =
   '<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
@@ -35,7 +36,7 @@ const ICON_RING =
 
 export function pieceShell(): void {
   document.querySelector('#app')!.innerHTML = `<main class="trainer piece">
-    <nav class="app-nav" aria-label="Music tools"><a href="${import.meta.env.BASE_URL}">Trainer</a><a href="${import.meta.env.BASE_URL}piece.html" aria-current="page">Pieces</a><a href="${import.meta.env.BASE_URL}play.html?mode=partner">Partner</a><a href="${import.meta.env.BASE_URL}play.html?mode=looper">Looper</a><span>One passage at a time.</span></nav>
+    ${siteNav('piece')}
     <header class="trainer-header topbar"><button id="piece-menu" type="button" class="icon-btn" aria-label="Open menu" aria-haspopup="dialog">${ICON_MENU}</button><div class="brand"><h1 id="piece-title">Learn a piece</h1><span id="piece-composer" class="composer"></span></div><button id="piece-today-chip" type="button" class="chip" aria-haspopup="dialog">${ICON_RING}<span id="piece-today-long" class="long"></span><span id="piece-today-short" class="short"></span></button><button id="piece-status-chip" type="button" class="chip status-chip" aria-haspopup="dialog"><span class="dot" aria-hidden="true"></span><span id="piece-status-long" class="long"></span><span id="piece-status-short" class="short"></span></button></header>
     <section class="lesson-card stage" aria-labelledby="unit-title">
       <div class="hud">

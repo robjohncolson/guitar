@@ -35,7 +35,7 @@ function paintDialog(error = ''): void {
   if (state.signedIn) {
     body.innerHTML = `
       <h2 id="account-title">Your account</h2>
-      <p>Signed in as <strong>${esc(state.username ?? '')}</strong>. Trainer and Pieces progress and your Partner/Looper settings sync automatically between devices where you sign in.</p>
+      <p>Signed in as <strong>${esc(state.username ?? '')}</strong>. Your guitar course and Pieces progress sync automatically between devices where you sign in.</p>
       <p class="account-status" role="status" id="account-status">${esc(state.status)}</p>
       <p class="account-note">Pieces you add yourself stay in this browser unless you choose <em>Save to my account</em> on the Pieces page. They are private to you.</p>
       <div class="account-actions"><button id="account-signout">Sign out</button><button class="primary" id="account-close">Done</button></div>

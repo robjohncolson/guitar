@@ -1,4 +1,5 @@
 import { accountsEnabled, PIECES_KEY, PROGRESS_KEYS } from './config';
+import { PRODUCT } from '../brand';
 
 const WELCOME_KEY = 'guitar.welcome.v1';
 
@@ -21,10 +22,10 @@ export function showWelcome(): void {
   if (!main) return;
   const card = document.createElement('section');
   card.className = 'welcome-card';
-  card.setAttribute('aria-label', 'How to use this site');
-  card.innerHTML = `<h2>New here? How it works</h2><ol>
+  card.setAttribute('aria-label', `How to use ${PRODUCT}`);
+  card.innerHTML = `<h2>New to ${PRODUCT}? How it works</h2><ol>
+    <li>There are two ways in: the <a href="${import.meta.env.BASE_URL}">guitar course</a>, short lessons from your first notes, or <a href="${import.meta.env.BASE_URL}piece.html">a piece on piano or guitar</a>, learned one passage at a time.</li>
     <li><strong>Use headphones</strong> and allow the microphone when asked. Your playing is analysed on this device; audio is never uploaded.</li>
-    <li><strong>Trainer</strong> is a guided guitar course. <strong>Pieces</strong> teaches one piece on piano or guitar. <strong>Partner</strong> and <strong>Looper</strong> are for playing along.</li>
     <li>Calibrate timing once (under Sound &amp; timing) for accurate tempo steps, then start slowly.</li>
     <li>Progress saves in this browser automatically.${accountsEnabled ? ' Create a free account (Sign in, top right) to sync it across devices.' : ''}</li>
   </ol><button type="button" class="primary">Got it</button>`;

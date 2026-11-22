@@ -9,7 +9,7 @@ export default defineConfig({
   server: { host: '127.0.0.1' },
   build: {
     target: 'es2022',
-    rolldownOptions: { input: { trainer: 'index.html', play: 'play.html', piece: 'piece.html' } },
+    rolldownOptions: { input: { trainer: 'index.html', piece: 'piece.html' } },
     // Ships the licences of every bundled dependency (TensorFlow.js and its MIT-licensed parts) with the site.
     license: { fileName: 'third-party-licenses.md' },
   },

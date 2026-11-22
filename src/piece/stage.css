@@ -10,6 +10,10 @@ main.piece .app-nav {
   padding: 0 8px;
   font-size: 13px;
 }
+main.piece .app-nav .app-brand {
+  padding: 0 8px;
+  color: var(--ink);
+}
 main.piece .app-nav a {
   display: inline-flex;
   align-items: center;

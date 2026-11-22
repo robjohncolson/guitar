@@ -1,4 +1,4 @@
-import type { ProgressKey } from './config';
+import { isProgressKey, type ProgressKey } from './config';
 
 export type CloudItem = { key: ProgressKey; value: unknown; updatedAt: string; version: number };
 export type CloudPiece = { id: string; updatedAt: string; bytes: number };
@@ -43,7 +43,11 @@ export async function api<T>(
 
 export const getSession = (timeoutMs?: number) =>
   api<{ accounts: boolean; signedIn: boolean; username: string | null }>('session', { timeoutMs });
-export const getProgress = () => api<{ items: CloudItem[] }>('progress');
+/** Cloud copies of the keys this client syncs. Keys the server still keeps for older clients (the former Play page's settings) are left out. */
+export const getProgress = () =>
+  api<{ items: CloudItem[] }>('progress').then(({ items }) => ({
+    items: items.filter((item) => isProgressKey(item.key)),
+  }));
 export const putProgress = (
   key: ProgressKey,
   value: unknown,

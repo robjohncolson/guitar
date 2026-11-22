@@ -150,6 +150,9 @@
   margin: 0 0 6px;
   color: #e8e9df;
 }
+.welcome-card a {
+  color: #c8d8a7;
+}
 .welcome-card ol {
   margin: 6px 0 10px;
   padding-left: 20px;

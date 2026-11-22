@@ -1,4 +1,6 @@
-# Four-bar audio Looper and Partner replies
+# Implementation and verification notes
+
+> **Note added 2026-11-22.** The product is now called **Clean Take**. The Play page (`/play.html`, Partner and Looper) was removed on 2026-11-22 at the owner's request. The Looper and Partner sections below are kept as history; the recorder they describe (`src/audio/looper.worklet.ts`, `loop-engine.ts`) still records every take.
 
 ## Pieces
 
