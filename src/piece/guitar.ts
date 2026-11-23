@@ -355,6 +355,33 @@ export function melodyBacking(score: Score, bars: number[]): XEvent[] {
   return toEvents(notes, 'none');
 }
 
+const list = (words: string[]) =>
+  words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}` : (words[0] ?? '');
+/** Beats from 0 as the counts a player says: 1, 2 and 3. */
+const counts = (beats: number[]) => list(beats.map((b) => String(Math.round(b) + 1)));
+/**
+ * One bar of the pattern in words, read from its events (patternEvents): every beat strummed on muted strings, or the
+ * bass with the thumb and then the pinches, with how long the last one rings. "bass note on 1 with the thumb, then
+ * index, middle and ring together on 2, letting it ring through 3" in 3/4; "... together on 2, 3 and 4" in 4/4.
+ */
+export function patternText(events: readonly XEvent[]): string {
+  const bar = [...events].sort((a, b) => a.beat - b.beat);
+  if (!bar.length) return 'the rhythm of the bar';
+  if (bar.every((e) => e.strum))
+    return `a muted down-strum on ${bar.length === 1 ? 'beat' : 'beats'} ${counts(bar.map((e) => e.beat))}`;
+  const [bass, ...pinches] = bar;
+  let text = `bass note on ${counts([bass.beat])} with the thumb`;
+  if (pinches.length) {
+    const fingers = ['index', 'middle', 'ring'].slice(0, Math.min(3, Math.max(...pinches.map((e) => e.notes.length)))),
+      last = pinches[pinches.length - 1],
+      end = last.beat + Math.max(...last.notes.map((n) => n.dur)),
+      rings = Array.from({ length: Math.max(0, Math.round(end - last.beat) - 1) }, (_, i) => last.beat + 1 + i);
+    text += `, then ${list(fingers)} ${fingers.length > 1 ? 'together ' : ''}on ${counts(pinches.map((e) => e.beat))}`;
+    if (rings.length) text += `, letting it ring through ${counts(rings)}`;
+  }
+  return text;
+}
+
 export const GUITAR_STAGES = ['Shapes', 'Changes', 'The pattern', 'Sections', 'The whole piece'];
 /** Shapes string by string, every change in song order, the pattern on muted strings then on a chord, sections and the whole piece with the melody. */
 export function guitarUnits(score: Score, arrangement: Arrangement, goalBpm = score.tempo.bpm): Unit[] {
@@ -410,12 +437,15 @@ export function guitarUnits(score: Score, arrangement: Arrangement, goalBpm = sc
       goalBpm,
     });
   }
+  // The two pattern steps describe the bar they really play (first.bar, repeated): the words follow the events built.
+  const bar = (hand: 'pick' | 'muted') =>
+    arrangedExercise(score, arrangement, [first.bar], 1, `g-pattern:${hand}`, '', hand).events;
   units.push({
     id: 'g-pattern:muted',
     kind: 'hand',
     stage: 2,
     title: 'Picking pattern on muted strings',
-    goal: 'Rest the fretting hand lightly on the strings and play the rhythm only: bass on 1, pinch on 2, let 3 ring.',
+    goal: `Rest the fretting hand lightly on the strings and play the rhythm only: ${patternText(bar('muted'))}.`,
     why: 'Learn the right hand before combining it with shapes. Timing only.',
     bars: [first.bar, first.bar, first.bar, first.bar],
     hands: ['R'],
@@ -429,7 +459,7 @@ export function guitarUnits(score: Score, arrangement: Arrangement, goalBpm = sc
     kind: 'hand',
     stage: 2,
     title: `Pattern on ${first.shape.name}`,
-    goal: `Bass note on 1 with the thumb, then index, middle and ring together on 2. Let it ring.`,
+    goal: `${patternText(bar('pick')).replace(/^./, (c) => c.toUpperCase())}.`,
     why: 'The same rhythm, now with a shape. Timing only: the microphone cannot certify that every string rang.',
     bars: [first.bar, first.bar, first.bar, first.bar],
     hands: ['R'],

@@ -1,5 +1,5 @@
 import { chordName, chunks, detectKey, difficulty, drillKeys, parseChord, prettyChord } from './analysis';
-import { SCALES, keyLabel, type DrillMode } from './drills';
+import { drillSignature, SCALES, keyLabel, type DrillMode } from './drills';
 import { toEvents, type Exercise, type XEvent, type XNote } from './exercise';
 import { LADDER, repeats, type Unit } from './curriculum';
 import { OPEN, shapeFor } from './guitar';
@@ -318,6 +318,20 @@ function rhythm(
   return { events, marks, chords, beats: offset, perBar };
 }
 
+/**
+ * What a one-part step checks, from the grades its events really have: a single string is checked for pitch, two or
+ * more at once for timing only. All pitch, all timing, or how many of each.
+ */
+export function checkedText(events: readonly XEvent[], hand: Hand): string {
+  const graded = events.filter((e) => e.grade !== 'none'),
+    pitch = graded.filter((e) => e.grade === 'pitch').length,
+    timing = graded.length - pitch;
+  if (!timing)
+    return `Every ${hand === 'R' ? 'melody note' : 'note here'} is a single string, so its pitch is checked.`;
+  if (!pitch) return 'Every attack here is two or more strings at once, so this step checks timing only.';
+  return `${pitch} of the ${graded.length} attacks ${pitch === 1 ? 'is a single string, so its' : 'are a single string, so their'} pitch is checked; the other ${timing} ${timing === 1 ? 'is' : 'are'} two or more strings at once, timing only.`;
+}
+
 const exerciseOf = (
   id: string,
   title: string,
@@ -625,10 +639,7 @@ export function guitarPieceUnits(score: Score, arranged: PieceArrangement, goalB
           : hand === 'R'
             ? 'The melody alone. Let each note ring for its length.'
             : 'Bass on beat 1, then the chord. Let the bass ring under it.',
-        why:
-          hand === 'R'
-            ? 'Every melody note is a single string, so its pitch is checked.'
-            : 'The bass note is checked. A chord of several strings is timing only.',
+        why: checkedText(rhythm(score, arranged, range, [hand]).events, hand),
         bars: range,
         hands: [hand],
         requires: [],
@@ -732,7 +743,7 @@ export function guitarPieceUnits(score: Score, arranged: PieceArrangement, goalB
   });
 
   for (const dk of drillKeys(score)) {
-    const name = keyLabel(dk.tonic, dk.mode),
+    const name = keyLabel(dk.tonic, dk.mode, score.key),
       tag = `${dk.tonic}:${dk.mode}`;
     const specs: ['scale' | 'arpeggio' | 'cadence', string, number][] = dk.optional
       ? [['scale', 'scale, open position', 80]]
@@ -770,12 +781,14 @@ export function pieceExercise(score: Score, arranged: PieceArrangement, unit: Un
   if (unit.id.startsWith('gp-fig:')) return figureExercise(score, arranged, unit.bars[0], unit.id, unit.title);
   if (unit.id.startsWith('gp-drill:')) {
     const [, tonic, mode, kind] = unit.id.split(':') as [string, string, DrillMode, 'scale' | 'arpeggio' | 'cadence'];
-    const built = drillEvents(kind, scaleStart(Number(tonic)), mode, score.key)!;
+    // Spelled like its title (drillSignature): the notes are the same in any spelling.
+    const spell = drillSignature(Number(tonic), mode, score.key),
+      built = drillEvents(kind, scaleStart(Number(tonic)), mode, spell)!;
     const marks = Array.from({ length: Math.ceil(built.beats / built.perBar) }, (_, i) => ({
       beat: i * built.perBar,
       number: i + 1,
     }));
-    return exerciseOf(unit.id, unit.title, score.key, built.perBar, built.beats, built.events, marks, built.chords);
+    return exerciseOf(unit.id, unit.title, spell, built.perBar, built.beats, built.events, marks, built.chords);
   }
   const hands: Hand[] | 'all' =
     unit.hands.length === 2 ||

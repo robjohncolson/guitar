@@ -77,14 +77,32 @@ export interface DrillSpec {
   mode: DrillMode;
   hands: Hand[];
   octaves: 1 | 2;
+  /** The piece's own key signature (fifths): it decides how the drill is spelled (drillSignature). Names only. */
+  piece?: number;
 }
 
-export const keyLabel = (tonic: number, mode: DrillMode) =>
-  `${(mode === 'major' ? MAJOR_NAMES : MINOR_NAMES)[mod12(tonic)].replace('#', '♯').replace(/b$/, '♭')} ${mode === 'major' ? 'major' : mode === 'harmonic' ? 'harmonic minor' : 'natural minor'}`;
 export const keySignatureOf = (tonic: number, mode: DrillMode) => {
   const major = mode === 'major' ? mod12(tonic) : mod12(tonic + 3);
   return [0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5][major];
 };
+/**
+ * The one signature a drill is shown in, for its title and its lane alike. It starts from the drill key's own
+ * signature; in a piece with flats a sharp key takes its flat twin (12 fifths fewer) when that has at most 7 flats, and
+ * in a piece with sharps a flat key takes its sharp twin when that has at most 7 sharps. So A♭ major's borrowed minor is
+ * A♭ minor (7 flats), while D♭ major's stays C♯ minor (8 flats is no signature). Spelling only: notes stay the same.
+ * A known limit: the note names (pcName in score.ts) have no C♭, F♭, E♯ or B♯, so in six or seven flats or sharps a
+ * lane can show one letter twice (A♭ natural minor: A♭ B♭ B D♭ E♭ E G♭). The drill's names match the names the piece's
+ * own lane uses for the same keys, which matters more here; teaching the name tables those four is an app-wide change.
+ */
+export function drillSignature(tonic: number, mode: DrillMode, piece = 0): number {
+  const own = keySignatureOf(tonic, mode);
+  if (piece < 0 && own > 0 && own - 12 >= -7) return own - 12;
+  if (piece > 0 && own < 0 && own + 12 <= 7) return own + 12;
+  return own;
+}
+/** A drill key's name, spelled in drillSignature: "A♭ natural minor", "C♯ major". */
+export const keyLabel = (tonic: number, mode: DrillMode, piece = 0) =>
+  `${pcName(tonic, drillSignature(tonic, mode, piece))} ${mode === 'major' ? 'major' : mode === 'harmonic' ? 'harmonic minor' : 'natural minor'}`;
 /** Lowest tonic at or above C4 for the right hand, an octave lower for the left. */
 const startFor = (tonic: number, hand: Hand) => 60 + mod12(tonic) - (hand === 'L' ? 12 : 0);
 
@@ -132,7 +150,7 @@ function arpeggioLine(spec: DrillSpec, hand: Hand): { midi: number; finger: numb
 /** Scales and arpeggios run up and back in even notes; a cadence is I, IV, V, I in close position over the roots. */
 export function drillExercise(spec: DrillSpec, id: string, title: string): Exercise {
   const notes: (XNote & { beat: number })[] = [];
-  const keySig = keySignatureOf(spec.tonic, spec.mode);
+  const keySig = drillSignature(spec.tonic, spec.mode, spec.piece);
   let beats = 16;
   if (spec.kind === 'cadence') {
     const minor = spec.mode !== 'major',

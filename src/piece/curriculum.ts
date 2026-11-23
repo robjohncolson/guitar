@@ -298,7 +298,7 @@ export function buildCurriculum(score: Score, goalBpm = score.tempo.bpm): Curric
 
   // Drills in the key, plus keys the music borrows.
   for (const dk of drillKeys(score)) {
-    const name = keyLabel(dk.tonic, dk.mode),
+    const name = keyLabel(dk.tonic, dk.mode, score.key),
       tag = `${dk.tonic}:${dk.mode}`;
     const specs: [DrillSpec, string, number][] = dk.optional
       ? [
@@ -353,7 +353,8 @@ export function buildCurriculum(score: Score, goalBpm = score.tempo.bpm): Curric
         rungs: full,
         certify: [1],
         goalBpm: bpm,
-        drill,
+        // The piece's signature decides how the drill is spelled, in its title and its lane (drillSignature).
+        drill: { ...drill, piece: score.key },
         optional: dk.optional,
       });
   }
