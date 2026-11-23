@@ -47,6 +47,18 @@ function duration(text: string): { ticks: number; tie: boolean } | undefined {
   return { ticks: Math.round(base * (2 - 1 / 2 ** dots)), tie: m[3] === '~' };
 }
 
+/** An exact non-negative fraction [numerator, denominator] of ticks, for tuplets that do not divide into whole ticks. */
+type Fraction = [number, number];
+const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : Math.abs(a) || 1);
+function frac(n: number, d: number): Fraction {
+  const g = gcd(n, d);
+  return [n / g, d / g];
+}
+const plus = (a: Fraction, b: Fraction) => frac(a[0] * b[1] + b[0] * a[1], a[1] * b[1]);
+const times = (a: Fraction, b: Fraction) => frac(a[0] * b[0], a[1] * b[1]);
+/** Nearest whole tick, halves rounded up as Math.round does. */
+const round = ([n, d]: Fraction) => Math.floor((2 * n + d) / (2 * d));
+
 interface PitchToken {
   letter: string;
   acc?: string;
@@ -150,11 +162,23 @@ export function compile(source: string): Compiled {
       const scale: number[] = [],
         groups: ('tuplet' | 'grace')[] = [];
       const factor = () => scale.reduce((a, b) => a * b, 1);
+      // Each note above is rounded to whole ticks on its own, so a tuplet that does not divide into whole ticks (7:4,
+      // 9:8, a triplet inside a triplet) drifts and its bar never adds up. Alongside, keep the exact position as a
+      // fraction and round only where a note starts or ends. It is used for this voice line only when the per-note
+      // rounding leaves the line wrong and the exact placement fits, so every line that compiles today is unchanged.
+      let exact = frac(0, 1),
+        exactValid = true;
+      const ratios: Fraction[] = [],
+        placed: { item: Item; tick: number; dur: number }[] = [];
+      const exactly = (ticks: number) => ratios.reduce((a, r) => times(a, r), frac(ticks, 1));
       for (const token of lex(voiceLine.text)) {
         const tuplet = /^(\d+):(\d+)\{$/.exec(token);
         if (tuplet) {
           scale.push(Number(tuplet[2]) / Number(tuplet[1]));
           groups.push('tuplet');
+          const zero = Number(tuplet[1]) === 0 || Number(tuplet[2]) === 0;
+          if (zero) exactValid = false;
+          ratios.push(zero ? frac(1, 1) : frac(Number(tuplet[2]), Number(tuplet[1])));
           continue;
         }
         // Grace notes are read (their accidentals count) but take no time and are not played or graded.
@@ -167,12 +191,15 @@ export function compile(source: string): Compiled {
         if (token === '}') {
           const group = groups.pop();
           if (!group) error(voiceLine.line, 'Unmatched } in this bar.');
-          else if (group === 'tuplet') scale.pop();
-          else grace = false;
+          else if (group === 'tuplet') {
+            scale.pop();
+            ratios.pop();
+          } else grace = false;
           continue;
         }
         if (token === 'R') {
           cursor = Math.max(cursor, bar.ticks);
+          if (exact[0] < bar.ticks * exact[1]) exact = frac(bar.ticks, 1);
           continue;
         }
         const rest = /^([rs]):(.+)$/.exec(token);
@@ -183,6 +210,7 @@ export function compile(source: string): Compiled {
             continue;
           }
           cursor += Math.round(d.ticks * factor());
+          exact = plus(exact, exactly(d.ticks));
           continue;
         }
         let pitchTexts: string[], durText: string;
@@ -230,10 +258,12 @@ export function compile(source: string): Compiled {
             tie: d.tie || m[5] === '~',
           });
         }
-        const ticks = Math.round(d.ticks * factor());
+        const ticks = Math.round(d.ticks * factor()),
+          start = exact,
+          end = plus(exact, exactly(d.ticks));
         if (grace) {
-          if (pitches.length)
-            items.push({
+          if (pitches.length) {
+            const item: Item = {
               voice: voiceLine.voice,
               staff: def.staff,
               hand,
@@ -243,11 +273,14 @@ export function compile(source: string): Compiled {
               line: voiceLine.line,
               order: order++,
               grace: true,
-            });
+            };
+            items.push(item);
+            placed.push({ item, tick: round(start), dur: 0 });
+          }
           continue;
         }
-        if (pitches.length)
-          items.push({
+        if (pitches.length) {
+          const item: Item = {
             voice: voiceLine.voice,
             staff: def.staff,
             hand,
@@ -256,14 +289,27 @@ export function compile(source: string): Compiled {
             pitches,
             line: voiceLine.line,
             order: order++,
-          });
+          };
+          items.push(item);
+          placed.push({ item, tick: round(start), dur: round(end) - round(start) });
+        }
         cursor += ticks;
+        exact = end;
       }
       if (groups.length)
         error(
           voiceLine.line,
           groups.includes('grace') ? 'A grace group was not closed with }.' : 'A tuplet was not closed with }.',
         );
+      const partial = current.partial,
+        fits = (length: number) => (partial ? length <= bar.ticks : length === bar.ticks);
+      if (exactValid && !fits(cursor) && fits(round(exact))) {
+        for (const p of placed) {
+          p.item.tick = p.tick;
+          p.item.dur = p.dur;
+        }
+        cursor = round(exact);
+      }
       lengths.push(cursor);
       if (!current.partial && cursor !== bar.ticks)
         error(
