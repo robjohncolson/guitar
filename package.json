@@ -17,6 +17,7 @@
     "check:piano-voice": "node scripts/piano-voice-check.mjs",
     "check:piano-realtime": "node scripts/piano-realtime-check.mjs",
     "check:piece-sound": "node scripts/piece-sound-check.mjs",
+    "make:og": "node scripts/make-og.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json",
