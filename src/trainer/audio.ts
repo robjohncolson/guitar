@@ -1,7 +1,7 @@
 import grabberUrl from '../audio/grabber.worklet.ts?worker&url';
 import recorderUrl from '../audio/looper.worklet.ts?worker&url';
 import { enableContext, microphoneConstraints, outputDelay, type OutputMode } from '../audio/context';
-import { Ear } from '../audio/ear';
+import type { Ear } from '../audio/ear';
 import { Synth } from '../audio/synth';
 import { edgeGain, type LoopEvent } from '../audio/loop-engine';
 import { loopLevelGain } from '../audio/loop-level';
@@ -38,7 +38,12 @@ interface Capture {
 }
 export class TrainerAudio {
   context?: AudioContext;
-  model = 'CREPE loading';
+  /** The pitch ear's state in plain words, for the status line. */
+  model = 'Pitch ear loading…';
+  /** The real CREPE model is loaded and working (not the labelled fallback, not failed). */
+  pitchReady = false;
+  /** The ear failed to load, fell back to the labelled fallback or stopped working: the status line asks for attention. */
+  pitchTrouble = false;
   pitch = 0;
   confidence = 0;
   error = '';
@@ -54,8 +59,8 @@ export class TrainerAudio {
   onTake: (take: TrainerTake) => void = () => {};
   onCalibration: (result: Calibration) => void = () => {};
   private synth?: Synth;
-  private ear: Ear;
-  private loading: Promise<void>;
+  private ear?: Ear;
+  private earLoading?: Promise<Ear | undefined>;
   private stream?: MediaStream;
   private source?: MediaStreamAudioSourceNode;
   private grabber?: AudioWorkletNode;
@@ -72,18 +77,54 @@ export class TrainerAudio {
   private lastTick = 0;
   private interrupted = false;
   private modules = false;
-  constructor() {
-    this.ear = new Ear(
-      (text) => (this.model = text),
-      (pitch) => {
-        this.pitch = pitch.hz;
-        this.confidence = pitch.confidence;
+  /**
+   * CREPE (and TensorFlow.js) load on first need: a take that reads pitch, or the page going idle (prefetchEar).
+   * Loading starts once; if the code itself cannot be fetched, the next need tries again.
+   */
+  loadEar(): Promise<Ear | undefined> {
+    this.earLoading ??= import('../audio/ear').then(
+      async ({ Ear }) => {
+        const ear = new Ear(
+          (text) => this.earStatus(text),
+          (pitch) => {
+            this.pitch = pitch.hz;
+            this.confidence = pitch.confidence;
+          },
+          (note) => this.capture?.evidence.note(note),
+          undefined,
+          (end) => this.capture?.evidence.finish(end),
+        );
+        await ear.load(() => this.quiet());
+        return (this.ear = ear);
       },
-      (note) => this.capture?.evidence.note(note),
-      undefined,
-      (end) => this.capture?.evidence.finish(end),
+      (error: unknown) => {
+        this.earLoading = undefined;
+        this.pitchReady = false;
+        this.pitchTrouble = true;
+        this.model = 'Pitch ear could not load. Check the connection, then start again.';
+        console.error('Pitch ear loading failed:', error);
+        return undefined;
+      },
     );
-    this.loading = this.ear.load();
+    return this.earLoading;
+  }
+  /** Resolves once no take, calibration or demo is being timed, so a model warm-up cannot stall one. */
+  private quiet(): Promise<void> {
+    return new Promise((resolve) => {
+      const check = () => (this.plan ? setTimeout(check, 100) : resolve());
+      check();
+    });
+  }
+  /** Start loading the pitch ear in the background, so the first take that needs it rarely waits. */
+  prefetchEar(): void {
+    void this.loadEar();
+  }
+  private earStatus(text: string): void {
+    this.pitchReady = text.startsWith('CREPE ready');
+    // Loading is not trouble: rhythm-only lessons and calibration never wait for it.
+    this.pitchTrouble = !this.pitchReady && text !== 'CREPE loading';
+    // The labelled fallback and any model error keep their own wording.
+    this.model = text === 'CREPE loading' ? 'Pitch ear loading…' : this.pitchReady ? 'Pitch ear ready' : text;
   }
   get micActive(): boolean {
     return Boolean(this.stream);
@@ -116,7 +157,7 @@ export class TrainerAudio {
     this.capture = undefined;
     this.current = undefined;
     this.closeMic();
-    this.ear.resetCapture(this.now);
+    this.ear?.resetCapture(this.now);
     this.synth?.panic();
     for (const pip of this.pips)
       try {
@@ -179,7 +220,7 @@ export class TrainerAudio {
           message.t >= this.plan.playAt - 0.15 &&
           message.t <= this.plan.end + 0.5
         )
-          this.ear.receive(message);
+          this.ear?.receive(message);
       };
       this.recorder.port.onmessage = (event) => {
         if (generation === this.generation) this.receive(event.data as LoopEvent);
@@ -220,14 +261,15 @@ export class TrainerAudio {
       this.synth ??= new Synth(this.context);
       this.synth.volume = this.volume;
       this.synth.setMutes(false, false);
-      if (kind !== 'demo') {
-        await this.loading;
+      // Only takes that read pitch wait for the ear: a rhythm-only lesson and calibration never read it.
+      if (kind === 'creative' || (kind === 'practice' && !lesson.rhythmOnly)) {
+        await this.loadEar();
         if (generation !== this.generation) return;
-        if (kind === 'practice' && !this.model.startsWith('CREPE ready'))
-          throw new Error('CREPE is not ready. Retry after reloading; graded training requires the real pitch model.');
-        if (!(await this.microphone(generation))) return;
+        if (kind === 'practice' && !this.pitchReady)
+          throw new Error('The pitch ear is not ready. Reload to retry; graded notes need the real pitch model.');
       }
-      this.ear.resetCapture(this.now);
+      if (kind !== 'demo' && !(await this.microphone(generation))) return;
+      this.ear?.resetCapture(this.now);
       this.plan = planSession(lesson, bpm, this.now + outputDelay(this.context), kind, support, demonstrate);
       this.current = { lesson, bpm, offset };
       this.eventIndex = 0;
@@ -356,7 +398,7 @@ export class TrainerAudio {
     this.plan = undefined;
     this.busy = true;
     this.analysis = 'Checking the recorded notes…';
-    this.ear.resetCapture(this.now);
+    this.ear?.resetCapture(this.now);
     if (plan.kind === 'calibration') {
       const observed = pipOnsets(capture.samples, context.sampleRate).map((t) => t + capture.from);
       const expected = plan.events.map((e) => e.at - outputDelay(context));
@@ -372,6 +414,8 @@ export class TrainerAudio {
       this.interrupted || !capture.ready,
     );
     this.closeMic();
+    // A rhythm-only take never reads pitch, so it may finish before the ear has loaded.
+    const ear = this.ear;
     try {
       if (plan.kind === 'practice')
         evidence.attacks = await analyzeTake(
@@ -379,10 +423,12 @@ export class TrainerAudio {
           context.sampleRate,
           plan.playAt - capture.from,
           plan.end - plan.playAt,
-          (frame) => this.ear.analyze(frame),
+          (frame) =>
+            ear ? ear.analyze(frame) : Promise.reject(new Error('Recorded-note grading requires real CREPE.')),
           () => generation === this.generation,
           (done, total) => (this.analysis = `Checking note ${done} of ${total}…`),
           current.lesson.rhythmOnly,
+          ear?.batchReady ? (frames, progress) => ear.analyzeMany(frames, progress) : undefined,
         );
     } catch (error) {
       if (generation === this.generation) {

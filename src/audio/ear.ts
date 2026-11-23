@@ -29,10 +29,11 @@ export class Ear {
   ) {
     this.onsets = new OnsetDetector(ended);
   }
-  async load(): Promise<void> {
+  /** quiet: resolves when no take or demo is being timed (see Crepe.load). */
+  async load(quiet?: () => Promise<void>): Promise<void> {
     this.status('CREPE loading');
     try {
-      await this.crepe.load();
+      await this.crepe.load(quiet);
       this.status('CREPE ready (tiny)');
     } catch (error) {
       this.crepe.dispose();
@@ -41,11 +42,26 @@ export class Ear {
       console.error('CREPE loading failed:', error);
     }
     this.ready = true;
+    // The batch shape compiles after readiness, so it never delays the ready status (see Crepe.warmBatch). A failure
+    // only leaves the batch path off: takes are then rechecked one frame at a time.
+    if (!this.fallback)
+      void Promise.resolve()
+        .then(() => this.crepe.warmBatch(quiet))
+        .catch((error: unknown) => console.error('CREPE batch warm-up failed:', error));
   }
   /** Recheck a stored frame with the same real model, without live queue dropping. */
   async analyze(frame: Float32Array): Promise<Pitch> {
     if (!this.ready || this.fallback) throw new Error('Recorded-note grading requires real CREPE.');
     return this.crepe.infer(frame);
+  }
+  /** analyzeMany can run without compiling shaders. Until then, recheck one frame at a time (same readings). */
+  get batchReady(): boolean {
+    return this.ready && !this.fallback && this.crepe.batchReady;
+  }
+  /** The same recheck for many stored frames at once (one model call per chunk), results in the order given. */
+  async analyzeMany(frames: Float32Array[], progress?: (read: number) => void): Promise<Pitch[]> {
+    if (!this.ready || this.fallback) throw new Error('Recorded-note grading requires real CREPE.');
+    return this.crepe.inferMany(frames, progress);
   }
   receive(message: CaptureMessage): void {
     if (!this.ready) return;

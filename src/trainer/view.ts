@@ -10,7 +10,7 @@ export function trainerShell(): void {
   document.querySelector('#app')!.innerHTML = `<main class="trainer">
     ${siteNav('trainer')}
     <header class="trainer-header"><div><span class="eyebrow">GUITAR · A LITTLE EVERY DAY</span><h1>Find your rhythm.</h1><p class="intro">Listen. Play. Make it yours.</p></div><button id="trainer-stop" disabled>Stop · Esc</button></header>
-    <div class="trainer-status"><span id="trainer-mic">Mic off</span><span id="trainer-model">CREPE loading</span><span id="trainer-calibration-label">Timing not calibrated</span></div>
+    <div class="trainer-status"><span id="trainer-mic">Mic off</span><span id="trainer-model">Pitch ear loading…</span><span id="trainer-calibration-label">Timing not calibrated</span></div>
     <section class="lesson-card" aria-labelledby="lesson-title">
       <div class="lesson-heading"><div><span id="lesson-stage" class="eyebrow"></span><h2 id="lesson-title"></h2></div><div class="trainer-tempo"><label for="trainer-bpm">BPM</label><input id="trainer-bpm" type="number" min="40" max="110" step="1" inputmode="numeric"><span id="trainer-tempo-help">A comfortable beginning</span></div></div>
       <p id="lesson-goal"></p>

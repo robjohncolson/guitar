@@ -603,6 +603,7 @@ function selectUnit(id: string): void {
   el<HTMLDetailsElement>('piece-about-step').open = false;
   unit = units().find((u) => u.id === id) ?? units()[0];
   exercise = stepExercise();
+  audio.prepareFor(exercise);
   progress.selected.unit = unit.id;
   progress.selected.instrument = instrument;
   const stages = stagesNow();

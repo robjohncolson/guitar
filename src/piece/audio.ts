@@ -193,18 +193,38 @@ export class PieceAudio {
     this.playbackGain?.disconnect();
     this.playbackGain = undefined;
   }
-  /** CREPE (and TensorFlow.js) load only when a guitar take needs pitch. */
+  /**
+   * CREPE (and TensorFlow.js) load only for guitar steps that check pitch. If the code cannot be fetched, the next need
+   * tries again.
+   */
   private async loadEar(): Promise<Ear> {
-    this.earLoading ??= import('../audio/ear').then(async ({ Ear }) => {
-      const ear = new Ear(
-        (text) => (this.model = text),
-        () => {},
-        () => {},
-      );
-      await ear.load();
-      return (this.ear = ear);
-    });
+    this.earLoading ??= import('../audio/ear')
+      .then(async ({ Ear }) => {
+        const ear = new Ear(
+          (text) => (this.model = text),
+          () => {},
+          () => {},
+        );
+        // A guitar step's demo or strum take may run while the ear loads: its warm-up waits until nothing is timed.
+        await ear.load(
+          () =>
+            new Promise((resolve) => {
+              const check = () => (this.plan ? setTimeout(check, 100) : resolve());
+              check();
+            }),
+        );
+        return (this.ear = ear);
+      })
+      .catch((error: unknown) => {
+        this.earLoading = undefined;
+        throw error;
+      });
     return this.earLoading;
+  }
+  /** Begin loading the pitch ear when a guitar step that checks pitch is opened, so its first take need not wait. */
+  prepareFor(exercise: Exercise): void {
+    if (exercise.instrument === 'guitar' && exercise.events.some((e) => e.grade === 'pitch'))
+      this.loadEar().catch((error: unknown) => console.error('Pitch ear loading failed:', error));
   }
   private async microphone(generation: number, calibrating = false): Promise<boolean> {
     const context = this.context!;
@@ -681,6 +701,7 @@ export class PieceAudio {
           () => generation === this.generation,
           (done, total) => (this.analysis = `Checking note ${done} of ${total}…`),
           !pitched,
+          ear?.batchReady ? (frames, progress) => ear.analyzeMany(frames, progress) : undefined,
         );
         result = gradeAttacks(
           current.exercise,

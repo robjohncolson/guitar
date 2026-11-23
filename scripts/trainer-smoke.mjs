@@ -56,7 +56,7 @@ try {
   `,
   });
   await send('Page.navigate', { url: origin });
-  await until("document.getElementById('trainer-model')?.textContent==='CREPE ready (tiny)'", 60000);
+  await until("document.getElementById('trainer-model')?.textContent==='Pitch ear ready'", 60000);
   assert.equal(await evaluate("document.querySelectorAll('[data-lesson]').length"), 13);
   await evaluate(
     "document.getElementById('trainer-settings').open=true;__trainer.calibration=true;document.getElementById('trainer-calibrate').click()",

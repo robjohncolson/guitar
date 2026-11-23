@@ -6,6 +6,9 @@ const work = vi.hoisted(() => [] as { resolve: (pitch: { hz: number; confidence:
 vi.mock('../src/audio/crepe', () => ({
   Crepe: class {
     async load() {}
+    async warmBatch() {
+      return false;
+    }
     infer() {
       return new Promise((resolve) => work.push({ resolve }));
     }

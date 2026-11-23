@@ -503,7 +503,7 @@ function paint(): void {
   el<HTMLButtonElement>('trainer-previous').disabled = !audio.previous || Boolean(plan || audio.busy);
   el<HTMLButtonElement>('trainer-loop').disabled = !audio.take || Boolean(plan || audio.busy);
   el('trainer-model').textContent = audio.model;
-  el('trainer-model').classList.toggle('needs-attention', !audio.model.startsWith('CREPE ready'));
+  el('trainer-model').classList.toggle('needs-attention', audio.pitchTrouble);
   el('trainer-mic').textContent = audio.busy
     ? audio.analysis
       ? 'Mic off · reviewing'
@@ -565,3 +565,28 @@ function paint(): void {
 }
 selectLesson(lesson.id);
 paint();
+// Fetch the pitch ear once the page has painted and gone idle, so the first take rarely waits for it. Not while
+// something plays: the model's WebGL warm-up can hold the main thread for a moment.
+const whenIdle = (run: () => void) =>
+  'requestIdleCallback' in window ? requestIdleCallback(run, { timeout: 3000 }) : setTimeout(run, 500);
+function prefetchEar(): void {
+  if (active()) setTimeout(() => whenIdle(prefetchEar), 2000);
+  else audio.prefetchEar();
+}
+let painted = false;
+const afterPaint = () => {
+  if (!painted) whenIdle(prefetchEar);
+  painted = true;
+};
+try {
+  // A paint entry arrives only after the first contentful frame is on screen (a frame callback runs before it).
+  new PerformanceObserver((list, observer) => {
+    if (list.getEntriesByName('first-contentful-paint').length) {
+      observer.disconnect();
+      afterPaint();
+    }
+  }).observe({ type: 'paint', buffered: true });
+} catch {
+  /* No paint timing: the timer below starts it. */
+}
+setTimeout(afterPaint, 4000);

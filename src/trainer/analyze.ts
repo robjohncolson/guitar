@@ -35,7 +35,39 @@ function clickLike(samples: Float32Array, rate: number, t: number): boolean {
   }
   return false;
 }
-/** No score/expected pitches enter this analysis. Slow hardware gets the same stored evidence. */
+/** Moments after an attack at which pitch may be read, in reading order. */
+const READ_AFTER = [0.08, 0.14, 0.2, 0.26];
+/**
+ * Reads many stored frames at once, results in the order given (see Crepe.inferMany). It may report how many frames it
+ * has read so far while it works.
+ */
+export type PitchBatch = (frames: Float32Array[], progress?: (read: number) => void) => Promise<Pitch[]>;
+interface Pluck {
+  index: number;
+  t: number;
+  level: number;
+  end: number;
+  /** The moments this pluck may read, in order; reading stops early once two usable readings agree. */
+  reads: number[];
+  readings: Pitch[];
+  next: number;
+  done: boolean;
+}
+/** Take one reading in order: keep it if usable, and stop once the latest usable reading agrees with the first. */
+function take(pluck: Pluck, pitch: Pitch): void {
+  const readings = pluck.readings;
+  pluck.next++;
+  if (pitch.hz >= 70 && pitch.hz <= 1400 && pitch.confidence >= 0.5) readings.push(pitch);
+  if (readings.length >= 2 && Math.abs(12 * Math.log2(readings.at(-1)!.hz / readings[0].hz)) < 0.5) pluck.done = true;
+  if (pluck.next >= pluck.reads.length) pluck.done = true;
+}
+/**
+ * No score/expected pitches enter this analysis. Slow hardware gets the same stored evidence.
+ * With inferMany, the plucks read in rounds: each round batches, for every pluck still reading, the next readings it
+ * is certain to take (two while it has no usable reading, since one reading can never stop it; otherwise one). Each
+ * pluck therefore takes exactly the readings, in the same order and with the same early stop, as with infer alone,
+ * and no frame is read that infer alone would not have read.
+ */
 export async function analyzeTake(
   samples: Float32Array,
   rate: number,
@@ -45,6 +77,7 @@ export async function analyzeTake(
   alive: () => boolean = () => true,
   update: (done: number, total: number) => void = () => {},
   rhythmOnly = false,
+  inferMany?: PitchBatch,
 ): Promise<Attack[]> {
   const detector = new AttackDetector(rate),
     raw: number[] = [];
@@ -60,9 +93,9 @@ export async function analyzeTake(
   // Limit work on an extremely noisy take. The caller treats this as unscorable.
   if (raw.length > 96)
     throw new Error('Too many attacks to judge. Try a quieter recording with clear, separate plucks.');
-  const attacks: Attack[] = [];
+  // Segment every pluck first (no pitch is involved): which attacks count, where each ends, which moments it may read.
+  const plucks: Pluck[] = [];
   for (let i = 0; i < raw.length; i++) {
-    if (!alive()) return [];
     const t = raw[i],
       level = rms(samples, rate, t, 0.1);
     // Require energy after the metronome's short tail, even in rhythm-only mode.
@@ -82,15 +115,52 @@ export async function analyzeTake(
         }
       } else quiet = undefined;
     }
-    const readings: Pitch[] = [];
+    const reads: number[] = [];
     if (!rhythmOnly)
-      for (const after of [0.08, 0.14, 0.2, 0.26]) {
-        if (!alive()) return [];
+      for (const after of READ_AFTER) {
         if (t + after + 0.032 > end + 0.02) break;
-        const pitch = await infer(pitchFrame(samples, rate, t + after));
-        if (pitch.hz >= 70 && pitch.hz <= 1400 && pitch.confidence >= 0.5) readings.push(pitch);
-        if (readings.length >= 2 && Math.abs(12 * Math.log2(readings.at(-1)!.hz / readings[0].hz)) < 0.5) break;
+        reads.push(after);
       }
+    plucks.push({ index: i, t, level, end, reads, readings: [], next: 0, done: reads.length === 0 });
+  }
+  const frame = (pluck: Pluck, k: number) => pitchFrame(samples, rate, pluck.t + pluck.reads[k]);
+  // "Checking note X of Y" as last shown; it never goes back.
+  let checked = 0;
+  const show = (done: number) => update((checked = Math.max(checked, done)), raw.length);
+  if (inferMany)
+    for (;;) {
+      const wanted: Pluck[] = [],
+        frames: Float32Array[] = [];
+      for (const pluck of plucks) {
+        if (pluck.done) continue;
+        const count = Math.min(pluck.reads.length - pluck.next, pluck.readings.length ? 1 : 2);
+        for (let k = 0; k < count; k++) {
+          wanted.push(pluck);
+          frames.push(frame(pluck, pluck.next + k));
+        }
+      }
+      if (!frames.length) break;
+      if (!alive()) return [];
+      // While the model works, the note whose frames were read last is the one being checked.
+      const pitches = await inferMany(frames, (read) => {
+        if (alive() && read > 0 && read <= wanted.length) show(wanted[read - 1].index + 1);
+      });
+      if (!alive()) return [];
+      if (pitches.length !== frames.length) throw new Error('The pitch model returned the wrong number of readings.');
+      wanted.forEach((pluck, i) => {
+        if (!pluck.done) take(pluck, pitches[i]);
+      });
+      // Every attack whose pitch is settled (or that needs none) is checked.
+      show(raw.length - plucks.filter((pluck) => !pluck.done).length);
+    }
+  const attacks: Attack[] = [];
+  for (const pluck of plucks) {
+    if (!alive()) return [];
+    while (!pluck.done) {
+      take(pluck, await infer(frame(pluck, pluck.next)));
+      if (!alive()) return [];
+    }
+    const { readings, t, end, level } = pluck;
     const clusters = readings
         .map((p) => readings.filter((q) => Math.abs(12 * Math.log2(q.hz / p.hz)) < 0.5))
         .sort((a, b) => b.length - a.length),
@@ -106,7 +176,7 @@ export async function analyzeTake(
       duration: Math.max(0, end - t),
       level,
     });
-    update(i + 1, raw.length);
+    show(pluck.index + 1);
   }
   return attacks;
 }
