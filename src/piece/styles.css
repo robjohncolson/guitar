@@ -592,3 +592,85 @@ main.piece #piece-select {
   min-width: 0;
   max-width: 100%;
 }
+
+/* The session summary behind Finish (summary.ts): facts about this visit, in the page's own colours. */
+.visit-card {
+  margin: 8px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid #364735;
+  border-left: 2px solid #e1c48f;
+  border-radius: 12px;
+  background: #19211c;
+  font-size: 13px;
+  color: #e8e9df;
+}
+.visit-aim {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.visit-aim p {
+  margin: 0;
+  font-size: 14px;
+}
+.visit-aim .muted {
+  display: block;
+  font-size: 12px;
+}
+.visit-ring {
+  flex: none;
+}
+.visit-ring circle {
+  fill: none;
+  stroke-width: 4;
+}
+.visit-ring .track {
+  stroke: #3a493c;
+}
+.visit-ring .fill {
+  stroke: #c8d8a7;
+  stroke-linecap: round;
+}
+.visit-head {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #aabd9f;
+}
+.visit-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.visit-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid #2c3a2d;
+  overflow-wrap: anywhere;
+}
+.visit-list li:last-child {
+  border-bottom: 0;
+}
+.visit-moved li {
+  justify-content: space-between;
+}
+.visit-moved li > span:last-child {
+  font-size: 12px;
+  text-align: right;
+}
+.visit-stars .stars {
+  margin-right: 0;
+}
+.visit-next {
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid #2c3a2d;
+}
+.visit-card > p.muted {
+  margin: 12px 0 0;
+}

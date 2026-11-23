@@ -79,7 +79,7 @@ import {
   type NextLine,
   type TakeFacts,
 } from './loop';
-import { earText, ladderHtml, metricsHtml, scoreHtml, starsHtml } from './hud';
+import { earText, ladderHtml, metricsHtml, scoreHtml } from './hud';
 import {
   countUp,
   keyWin,
@@ -90,7 +90,6 @@ import {
   starCount,
   starMoment,
   starNews,
-  starsFor,
   starTitle,
   takeRun,
 } from './game';
@@ -99,6 +98,8 @@ import { keyAllowed, laneHeight, overlayOpen, statusChip, stepFinished, todayChi
 import { saveTracked } from '../account/changes';
 import { mountAddPanel } from './add-panel';
 import { isDraft, pickerLabel, pieceMeta, readMine } from './mine';
+import { courseListHtml, mountJourney, stepStarsHtml } from './journey-view';
+import { finishView, pieceCourses, titleIn, Visit } from './summary';
 
 pieceShell();
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -372,7 +373,8 @@ function paintLaneHelp(): void {
   laneLine = (el('lane-help').textContent ?? '').split(' · ').slice(0, 2).join(' · ');
 }
 const heard = new Set<string>(),
-  session = { takes: 0, seconds: 0, notes: [] as string[] };
+  session = { takes: 0, seconds: 0, notes: [] as string[] },
+  visit = new Visit(progress.units);
 
 const courseTag = () => (instrument === 'piano' ? '' : pieceCourse() ? '#guitar-piece' : '#guitar');
 const stagesNow = () => (instrument === 'piano' ? STAGES : pieceCourse() ? PIECE_STAGES : GUITAR_STAGES);
@@ -669,22 +671,13 @@ function selectUnit(id: string): void {
 }
 function paintCourse(): void {
   const list = units(),
-    stages = stagesNow(),
-    now = Date.now();
-  const earned = pieceStars(list, get),
-    stars = (u: Unit) => {
-      const s = starsFor(list, u, get, now);
-      return s ? starsHtml(s) : '';
-    };
-  el('course-count').textContent = `· all ${list.filter((u) => !u.sameAs).length} steps · ${starCount(earned)}`;
-  if (unit) el('unit-stars').innerHTML = stars(unit);
-  el('course-list').innerHTML = stages
-    .map((name, i) => {
-      const members = list.filter((u) => u.stage === i);
-      if (!members.length) return '';
-      return `<div class="course-stage">${i + 1} · ${escape(name)}</div>${members.map((u) => `<button class="course-lesson${u.sameAs ? ' covered' : ''}" data-unit="${escape(u.id)}" aria-current="${u.id === unit?.id}"><span>${escape(u.title)}${!u.sameAs && !ready(u, get) ? ' <span class="muted">· later</span>' : ''}${u.optional ? ' <span class="muted">· optional</span>' : ''}</span><span>${stars(u)}${escape(stateLabel(u))}</span></button>`).join('')}`;
-    })
-    .join('');
+    now = Date.now(),
+    row = { units: list, get, now, current: unit?.id, label: stateLabel };
+  el('course-count').textContent =
+    `· all ${list.filter((u) => !u.sameAs).length} steps · ${starCount(pieceStars(list, get))}`;
+  if (unit) el('unit-stars').innerHTML = stepStarsHtml(list, unit, get, now);
+  el('course-list').innerHTML = courseListHtml(stagesNow(), row);
+  journey.paint(() => ({ ...row, score, plan: new Set(todayPlan().map((r) => r.unit.id)) }));
   // The headline progress: a map of the piece from saved progress only.
   const map = pieceMap(score, list, get, now, instrument, unit?.id);
   el('map-count').textContent = `· ${map.headline}`;
@@ -1321,6 +1314,7 @@ function answer(comfortable: boolean): void {
   const starsBefore = pending!.before;
   const event = nextTake(comfortable),
     message = ladderSaid;
+  visit.answered(event, owner && key(owner.id), progress.units);
   // A new star is named only when the saved progress (a counted, confirmed answer) earned it.
   const news = owner && event ? starNews(owner, starsBefore, get(owner.id) ?? starsBefore) : undefined;
   if (event?.kind === 'placed') placedNow = true;
@@ -1734,6 +1728,7 @@ el('course-list').onclick = (event) => {
     selectUnit(b.dataset.unit!);
   }
 };
+const journey = mountJourney();
 el('today-list').onclick = (event) => {
   const b = (event.target as HTMLElement).closest<HTMLElement>('[data-unit]');
   if (b && !active()) {
@@ -2074,13 +2069,14 @@ mountAddPanel({
 el('piece-finish').onclick = () => {
   audio.stop();
   player.pause();
-  const next = suggestToday({ ...curriculum, units: units() }, get, Date.now()).find(
-      (p) => p.slot !== 'warm' && p.slot !== 'listen',
-    ),
-    log = todayLog();
+  // After a counted take in this visit, the summary card (summary.ts); otherwise the one sentence, as before.
+  const piece = pieceCourses(pack.id, courseTag(), curriculum.units, pUnits, gUnits),
+    plan = (time: number) => suggestToday({ ...curriculum, units: units() }, get, time),
+    title = (id: string) => titleIn(packs(), id),
+    shown = finishView({ progress, visit, piece, title, notes: session.notes, plan, now: Date.now() });
   el('piece-session').hidden = false;
-  el('piece-session').textContent =
-    `Today: ${log.clean} clean take${log.clean === 1 ? '' : 's'} of ${log.takes}. ${session.notes.length ? session.notes.join('. ') + '. ' : 'Steady, deliberate practice counts even when nothing moved up today. '}${next ? `Next time: ${next.unit.title}.` : ''}`;
+  if ('html' in shown) el('piece-session').innerHTML = shown.html;
+  else el('piece-session').textContent = shown.text;
 };
 let resetArmed = false;
 el('piece-reset').onclick = () => {
@@ -2101,6 +2097,7 @@ el('piece-reset').onclick = () => {
   delete progress.today[pack.id];
   delete progress.today[`${pack.id}#guitar`];
   delete progress.today[`${pack.id}#guitar-piece`];
+  visit.forget(pack.id);
   persist();
   selectUnit(unit.id);
   say('reset');
