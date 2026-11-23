@@ -32,66 +32,16 @@ const name = (m) => noteName(m, score.key);
 console.log(
   `${score.meta.title}: ${score.bars.length} written bars, ${score.playOrder.length} played, ${score.notes.length} notes, key signature ${score.key}, ${score.sections.length} sections.`,
 );
-// Notes per written bar as "beat:pitch:length:hand" strings (ties merged, so a missing tie shows up), sorted.
-const onsets = (s) => {
-  const bars = new Map();
-  for (const n of s.notes) {
-    const k = s.bars[n.bar].number;
-    bars.set(
-      k,
-      [...(bars.get(k) ?? []), `${n.tick / s.ppq}:${n.midi}:${+(n.dur / s.ppq).toFixed(3)}:${n.hand}`].sort(),
-    );
-  }
-  return bars;
-};
-// Chord symbols (with their beats) and the swing feel per written bar.
-const feel = (s) =>
-  new Map(
-    s.bars.map((b) => [
-      b.number,
-      `${b.harmony.map((h) => `${h.symbol}@${h.tick / s.ppq + 1}`).join(' ') || 'no chord symbol'}${b.swing ? ' · swing' : ''}`,
-    ]),
-  );
+// The comparison lives in src/piece/compare.ts, shared with the Pieces page; its printed form is pinned by a test.
+const { barNotes, barFeel, diffNotes, diffFeel, noteDiffLines, feelDiffLines } = await load('/src/piece/compare.ts');
 const compare = (a, b, labelA, labelB) => {
-  let same = 0,
-    differ = 0;
-  for (const bar of [...new Set([...a.keys(), ...b.keys()])].sort((x, y) => x - y)) {
-    const x = a.get(bar) ?? [],
-      y = b.get(bar) ?? [],
-      onlyX = x.filter((v) => !y.includes(v)),
-      onlyY = y.filter((v) => !x.includes(v));
-    if (!onlyX.length && !onlyY.length && x.length === y.length) {
-      same++;
-      continue;
-    }
-    differ++;
-    const show = (list) =>
-      list
-        .map((v) => {
-          const [beat, midi, length, hand] = v.split(':');
-          return `${name(Number(midi))}@${Number(beat) + 1} (${length} beats, ${hand})`;
-        })
-        .join(' ');
-    console.log(`bar ${bar}: only in ${labelA}: ${show(onlyX) || '-'} | only in ${labelB}: ${show(onlyY) || '-'}`);
-  }
-  console.log(
-    `${same} bars agree on every note's pitch, start, length and hand; ${differ} differ. Look again at the page for every differing bar; agreement does not prove both are right.`,
-  );
-};
-const compareFeel = (a, b, labelA, labelB) => {
-  let differ = 0;
-  for (const [bar, text] of a)
-    if (b.has(bar) && b.get(bar) !== text) {
-      differ++;
-      console.log(`bar ${bar} chords/feel: ${labelA}: ${text} | ${labelB}: ${b.get(bar)}`);
-    }
-  console.log(`${differ} bars differ in chord symbols or swing.`);
+  for (const line of noteDiffLines(diffNotes(a, b), labelA, labelB, name)) console.log(line);
 };
 if (option('--diff')) {
   const other = await read(option('--diff'));
   if (other) {
-    compare(onsets(score), onsets(other), file, option('--diff'));
-    compareFeel(feel(score), feel(other), 'first', 'second');
+    compare(barNotes(score), barNotes(other), file, option('--diff'));
+    for (const line of feelDiffLines(diffFeel(barFeel(score), barFeel(other)), 'first', 'second')) console.log(line);
   }
 } else if (option('--midi')) {
   const { readMidi } = await load('/src/piece/midi.ts'),
@@ -104,7 +54,7 @@ if (option('--diff')) {
     bars.set(bar, [...(bars.get(bar) ?? []), `${beat}:${n.midi}`].sort());
   }
   console.log('MIDI bars count from the first written bar; repeats in the MIDI must be folded like the written score.');
-  compare(onsets(score), bars, file, option('--midi'));
+  compare(barNotes(score), bars, file, option('--midi'));
 } else if (args.includes('--course')) {
   const { buildCurriculum, STAGES } = await load('/src/piece/curriculum.ts'),
     { arrange, guitarUnits } = await load('/src/piece/guitar.ts');

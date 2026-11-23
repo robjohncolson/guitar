@@ -3,7 +3,7 @@ import '../trainer/styles.css';
 import './styles.css';
 import './hud.css';
 import './stage.css';
-import { compile, type Diagnostic } from './notation';
+import { compile } from './notation';
 import { buildCurriculum, exerciseFor, STAGES, type Curriculum, type Unit } from './curriculum';
 import { arrange, guitarExerciseFor, guitarUnits, GUITAR_STAGES, melodyBacking, type Arrangement } from './guitar';
 import { fromBars, sliceExercise, type Exercise, type XEvent } from './exercise';
@@ -97,7 +97,8 @@ import {
 import { audioNotice, notice as noticeFor, type Notice, type NoticeDetail, type NoticeSource } from './notice';
 import { keyAllowed, laneHeight, overlayOpen, statusChip, stepFinished, todayChip } from './stage';
 import { saveTracked } from '../account/changes';
-import { mountPieceAccount } from '../account/pieces';
+import { mountAddPanel } from './add-panel';
+import { isDraft, pickerLabel, pieceMeta, readMine } from './mine';
 
 pieceShell();
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -115,17 +116,6 @@ const bundled = import.meta.glob('./packs/*.piece.txt', { query: '?raw', import:
 const localFiles: Record<string, string> = import.meta.env.DEV
   ? import.meta.glob('./packs/local/*.piece.txt', { query: '?raw', import: 'default', eager: true })
   : {};
-const MINE = 'piece.imported.v1';
-const readMine = (): { id: string; text: string }[] => {
-  try {
-    const v = JSON.parse(localStorage.getItem(MINE) ?? '[]');
-    return Array.isArray(v)
-      ? v.filter((x) => typeof x?.id === 'string' && typeof x?.text === 'string').slice(0, 30)
-      : [];
-  } catch {
-    return [];
-  }
-};
 const packs = (): Pack[] => [
   ...Object.entries(bundled).map(([path, text]) => ({
     id: path.split('/').pop()!.replace('.piece.txt', ''),
@@ -549,27 +539,37 @@ function loadPack(id: string): void {
   pieceArr = arrangePiece(score);
   pUnits = guitarPieceUnits(score, pieceArr, goal());
   progress.selected.piece = pack.id;
-  el<HTMLSelectElement>('piece-select').innerHTML = all
-    .map(
-      (p) =>
-        `<option value="${escape(p.id)}"${p.id === pack.id ? ' selected' : ''}>${escape(compile(p.text).score?.meta.title ?? p.id)}${p.origin === 'bundled' ? '' : ' · yours'}</option>`,
-    )
-    .join('');
+  paintPicker(all);
   el('piece-title').textContent = score.meta.title;
   el('piece-composer').textContent = score.meta.composer;
   el('piece-summary').textContent = curriculum.summary.slice(1).join(' · ');
-  el('piece-verified').textContent = {
-    sources: 'Notes checked against an independent source',
-    owner: 'Notes confirmed by you',
-    checks: 'Notes compiled and checked; listen through once',
-    none: 'Notes not yet checked',
-  }[score.meta.verified];
+  paintVerified();
   el<HTMLInputElement>('piece-goal').value = String(goal());
   el('piece-goal-help').textContent = `Marked "${score.tempo.text || 'no tempo'}"; ${score.tempo.bpm} BPM suggested`;
   paintAbout();
   const wanted =
     progress.selected.unit && units().some((u) => u.id === progress.selected.unit) ? progress.selected.unit : landing();
   selectUnit(wanted);
+}
+/** The piece picker (pickerLabel: his own pieces say "yours", and "draft" until he has confirmed them by ear). */
+function paintPicker(all = packs()): void {
+  el<HTMLSelectElement>('piece-select').innerHTML = all
+    .map((p) => {
+      const meta = pieceMeta(p.text);
+      return `<option value="${escape(p.id)}"${p.id === pack.id ? ' selected' : ''}>${escape(pickerLabel(meta.title ?? p.id, p.origin, meta.verified))}</option>`;
+    })
+    .join('');
+}
+function paintVerified(): void {
+  el('piece-verified').textContent =
+    pack.origin === 'mine' && isDraft(score.meta.verified)
+      ? 'Draft: listen with Hear the whole piece, then confirm it under Add your own piece'
+      : {
+          sources: 'Notes checked against an independent source',
+          owner: 'Notes confirmed by you',
+          checks: 'Notes compiled and checked; listen through once',
+          none: 'Notes not yet checked',
+        }[score.meta.verified];
 }
 function paintAbout(): void {
   const spans = chordSpans(score),
@@ -2049,71 +2049,28 @@ el('piece-calibrate').onclick = () => {
   say('calibrating', { dropped });
   void audio.start(exercise, 'calibration', 60, 'calibration');
 };
-el<HTMLInputElement>('piece-file').onchange = async () => {
-  const file = el<HTMLInputElement>('piece-file').files?.[0];
-  if (!file) return;
-  if (file.size > 300000) {
-    el('piece-file-report').textContent = 'That file is too large for a piece file.';
-    return;
-  }
-  const text = await file.text(),
-    result = compile(text),
-    report = (d: Diagnostic) => `<li>line ${d.line}: ${escape(d.message)}</li>`;
-  if (!result.score) {
-    el('piece-file-report').innerHTML = `<p>It did not compile:</p><ul>${result.diagnostics
-      .filter((d) => d.level === 'error')
-      .slice(0, 12)
-      .map(report)
-      .join('')}</ul>`;
-    return;
-  }
-  const id = `mine:${file.name
-    .replace(/\.piece\.txt$|\.txt$/, '')
-    .replace(/[^\w-]+/g, '-')
-    .slice(0, 60)}`;
-  try {
-    localStorage.setItem(MINE, JSON.stringify([...readMine().filter((m) => m.id !== id), { id, text }]));
-  } catch {
-    el('piece-file-report').textContent = 'Browser storage is full or unavailable.';
-    return;
-  }
-  el('piece-file-report').innerHTML =
-    `<p>Added "${escape(result.score.meta.title)}": ${result.score.bars.length} bars, ${result.score.notes.length} notes.</p>${result.diagnostics.length ? `<p>Please check:</p><ul>${result.diagnostics.slice(0, 12).map(report).join('')}</ul>` : ''}`;
-  progress.selected.unit = '';
-  loadPack(id);
-  paintLocal();
-};
-let accountPieces: { paint: () => void } | undefined;
-function paintLocal(): void {
-  accountPieces?.paint();
-  const mine = readMine();
-  el('piece-local-list').innerHTML = mine.length
-    ? `<p>Your pieces in this browser:</p>${mine.map((m) => `<div class="journal-entry"><span>${escape(compile(m.text).score?.meta.title ?? m.id)}</span><button class="text-button" data-remove="${escape(m.id)}">Remove</button></div>`).join('')}`
-    : '';
-}
-accountPieces = mountPieceAccount({
-  container: el('piece-account-list'),
-  readMine,
-  titleOf: (text) => compile(text).score?.meta.title ?? 'Untitled piece',
-  refresh: () => paintLocal(),
-  addMine: (m) => {
-    const mine = readMine();
-    if (mine.length >= 30 && !mine.some((x) => x.id === m.id)) return false;
-    try {
-      localStorage.setItem(MINE, JSON.stringify([...mine.filter((x) => x.id !== m.id), m]));
-      return true;
-    } catch {
-      return false;
+// Add your own piece (add-panel.ts): it stores his pieces itself and asks the page only to open, relabel or close one.
+mountAddPanel({
+  open: (id) => {
+    progress.selected.unit = '';
+    loadPack(id);
+  },
+  current: () => pack,
+  relabel: (id) => {
+    const fresh = packs().find((p) => p.id === id);
+    if (fresh && pack.id === id) {
+      pack = fresh;
+      const verified = pieceMeta(fresh.text).verified;
+      if (verified) score.meta.verified = verified;
+      paintVerified();
     }
+    paintPicker();
+  },
+  removed: (id) => {
+    if (pack.id === id) loadPack(packs()[0].id);
+    else paintPicker();
   },
 });
-el('piece-local-list').onclick = (event) => {
-  const b = (event.target as HTMLElement).closest<HTMLElement>('[data-remove]');
-  if (!b) return;
-  localStorage.setItem(MINE, JSON.stringify(readMine().filter((m) => m.id !== b.dataset.remove)));
-  paintLocal();
-  if (pack.id === b.dataset.remove) loadPack(packs()[0].id);
-};
 el('piece-finish').onclick = () => {
   audio.stop();
   player.pause();
@@ -2804,7 +2761,6 @@ function live(): Parameters<typeof drawKeys>[8] {
     run: scoring && runFrom && plan ? runFrom.now(audio.now - plan.playAt).run : 0,
   };
 }
-paintLocal();
 loadPack(progress.selected.piece || packs()[0].id);
 pressCourse();
 paint();

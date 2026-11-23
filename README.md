@@ -7,7 +7,7 @@ Clean Take is a trainer for guitar and piano that listens through your microphon
 
 **Live:** [robjohncolson.github.io/guitar](https://robjohncolson.github.io/guitar/) (GitHub Pages, deployed by `.github/workflows/pages.yml` on every push to `main`) · [guitar-lac-seven.vercel.app](https://guitar-lac-seven.vercel.app) (Vercel) · **Source:** [robjohncolson/guitar](https://github.com/robjohncolson/guitar)
 
-The build uses relative asset URLs (`base: './'` in `vite.config.ts`), so the same `dist/` works at a domain root and under a subpath. Everything a user saves lives in that browser's `localStorage`. On the Vercel deployment, an **optional account** (below) syncs it across devices; the GitHub Pages mirror is built with `VITE_ACCOUNTS=off` and stays localStorage-only. Keys: `guitar.trainer.v1` (guitar course progress, `src/trainer/progress.ts`), `piece.trainer.v1` (Pieces progress, `src/piece/progress.ts`) and `piece.imported.v1` (pieces a user added, `src/piece/main.ts`). The product name is set in `src/brand.ts` and in the titles of `index.html` and `piece.html`.
+The build uses relative asset URLs (`base: './'` in `vite.config.ts`), so the same `dist/` works at a domain root and under a subpath. Everything a user saves lives in that browser's `localStorage`. On the Vercel deployment, an **optional account** (below) syncs it across devices; the GitHub Pages mirror is built with `VITE_ACCOUNTS=off` and stays localStorage-only. Keys: `guitar.trainer.v1` (guitar course progress, `src/trainer/progress.ts`), `piece.trainer.v1` (Pieces progress, `src/piece/progress.ts`) and `piece.imported.v1` (pieces a user added, `src/piece/mine.ts`). The product name is set in `src/brand.ts` and in the titles of `index.html` and `piece.html`.
 
 The former Play page (Partner and Looper, `/play.html`) was removed on 2026-11-22; `/play.html` is now a short static notice (`public/play.html`) that forwards to the guitar course. Its settings key `guitar.practice.v1` is no longer written or synced; the server still accepts it so that old clients keep working.
 
@@ -30,7 +30,7 @@ Piano listening works with an acoustic piano and the laptop microphone. Each att
 
 **Guitar accompaniment** arranges the same harmony for guitar (one capo position, shapes that never add a note outside the chord, a bass-and-pinch pattern that mirrors the piano's left hand) with its own course: shapes string by string (pitch checked by CREPE), changes, the pattern, then sections and the whole piece with the melody in your headphones. **Guitar** also plays the written notes on one guitar in standard tuning (frets 0–12), with the same steps as the piano course. A single string is pitch-checked; two or more at once are timing only.
 
-To add your own piece, give the sheet music (PDF or photos) to your AI assistant with [PIECES.md](PIECES.md): it writes a `.piece.txt` file, transcribes it twice and checks it with `node scripts/piece-check.mjs`. Open the file under **Add your own piece**: it stays in this browser. Copyrighted music belongs in the git-ignored `src/piece/packs/local/`, never in the deployed site.
+To add your own piece, open **Add your own piece** in the Pieces menu: copy the instructions into any AI chat together with the pages (PDF or photos), paste its answer back and press **Check**. The app tells you plainly what is wrong (as text to paste back to the AI), compares a second, independent reading if you make one, and keeps the piece as a draft until you have listened to it and pressed **It sounds right**. The app calls no model and sends nothing anywhere; the piece stays in this browser. A coding assistant working in this repository can instead follow [PIECES.md](PIECES.md) and check its files with `node scripts/piece-check.mjs`. Copyrighted music belongs in the git-ignored `src/piece/packs/local/` or in the browser, never in the deployed site.
 
 Run `node scripts/piece-smoke.mjs` against `npm run preview` for the real Chrome check (calibration loopback, recorded piano and guitar notes, a wrong note, silence, the tempo ladder, CREPE guitar shape, mobile layout).
 
@@ -65,15 +65,16 @@ npm run preview
 
 `npm run verify` runs the format check (Prettier), the tests and the production build.
 
-With preview running, two scripts drive real Chrome with real local CREPE and recorded input through the native microphone path:
+With preview running, two scripts drive real Chrome with real local CREPE and recorded input through the native microphone path, and a third drives the import area:
 
 ```powershell
 $env:SMOKE_ORIGIN = 'http://127.0.0.1:4173'
 node scripts/trainer-smoke.mjs
 node scripts/piece-smoke.mjs
+node scripts/import-smoke.mjs
 ```
 
-`trainer-smoke.mjs` checks the guitar course (see **Guitar course** above for `SMOKE_TRAINER_COURSE` and `SMOKE_TRAINER_QUICK`); `piece-smoke.mjs` checks Pieces with recorded piano and guitar notes. `CHROME_PATH` can override Chrome's location. Screenshots and traces go to the ignored `smoke-artifacts/`.
+`trainer-smoke.mjs` checks the guitar course (see **Guitar course** above for `SMOKE_TRAINER_COURSE` and `SMOKE_TRAINER_QUICK`); `piece-smoke.mjs` checks Pieces with recorded piano and guitar notes. `import-smoke.mjs` needs no audio: it checks **Add your own piece** with real clicks, keys and clipboard (copying the instructions, Check and Add, the draft marks, confirming, a broken reading and its message, parts pasted behind each other, a file added to the box, Clear, Compare, the Replace question, Remove, focus, and that typing in the boxes plays nothing with Keyboard · MIDI); set `SMOKE_SIZE=390x844` for phone width (default 1280x800). `CHROME_PATH` can override Chrome's location. Screenshots and traces go to the ignored `smoke-artifacts/`.
 
 The recorded guitar plucks come from the [University of Iowa guitar collection](https://theremin.music.uiowa.edu/MISguitar.html). See [fixture provenance and edits](tests/fixtures/NOTICE.md). These are edited recorded notes assembled into test phrases, not a physical speaker-feedback test or a recording of your playing. Regenerate with `node scripts/vendor-guitar-fixture.mjs`.
 

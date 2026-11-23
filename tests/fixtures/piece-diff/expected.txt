@@ -1,0 +1,12 @@
+Diff Test Tune: 5 written bars, 5 played, 15 notes, key signature 1, 1 sections.
+tests/fixtures/piece-diff/second.piece.txt:24 warn: F4 is natural here but the key signature alters F. Write fn4 if the natural is intended.
+bar 1: only in tests/fixtures/piece-diff/first.piece.txt: G2@1 (3 beats, L) | only in tests/fixtures/piece-diff/second.piece.txt: G2@1 (3 beats, R)
+bar 2: only in tests/fixtures/piece-diff/first.piece.txt: F♯4@2.5 (0.5 beats, R) | only in tests/fixtures/piece-diff/second.piece.txt: F4@2.5 (0.5 beats, R)
+bar 3: only in tests/fixtures/piece-diff/first.piece.txt: G4@1 (4 beats, R) | only in tests/fixtures/piece-diff/second.piece.txt: G4@1 (3 beats, R)
+bar 4: only in tests/fixtures/piece-diff/first.piece.txt: - | only in tests/fixtures/piece-diff/second.piece.txt: G4@1 (1 beats, R)
+bar 5: only in tests/fixtures/piece-diff/first.piece.txt: - | only in tests/fixtures/piece-diff/second.piece.txt: G2@1 (3 beats, L)
+1 bars agree on every note's pitch, start, length and hand; 5 differ. Look again at the page for every differing bar; agreement does not prove both are right.
+bar 2 chords/feel: first: D7@1 | second: D@1
+bar 3 chords/feel: first: Em@1 | second: Em@1 · swing
+bar 4 chords/feel: first: G@1 | second: G@1 · swing
+3 bars differ in chord symbols or swing.

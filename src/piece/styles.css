@@ -575,3 +575,20 @@
 .map-legend .map-cell.s2 {
   background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14' fill='%2310150f'><polygon points='3.60,4.20 4.42,6.47 6.83,6.55 4.93,8.03 5.60,10.35 3.60,9.00 1.60,10.35 2.27,8.03 0.37,6.55 2.78,6.47'/><polygon points='10.40,4.20 11.22,6.47 13.63,6.55 11.73,8.03 12.40,10.35 10.40,9.00 8.40,10.35 9.07,8.03 7.17,6.55 9.58,6.47'/></svg>");
 }
+
+/* Titles of the owner's own pieces can be one long unbroken word: let them wrap wherever they are shown, so nothing
+   scrolls sideways on a phone (the top bar shortens its title with an ellipsis instead). */
+main.piece :is(#piece-summary, #piece-about-body, #piece-account-list .journal-entry span) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* The picker sits in a flex label: without these it keeps the width of its longest title. */
+main.piece .piece-controls > label:has(#piece-select) {
+  min-width: 0;
+  max-width: 100%;
+}
+main.piece #piece-select {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
