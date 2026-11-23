@@ -15,8 +15,9 @@ export function routeOf(url: string): string {
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  try { await handle(req, res, routeOf(req.url ?? '/')); }
-  catch {
+  try {
+    await handle(req, res, routeOf(req.url ?? '/'));
+  } catch {
     res.statusCode = 503;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');

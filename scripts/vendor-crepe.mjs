@@ -15,7 +15,7 @@ const modelData = await download(`${base}model.json`);
 const model = JSON.parse(modelData);
 if (!Array.isArray(model.weightsManifest)) throw new Error('Missing Layers weight manifest');
 const hashes = {};
-for (const shard of new Set(model.weightsManifest.flatMap(group => group.paths))) {
+for (const shard of new Set(model.weightsManifest.flatMap((group) => group.paths))) {
   if (!/^[\w.-]+$/.test(shard)) throw new Error(`Unexpected shard path: ${shard}`);
   const bytes = await download(new URL(shard, base));
   await writeFile(path.join(target, shard), bytes);

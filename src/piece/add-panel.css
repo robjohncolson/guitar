@@ -1,0 +1,278 @@
+/* Add your own piece: numbered steps inside the menu. Scoped to the panel; colours come from hud.css. */
+main.piece #piece-add .add-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 2px;
+  /* Quoted lines and messages can hold one long unbroken token: they break anywhere rather than widen the menu. */
+  overflow-wrap: anywhere;
+}
+main.piece #piece-add :is(.add-report, .add-step, .add-step-body) > * {
+  min-width: 0;
+}
+main.piece #piece-add .add-privacy {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+}
+main.piece #piece-add :is(.add-step, .add-step-body) {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+}
+main.piece #piece-add .add-step {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+main.piece #piece-add .add-step-body[hidden] {
+  display: none;
+}
+main.piece #piece-add .add-step h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+main.piece #piece-add .add-num {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--lime);
+  color: #182218;
+  font-size: 13px;
+  font-weight: 700;
+}
+/* Step 3's heading is the button that opens it, drawn like the menu's own section headings. */
+main.piece #piece-add .add-disclosure {
+  display: flex;
+  position: relative;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 4px 36px 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  color: var(--ink);
+}
+main.piece #piece-add .add-disclosure::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  width: 8px;
+  height: 8px;
+  margin-top: -6px;
+  border: solid var(--muted);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+main.piece #piece-add .add-disclosure[aria-expanded='true']::after {
+  margin-top: -2px;
+  transform: rotate(225deg);
+}
+main.piece #piece-add .add-step p {
+  margin: 0;
+}
+main.piece #piece-add .add-label {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+}
+main.piece #piece-add .add-box {
+  display: block;
+  width: 100%;
+  min-height: 9em;
+  padding: 8px 10px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font:
+    13px/1.45 ui-monospace,
+    'Cascadia Mono',
+    Consolas,
+    monospace;
+  resize: vertical;
+}
+main.piece #piece-add .add-box:focus-visible {
+  outline: 2px solid #bdcf91;
+  outline-offset: 2px;
+}
+main.piece #piece-add .add-box.add-drop {
+  border-style: dashed;
+  border-color: var(--lime);
+}
+main.piece #piece-add .add-row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+main.piece #piece-add .add-row button {
+  padding: 8px 14px;
+}
+/* The file input stays in the tab order but out of sight; its label is drawn as a button. */
+main.piece #piece-add .add-file-input {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+main.piece #piece-add .add-file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 14px;
+  border: 1px solid #414941;
+  border-radius: 8px;
+  background: #212823;
+  color: var(--ink);
+  cursor: pointer;
+}
+main.piece #piece-add .add-file:hover {
+  background: #303c33;
+}
+main.piece #piece-add .add-file-input:focus-visible + .add-file {
+  outline: 2px solid #bdcf91;
+  outline-offset: 4px;
+}
+main.piece #piece-add .add-status:empty,
+main.piece #piece-add .add-fallback-slot:empty,
+main.piece #piece-add .add-report:empty {
+  display: none;
+}
+main.piece #piece-add :is(.add-status, .add-copied) {
+  margin: 0;
+  color: var(--lime);
+  overflow-wrap: anywhere;
+}
+main.piece #piece-add .add-by {
+  font-weight: 400;
+  color: var(--muted);
+}
+main.piece #piece-add .add-report:focus {
+  outline: none;
+}
+main.piece #piece-add .add-step h3[tabindex]:focus-visible {
+  outline: 2px solid #bdcf91;
+  outline-offset: 2px;
+}
+main.piece #piece-add .add-report {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+main.piece #piece-add .add-ok {
+  color: var(--ink);
+}
+main.piece #piece-add .add-bad {
+  color: var(--amber);
+}
+main.piece #piece-add .add-tidied,
+main.piece #piece-add .add-hint {
+  color: var(--muted);
+}
+main.piece #piece-add :is(.add-problems, .add-unsure, .add-diffs) {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 22px;
+}
+main.piece #piece-add .add-problems li > span,
+main.piece #piece-add .add-problems li > code {
+  display: block;
+}
+main.piece #piece-add .add-where {
+  color: var(--muted);
+  font-size: 12px;
+}
+main.piece #piece-add code {
+  font:
+    12px/1.45 ui-monospace,
+    'Cascadia Mono',
+    Consolas,
+    monospace;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--ink);
+}
+main.piece #piece-add .add-msg {
+  color: var(--amber);
+}
+main.piece #piece-add :is(.add-diffs li, .add-unsure li, .add-ok, .add-bad) {
+  overflow-wrap: anywhere;
+}
+main.piece #piece-add .add-mine {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+main.piece #piece-add .add-piece {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+main.piece #piece-add .add-title {
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+main.piece #piece-add .add-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--amber);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--amber);
+}
+main.piece #piece-add .add-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+main.piece #piece-add .add-actions button {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+main.piece #piece-add .add-fallback {
+  display: grid;
+  gap: 6px;
+}
+@media (max-width: 700px) {
+  /* 16 px stops phones from zooming in when the box gets focus. */
+  main.piece #piece-add .add-box {
+    font-size: 16px;
+  }
+  main.piece #piece-add .add-row :is(button, .add-file) {
+    flex: 1 1 auto;
+  }
+}

@@ -1,11 +1,13 @@
 # Guitar Practice Partner — Spec
 
+> **Note added 2026-11-22.** The product is now called **Clean Take**: one trainer for guitar and piano with two pages, the guitar course (`/`) and Pieces (`/piece.html`). The Play page (`/play.html`, Partner and Looper) was removed on 2026-11-22 at the owner's request. Every section below about Partner (the companion, its replies and harmony) or the Looper describes that removed page and is kept as history. The Looper's recorder (`src/audio/looper.worklet.ts`, `src/audio/loop-engine.ts`) stays, because every take is recorded through it.
+
 ## Current addition: Pieces (learn a specific piece on piano or guitar)
 
 The user asked to give the app any piece of music and be trained on all its chords and passages at a range of tempos, with scale drills in its key, for piano (an acoustic piano heard by the laptop microphone) and optionally a designed guitar accompaniment, or the written notes arranged onto the guitar, each with its own course. Music usually arrives as PDFs or photos of sheet music; the first piece is Satie's Gymnopédie No. 1. Trainer, Partner and Looper keep their contracts.
 
 - A piece is one plain-text file (PIECES.md) compiled deterministically: key signatures, bar-long accidentals, ties, tuplets, voices with hands, repeats with endings and D.C./D.S. jumps. The AI assistant transcribes PDFs twice (printed and sounding modes), diffs them with `scripts/piece-check.mjs`, and the owner listens before trusting it. Committed packs must be redistributable; private music stays in git-ignored `src/piece/packs/local/` or browser storage. Never upload.
-- Analysis, chunking, the curriculum, drills and the guitar arrangement are deterministic code; authored chord names and sections win over automatic suggestions. The course covers every chord (as written, then broken so each note can be checked), every neighbouring change, passages per hand and together, joins including across repeats, sections, the whole piece and key drills with standard fingering. Tempo moves only between takes on a 50-100% ladder of the goal tempo, with support fading at 80% and 100%, two-day certification and spaced review. A learner who already knows a step can place it: one explicit take from the placement control at a chosen tempo step (default its top step), graded like any take with the notes shown, places the step there only if trusted, calibrated, 90% or better and answered "Felt comfortable"; a miss records nothing.
+- Analysis, chunking, the curriculum, drills and the guitar arrangement are deterministic code; authored chord names and sections win over automatic suggestions. The course covers every chord (as written, then broken so each note can be checked), every neighbouring change, passages per hand and together, joins including across repeats, sections, the whole piece and key drills with standard fingering. Tempo moves only between takes on a 50-100% ladder of the goal tempo, with support fading at 80% and 100%, two-day certification and spaced review. A learner who already knows a step can place it: one explicit take from the placement control at a chosen tempo step (default its top step), graded like any take with the notes shown, places the step there only if trusted, calibrated, 80% or better and answered "Felt comfortable"; a miss records nothing.
 - Piano listening is score-informed and honest: verdicts are heard, not heard, wrong (naming the pitch heard), unclear and can't check; unclear never counts; a take with uncertain attacks or capture problems is unscored. A matched attack must show a real rise; nothing played is never credited. Note checks shape the score only when at least half the checkable notes are definite. Report measured false-confirmation and false-contradiction rates on held-out real recordings; do not claim certainty the microphone cannot give (octave doublings, pedalling, voicing).
 - Guitar parts never add a pitch outside the chord, keep its third, use one capo position and list simplified colour tones for review. Plucked single strings are checked by CREPE; strums and pinches are timing only; ringing strings, fingering and strum direction are self-judged. The written piece can also be arranged onto one guitar in standard tuning (frets 0–12): out-of-range notes move by octave, a pluck never adds a pitch the score does not have there, and notes that will not fit are listed. That course has the same steps as the piano course. A single string is pitch-checked; two or more are timing only.
 - Same audio rules as the Trainer: one AudioContext, demonstrations never overlap scoring, headphones recommended, calibration and manual offset, Stop/visibility/permission races release the microphone, recordings stay in the page, piano analysis off the main thread.
@@ -27,6 +29,8 @@ Phase gates (run and inspect tests before moving on): (1) authored curriculum, h
 
 ## Current refinement: automatic Looper level matching
 
+> **Removed 2026-11-22.** This section describes the Play page (Partner and Looper), which was removed on 2026-11-22. Kept as history.
+
 Quiet recordings should be louder at the existing volume setting without clipping. Measure the native recording's sample peak during capture, then freeze one gain for the completed take: target a peak of 0.8, cap boost at 16× (about +24 dB), and leave peaks below 0.005 unboosted. Attenuate hot recordings as needed. This retains articulation, rests, dynamics and exact sample timing, with headroom for the existing 0.126-peak metronome at full loop volume; no compressor latency or automatic gain pumping.
 
 Keep original samples intact. Apply the take's gain before seam fades, optional headphone softening and user volume. Play and Undo retain the appropriate take's gain. WAV download includes level matching and seam fades, independently of monitor volume/mute/softening. Show the applied gain in the saved take detail and the waveform at the matched level, without another required control. Processing cannot repair distortion already recorded by the microphone.
@@ -34,6 +38,8 @@ Keep original samples intact. Apply the take's gain before seam fades, optional 
 Phases, each followed by tests before continuing: (1) bounded level calculation and quiet/hot/silent sample tests; (2) native capture/playback, take metadata, Undo and WAV/UI integration, regression tests and production build; (3) Chrome measured output and export checks with quiet recorded guitar at full volume, transport regression, then publish and verify the live deployment under existing authorization.
 
 ## Current addition: four-bar audio Looper
+
+> **Removed 2026-11-22.** This section describes the Play page (Partner and Looper), which was removed on 2026-11-22. Kept as history.
 
 The user approved a separate Partner / Looper mode. Partner retains real CREPE and its Echo/Harmony contract below. Looper records actual mono microphone audio at the AudioContext sample rate, including chords, rests, and articulation; pitch detection does not gate recording or replay. No detector substitution, backend, uploads, overdubbing, or automatic recording archive.
 
@@ -47,6 +53,8 @@ The user approved a separate Partner / Looper mode. Partner retains real CREPE a
 Phases, each followed by tests before continuing: (1) pure loop timing/recording/replacement/undo/edge-fade engine; (2) native-rate worklet, audio transport and microphone lifecycle; (3) minimal mode UI/preferences/export plus full tests/build; (4) Chrome recorded-audio waveform/timing/transport checks, Partner real-CREPE regression, then GitHub/Vercel publishing and live verification under existing authorization.
 
 ## Current addition: a restrained harmony reply
+
+> **Removed 2026-11-22.** This section describes the Play page (Partner and Looper), which was removed on 2026-11-22. Kept as history.
 
 The user approved a single supporting harmony line as an alternative to Echo. This revision supersedes the earlier prohibition on harmonic pitch choice, while retaining real CREPE, manual BPM, continuous loop recognition, rests, half-beat placement, three finite passes, self-masking, and no overlapping app voices.
 
@@ -62,6 +70,8 @@ The user approved a single supporting harmony line as an alternative to Echo. Th
 Phase gates: (1) harmony selection tests, including transposition, ambiguity, tuning, register, smooth motion, delayed landings and rests; (2) playback/queue/masking tests with unchanged Echo behavior and three fixed harmony passes; (3) UI/preferences plus full tests/build; (4) real Chrome/CREPE recorded-guitar Harmony and Echo checks, then GitHub/Vercel publishing and live verification. Document the heuristic's limits and the remaining physical guitar/room listening check.
 
 ## Current product: continuous listening, manual BPM, offbeat replies (September 6, 2026)
+
+> **Removed 2026-11-22.** This section describes the Play page (Partner and Looper), which was removed on 2026-11-22. Kept as history.
 
 This is the latest user-approved contract. It supersedes Auto tempo and the bar-aligned finite replies below, while retaining the technical hard constraints in `CODEX_PROMPT.md`.
 

@@ -27,7 +27,7 @@ This is a greenfield folder. Build the whole v1. Do not ask to shrink scope. Do 
 
 6. **Vite + TypeScript + vanilla DOM.** No React, Vue, Svelte, p5, ml5.
 
-7. **No backend.** No accounts. The user's approved Trainer revision now permits authored lessons, fret/string guidance and local learning progress; it supersedes the original no-lessons product restriction. No song library service or generative music.
+7. **No backend except the optional account API** (README "Optional accounts"; AGENTS.md). The user's approved Trainer revision now permits authored lessons, fret/string guidance and local learning progress; it supersedes the original no-lessons product restriction. No song library service or generative music.
 
 8. **Schedule audio with `AudioContext.currentTime` minus `outputLatency`.** No `setTimeout` for musical timing.
 

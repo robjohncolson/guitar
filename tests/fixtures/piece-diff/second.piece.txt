@@ -1,0 +1,36 @@
+% The same tune read again from the page, sounding mode, with deliberate disagreements for the test.
+title: Diff Test Tune
+composer: Test
+source: Written for the test
+licence: Original test material
+redistributable: yes
+verified: none
+pitch-mode: sounding
+key: 1#
+time: 3/4
+tempo: q=90
+voices: rh@1:R lh@2:L
+section: A 1-4
+
+== 0
+rh: d5:4
+lh: r:4
+== 1
+harmony: G
+rh: b4:4 a4:4 g4:4
+lh[R]: g2:2.
+== 2
+harmony: D
+rh: f#4:4 e4:8 f4:8 a4:4
+lh: <d3 c4>:2.
+== 3 swing
+harmony: Em
+rh: g4:2.
+lh: e3:2 b2:4
+== 4 partial
+harmony: G
+rh: g4:4 r:4
+lh: g2:2
+== 5
+rh: R
+lh: g2:2.

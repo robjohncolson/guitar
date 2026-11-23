@@ -11,20 +11,44 @@ const suffix = Math.random().toString(36).slice(2, 8);
 const pw = 'integration password';
 
 describe.skipIf(!url)('Postgres store as guitar_app (RLS)', () => {
-  const pool = url ? createPool({ url, caPem: process.env.GUITAR_TEST_DATABASE_CA_PEM }) : (undefined as unknown as pg.Pool);
-  const svc = url ? new AccountService(new PgStore(pool), { signupOpen: true, maxUsers: 100000 }) : (undefined as unknown as AccountService);
+  const pool = url
+    ? createPool({ url, caPem: process.env.GUITAR_TEST_DATABASE_CA_PEM })
+    : (undefined as unknown as pg.Pool);
+  const svc = url
+    ? new AccountService(new PgStore(pool), { signupOpen: true, maxUsers: 100000 })
+    : (undefined as unknown as AccountService);
   const made: string[] = [];
   afterAll(async () => {
     if (!url) return;
-    for (const token of made) { const who = await svc.identity(token); if (who) await svc.deleteAccount(who, { password: pw }, '127.0.0.1'); }
+    for (const token of made) {
+      const who = await svc.identity(token);
+      if (who) await svc.deleteAccount(who, { password: pw }, '127.0.0.1');
+    }
     await pool.end();
   });
-  const user = async (name: string) => { const s = await svc.signUp({ username: `${name}-${suffix}`, password: pw }, `198.51.100.${made.length + 1}`); made.push(s.token); return (await svc.identity(s.token))!; };
+  const user = async (name: string) => {
+    const s = await svc.signUp({ username: `${name}-${suffix}`, password: pw }, `198.51.100.${made.length + 1}`);
+    made.push(s.token);
+    return (await svc.identity(s.token))!;
+  };
 
   it('stores progress with versions and pieces with a cap, scoped to the owner', async () => {
-    const a = await user('pga'), b = await user('pgb');
-    expect(await svc.putProgress(b, 'guitar.trainer.v1', { value: { b: true }, updatedAt: '2026-11-10T00:00:00Z', baseVersion: 0 })).toMatchObject({ ok: true, item: { version: 1 } });
-    expect(await svc.putProgress(b, 'guitar.trainer.v1', { value: { b: 2 }, updatedAt: '2026-11-10T00:00:00Z', baseVersion: 0 })).toMatchObject({ ok: false, current: { version: 1 } });
+    const a = await user('pga'),
+      b = await user('pgb');
+    expect(
+      await svc.putProgress(b, 'guitar.trainer.v1', {
+        value: { b: true },
+        updatedAt: '2026-11-10T00:00:00Z',
+        baseVersion: 0,
+      }),
+    ).toMatchObject({ ok: true, item: { version: 1 } });
+    expect(
+      await svc.putProgress(b, 'guitar.trainer.v1', {
+        value: { b: 2 },
+        updatedAt: '2026-11-10T00:00:00Z',
+        baseVersion: 0,
+      }),
+    ).toMatchObject({ ok: false, current: { version: 1 } });
     await svc.putPiece(b, 'mine:b-piece', { text: 'b text' });
     expect(await svc.listProgress(a)).toEqual([]);
     expect(await svc.listPieces(a)).toEqual([]);
@@ -33,8 +57,13 @@ describe.skipIf(!url)('Postgres store as guitar_app (RLS)', () => {
   });
 
   it('RLS hides other users’ rows even from raw SQL that forgets the user filter', async () => {
-    const a = await user('rla'), b = await user('rlb');
-    await svc.putProgress(b, 'piece.trainer.v1', { value: { secret: 1 }, updatedAt: '2026-11-10T00:00:00Z', baseVersion: 0 });
+    const a = await user('rla'),
+      b = await user('rlb');
+    await svc.putProgress(b, 'piece.trainer.v1', {
+      value: { secret: 1 },
+      updatedAt: '2026-11-10T00:00:00Z',
+      baseVersion: 0,
+    });
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -42,11 +71,19 @@ describe.skipIf(!url)('Postgres store as guitar_app (RLS)', () => {
       expect((await client.query('SELECT count(*)::int AS n FROM guitar.progress')).rows[0].n).toBe(0);
       await client.query("SELECT set_config('guitar.user_id', $1, true)", [a.userId]);
       expect((await client.query('SELECT count(*)::int AS n FROM guitar.progress')).rows[0].n).toBe(0);
-      await expect(client.query("INSERT INTO guitar.progress (user_id, key, value, updated_at) VALUES ($1, 'guitar.practice.v1', '{}', now())", [b.userId])).rejects.toMatchObject({ code: '42501' });
+      await expect(
+        client.query(
+          "INSERT INTO guitar.progress (user_id, key, value, updated_at) VALUES ($1, 'guitar.practice.v1', '{}', now())",
+          [b.userId],
+        ),
+      ).rejects.toMatchObject({ code: '42501' });
       await client.query('ROLLBACK');
       await client.query('BEGIN');
       await client.query("SELECT set_config('guitar.user_id', $1, true)", [a.userId]);
-      expect((await client.query('UPDATE guitar.progress SET value = \'{"hacked":1}\' WHERE user_id = $1', [b.userId])).rowCount).toBe(0);
+      expect(
+        (await client.query('UPDATE guitar.progress SET value = \'{"hacked":1}\' WHERE user_id = $1', [b.userId]))
+          .rowCount,
+      ).toBe(0);
       expect((await client.query('DELETE FROM guitar.imported_pieces')).rowCount).toBe(0);
       await client.query('ROLLBACK');
       for (const q of ['CREATE TABLE guitar.x (id int)', 'SELECT * FROM pg_catalog.pg_authid', 'SET ROLE postgres']) {
@@ -54,7 +91,9 @@ describe.skipIf(!url)('Postgres store as guitar_app (RLS)', () => {
         await expect(client.query(q)).rejects.toBeTruthy();
         await client.query('ROLLBACK');
       }
-    } finally { client.release(); }
+    } finally {
+      client.release();
+    }
     expect((await svc.listProgress(b))[0].value).toEqual({ secret: 1 });
   });
 
@@ -65,6 +104,8 @@ describe.skipIf(!url)('Postgres store as guitar_app (RLS)', () => {
     await svc.putPiece(who, 'mine:gone', { text: 'gone' });
     await svc.deleteAccount(who, { password: pw }, '198.51.100.200');
     expect(await svc.identity(s.token)).toBeNull();
-    await expect(svc.signIn({ username: `gone-${suffix}`, password: pw }, '198.51.100.201')).rejects.toMatchObject({ status: 401 });
+    await expect(svc.signIn({ username: `gone-${suffix}`, password: pw }, '198.51.100.201')).rejects.toMatchObject({
+      status: 401,
+    });
   });
 });

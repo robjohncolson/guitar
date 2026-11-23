@@ -20,7 +20,13 @@ export interface Store {
   deleteSession(tokenHash: string): Promise<void>;
   deleteUser(userId: string): Promise<void>;
   listProgress(userId: string): Promise<ProgressItem[]>;
-  putProgress(userId: string, key: ProgressKey, valueJson: string, updatedAt: Date, baseVersion: number): Promise<PutProgressResult>;
+  putProgress(
+    userId: string,
+    key: ProgressKey,
+    valueJson: string,
+    updatedAt: Date,
+    baseVersion: number,
+  ): Promise<PutProgressResult>;
   listPieces(userId: string): Promise<PieceSummary[]>;
   getPiece(userId: string, pieceId: string): Promise<{ id: string; text: string; updatedAt: string } | null>;
   /** 'limit' when the user already has the maximum number of other pieces. */
@@ -38,27 +44,38 @@ export class MemoryStore implements Store {
   private nextId = 1;
 
   async countAttempts(bucket: string, action: AttemptAction, since: Date, failuresOnly: boolean) {
-    return this.attempts.filter(a => a.bucket === bucket && a.action === action && a.at >= since && (!failuresOnly || !a.success)).length;
+    return this.attempts.filter(
+      (a) => a.bucket === bucket && a.action === action && a.at >= since && (!failuresOnly || !a.success),
+    ).length;
   }
   async recordAttempt(buckets: string[], action: AttemptAction, success: boolean, now: Date) {
     for (const bucket of buckets) this.attempts.push({ bucket, action, success, at: now });
   }
-  async countUsers() { return this.users.size; }
+  async countUsers() {
+    return this.users.size;
+  }
   async createUser(username: string, passwordHash: string) {
-    if ([...this.users.values()].some(u => u.username === username)) return null;
+    if ([...this.users.values()].some((u) => u.username === username)) return null;
     const id = `00000000-0000-4000-8000-${String(this.nextId++).padStart(12, '0')}`;
     this.users.set(id, { id, username, passwordHash });
     return id;
   }
   async findUser(username: string) {
-    const user = [...this.users.values()].find(u => u.username === username);
+    const user = [...this.users.values()].find((u) => u.username === username);
     return user ? { id: user.id, passwordHash: user.passwordHash } : null;
   }
-  async passwordHash(userId: string) { return this.users.get(userId)?.passwordHash ?? null; }
-  async touchSignIn(userId: string, now: Date) { const u = this.users.get(userId); if (u) u.lastSignIn = now; }
+  async passwordHash(userId: string) {
+    return this.users.get(userId)?.passwordHash ?? null;
+  }
+  async touchSignIn(userId: string, now: Date) {
+    const u = this.users.get(userId);
+    if (u) u.lastSignIn = now;
+  }
   async createSession(tokenHash: string, userId: string, now: Date, expires: Date, keep: number) {
     this.sessions.set(tokenHash, { userId, expires, created: now });
-    const mine = [...this.sessions.entries()].filter(([, s]) => s.userId === userId).sort((a, b) => b[1].created.getTime() - a[1].created.getTime());
+    const mine = [...this.sessions.entries()]
+      .filter(([, s]) => s.userId === userId)
+      .sort((a, b) => b[1].created.getTime() - a[1].created.getTime());
     for (const [hash] of mine.slice(keep)) this.sessions.delete(hash);
   }
   async sessionUser(tokenHash: string, now: Date) {
@@ -67,31 +84,56 @@ export class MemoryStore implements Store {
     const u = this.users.get(s.userId);
     return u ? { userId: u.id, username: u.username } : null;
   }
-  async deleteSession(tokenHash: string) { this.sessions.delete(tokenHash); }
+  async deleteSession(tokenHash: string) {
+    this.sessions.delete(tokenHash);
+  }
   async deleteUser(userId: string) {
     this.users.delete(userId);
     for (const [k, s] of this.sessions) if (s.userId === userId) this.sessions.delete(k);
-    for (const k of [...this.progress.keys(), ...this.pieces.keys()]) if (k.startsWith(`${userId}|`)) { this.progress.delete(k); this.pieces.delete(k); }
+    for (const k of [...this.progress.keys(), ...this.pieces.keys()])
+      if (k.startsWith(`${userId}|`)) {
+        this.progress.delete(k);
+        this.pieces.delete(k);
+      }
   }
   async listProgress(userId: string) {
     return [...this.progress.entries()].filter(([k]) => k.startsWith(`${userId}|`)).map(([, v]) => structuredClone(v));
   }
-  async putProgress(userId: string, key: ProgressKey, valueJson: string, updatedAt: Date, baseVersion: number): Promise<PutProgressResult> {
-    const id = `${userId}|${key}`, current = this.progress.get(id) ?? null;
+  async putProgress(
+    userId: string,
+    key: ProgressKey,
+    valueJson: string,
+    updatedAt: Date,
+    baseVersion: number,
+  ): Promise<PutProgressResult> {
+    const id = `${userId}|${key}`,
+      current = this.progress.get(id) ?? null;
     if ((current?.version ?? 0) !== baseVersion) return { ok: false, current: current && structuredClone(current) };
-    const item: ProgressItem = { key, value: JSON.parse(valueJson), updatedAt: updatedAt.toISOString(), version: baseVersion + 1 };
+    const item: ProgressItem = {
+      key,
+      value: JSON.parse(valueJson),
+      updatedAt: updatedAt.toISOString(),
+      version: baseVersion + 1,
+    };
     this.progress.set(id, item);
     return { ok: true, item: structuredClone(item) };
   }
   async listPieces(userId: string) {
-    return [...this.pieces.entries()].filter(([k]) => k.startsWith(`${userId}|`)).map(([, p]) => ({ id: p.id, updatedAt: p.updatedAt, bytes: Buffer.byteLength(p.text) }));
+    return [...this.pieces.entries()]
+      .filter(([k]) => k.startsWith(`${userId}|`))
+      .map(([, p]) => ({ id: p.id, updatedAt: p.updatedAt, bytes: Buffer.byteLength(p.text) }));
   }
-  async getPiece(userId: string, pieceId: string) { const p = this.pieces.get(`${userId}|${pieceId}`); return p ? { ...p } : null; }
+  async getPiece(userId: string, pieceId: string) {
+    const p = this.pieces.get(`${userId}|${pieceId}`);
+    return p ? { ...p } : null;
+  }
   async putPiece(userId: string, pieceId: string, text: string, now: Date, maxPieces: number): Promise<'ok' | 'limit'> {
-    const others = (await this.listPieces(userId)).filter(p => p.id !== pieceId).length;
+    const others = (await this.listPieces(userId)).filter((p) => p.id !== pieceId).length;
     if (others >= maxPieces) return 'limit';
     this.pieces.set(`${userId}|${pieceId}`, { id: pieceId, text, updatedAt: now.toISOString() });
     return 'ok';
   }
-  async deletePiece(userId: string, pieceId: string) { return this.pieces.delete(`${userId}|${pieceId}`); }
+  async deletePiece(userId: string, pieceId: string) {
+    return this.pieces.delete(`${userId}|${pieceId}`);
+  }
 }

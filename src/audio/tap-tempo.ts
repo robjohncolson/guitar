@@ -16,12 +16,16 @@ export class TapTempo {
     if (this.taps.length < 4) return null;
     const intervals = this.taps.slice(1).map((t, i) => t - this.taps[i]);
     const mid = median(intervals);
-    const good = intervals.filter(t => t > 0 && t >= 0.5 * mid && t <= 1.5 * mid);
+    const good = intervals.filter((t) => t > 0 && t >= 0.5 * mid && t <= 1.5 * mid);
     if (!good.length) return null;
     const estimate = Math.max(40, Math.min(240, 60 / (good.reduce((a, b) => a + b, 0) / good.length)));
     this.bpm = this.bpm === null ? estimate : this.bpm * 0.7 + estimate * 0.3;
     this.t0 = seconds;
     return this.bpm;
   }
-  reset(): void { this.taps = []; this.bpm = null; this.t0 = 0; }
+  reset(): void {
+    this.taps = [];
+    this.bpm = null;
+    this.t0 = 0;
+  }
 }

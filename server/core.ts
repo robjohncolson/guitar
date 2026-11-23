@@ -4,12 +4,16 @@ import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) { super(message); this.status = status; }
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
 }
 
 export const PROGRESS_KEYS = ['guitar.trainer.v1', 'guitar.practice.v1', 'piece.trainer.v1'] as const;
-export type ProgressKey = typeof PROGRESS_KEYS[number];
-export const isProgressKey = (key: unknown): key is ProgressKey => typeof key === 'string' && (PROGRESS_KEYS as readonly string[]).includes(key);
+export type ProgressKey = (typeof PROGRESS_KEYS)[number];
+export const isProgressKey = (key: unknown): key is ProgressKey =>
+  typeof key === 'string' && (PROGRESS_KEYS as readonly string[]).includes(key);
 
 export const LIMITS = {
   progressBytes: 512 * 1024,
@@ -28,14 +32,22 @@ export const GENERIC_SIGNIN_ERROR = 'Username or password is incorrect.';
 export const RATE_LIMIT_ERROR = 'Too many attempts. Please wait a few minutes and try again.';
 
 export function normalizeUsername(value: unknown): string {
-  if (typeof value !== 'string') throw new ApiError(400, 'Usernames are 3–32 characters: lowercase letters, numbers, _ or -.');
+  if (typeof value !== 'string')
+    throw new ApiError(400, 'Usernames are 3–32 characters: lowercase letters, numbers, _ or -.');
   const name = value.trim().toLowerCase();
-  if (!/^[a-z0-9_-]{3,32}$/.test(name)) throw new ApiError(400, 'Usernames are 3–32 characters: lowercase letters, numbers, _ or -.');
+  if (!/^[a-z0-9_-]{3,32}$/.test(name))
+    throw new ApiError(400, 'Usernames are 3–32 characters: lowercase letters, numbers, _ or -.');
   return name;
 }
 
 export function validatePassword(value: unknown): string {
-  if (typeof value !== 'string' || value.length < 10 || value.length > 200 || !/\S/u.test(value) || Buffer.byteLength(value, 'utf8') > 800) {
+  if (
+    typeof value !== 'string' ||
+    value.length < 10 ||
+    value.length > 200 ||
+    !/\S/u.test(value) ||
+    Buffer.byteLength(value, 'utf8') > 800
+  ) {
     throw new ApiError(400, 'Passwords need at least 10 characters (200 at most).');
   }
   return value;
@@ -43,9 +55,13 @@ export function validatePassword(value: unknown): string {
 
 const PREFIX = 'scrypt$32768$8$1$';
 const FORMAT = /^scrypt\$32768\$8\$1\$([A-Za-z0-9_-]{22})\$([A-Za-z0-9_-]{43})$/;
-const derive = (password: string, salt: Buffer): Promise<Buffer> => new Promise((resolve, reject) => {
-  scrypt(password, salt, 32, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (error, key) => { if (error) reject(error); else resolve(key); });
-});
+const derive = (password: string, salt: Buffer): Promise<Buffer> =>
+  new Promise((resolve, reject) => {
+    scrypt(password, salt, 32, { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (error, key) => {
+      if (error) reject(error);
+      else resolve(key);
+    });
+  });
 // Unknown usernames still pay one full scrypt so response time does not reveal which accounts exist.
 const DUMMY_HASH = `${PREFIX}${Buffer.alloc(16).toString('base64url')}$${Buffer.alloc(32).toString('base64url')}`;
 
@@ -69,7 +85,9 @@ export const hashToken = (token: string) => createHash('sha256').update(token).d
 export const hashIp = (ip: string) => createHash('sha256').update(`guitar-ip:${ip}`).digest('hex').slice(0, 32);
 const validToken = (token: string) => token.length === 43 && /^[A-Za-z0-9_-]+$/.test(token);
 
-export function cookieName(secure: boolean) { return secure ? '__Host-guitar_session' : 'guitar_session'; }
+export function cookieName(secure: boolean) {
+  return secure ? '__Host-guitar_session' : 'guitar_session';
+}
 
 export function sessionCookie(secure: boolean, token: string | null): string {
   if (token !== null && !validToken(token)) throw new Error('Invalid session token');
@@ -78,28 +96,35 @@ export function sessionCookie(secure: boolean, token: string | null): string {
 
 export function readSessionCookie(secure: boolean, header?: string): string | null {
   const name = cookieName(secure);
-  const values = (header ?? '').split(';').map(part => part.trim()).filter(part => part.startsWith(`${name}=`));
+  const values = (header ?? '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part.startsWith(`${name}=`));
   if (values.length !== 1) return null;
   const value = values[0].slice(name.length + 1);
   return validToken(value) ? value : null;
 }
 
 export function validatePieceId(value: unknown): string {
-  if (typeof value !== 'string' || !/^mine:[A-Za-z0-9_-]{0,60}$/.test(value)) throw new ApiError(400, 'Invalid piece id.');
+  if (typeof value !== 'string' || !/^mine:[A-Za-z0-9_-]{0,60}$/.test(value))
+    throw new ApiError(400, 'Invalid piece id.');
   return value;
 }
 
 /** Serialised size of a JSON progress value, enforced before it reaches the database. */
 export function progressValue(value: unknown): string {
-  if (value === undefined || value === null || typeof value !== 'object') throw new ApiError(400, 'Progress must be a JSON object.');
+  if (value === undefined || value === null || typeof value !== 'object')
+    throw new ApiError(400, 'Progress must be a JSON object.');
   const text = JSON.stringify(value);
-  if (Buffer.byteLength(text, 'utf8') > LIMITS.progressBytes) throw new ApiError(413, 'That progress is too large to save.');
+  if (Buffer.byteLength(text, 'utf8') > LIMITS.progressBytes)
+    throw new ApiError(413, 'That progress is too large to save.');
   return text;
 }
 
 export function pieceText(value: unknown): string {
   if (typeof value !== 'string' || value.length === 0) throw new ApiError(400, 'Piece text is missing.');
-  if (Buffer.byteLength(value, 'utf8') > LIMITS.pieceBytes) throw new ApiError(413, 'That piece is too large to save (2 MB at most).');
+  if (Buffer.byteLength(value, 'utf8') > LIMITS.pieceBytes)
+    throw new ApiError(413, 'That piece is too large to save (2 MB at most).');
   if (value.includes('\u0000')) throw new ApiError(400, 'Piece text is invalid.');
   return value;
 }

@@ -3,24 +3,50 @@ import type { Exercise } from '../src/piece/exercise';
 import type { EventResult, NoteResult, PieceGrade } from '../src/piece/grade';
 import type { Unit } from '../src/piece/curriculum';
 import type { Score } from '../src/piece/score';
-import { barsText, isSpotId, pickSpot, problemBars, slowerBpm, spotExercise, spotId, spotOffered } from '../src/piece/spot';
+import {
+  barsText,
+  isSpotId,
+  pickSpot,
+  problemBars,
+  slowerBpm,
+  spotExercise,
+  spotId,
+  spotOffered,
+} from '../src/piece/spot';
 
 /** An exercise of n four-beat bars with a right-hand and a left-hand note on every beat 0 and 2 of each bar. */
 const exercise = (n: number): Exercise => ({
-  id: 'x', title: 'x', instrument: 'piano', beatsPerBar: 4, beats: n * 4, keySig: 0, chords: [],
+  id: 'x',
+  title: 'x',
+  instrument: 'piano',
+  beatsPerBar: 4,
+  beats: n * 4,
+  keySig: 0,
+  chords: [],
   bars: Array.from({ length: n }, (_, i) => ({ beat: i * 4, number: i + 1 })),
-  events: Array.from({ length: n * 2 }, (_, i) => ({ beat: i * 2, grade: 'pitch' as const, notes: [{ midi: 40, hand: 'L' as const, dur: 1 }, { midi: 64, hand: 'R' as const, dur: 1 }] })),
+  events: Array.from({ length: n * 2 }, (_, i) => ({
+    beat: i * 2,
+    grade: 'pitch' as const,
+    notes: [
+      { midi: 40, hand: 'L' as const, dur: 1 },
+      { midi: 64, hand: 'R' as const, dur: 1 },
+    ],
+  })),
 });
 const note = (midi: number, verdict: NoteResult['verdict'] = 'heard'): NoteResult => ({ midi, verdict, reason: '' });
 const good = (beat: number): EventResult => ({ index: 0, beat, mark: 'good', notes: [note(40), note(64)] });
 const grade = (events: EventResult[]) => ({ events }) as unknown as PieceGrade;
 /** All events of an n-bar exercise, good except for the overrides keyed by beat. */
-const take = (n: number, over: Record<number, Partial<EventResult>>) => grade(Array.from({ length: n * 2 }, (_, i) => ({ ...good(i * 2), index: i, ...over[i * 2] }) as EventResult));
-const wrongR = (beat: number): Record<number, Partial<EventResult>> => ({ [beat]: { notes: [note(40), note(64, 'wrong')] } });
+const take = (n: number, over: Record<number, Partial<EventResult>>) =>
+  grade(Array.from({ length: n * 2 }, (_, i) => ({ ...good(i * 2), index: i, ...over[i * 2] }) as EventResult));
+const wrongR = (beat: number): Record<number, Partial<EventResult>> => ({
+  [beat]: { notes: [note(40), note(64, 'wrong')] },
+});
 const missed = (beat: number): Record<number, Partial<EventResult>> => ({ [beat]: { mark: 'missed' } });
 
 it('picks a cluster of adjacent problem bars with a lead-in bar and the hand that struggled', () => {
-  const ex = exercise(8), r = take(8, { ...wrongR(12), ...wrongR(16) });
+  const ex = exercise(8),
+    r = take(8, { ...wrongR(12), ...wrongR(16) });
   expect(problemBars(ex, r, true).get(3)).toEqual({ count: 1, L: 0, R: 1 });
   expect(pickSpot(ex, r, true)).toEqual({ from: 2, to: 4, lead: true, hand: 'R' });
 });
@@ -32,7 +58,12 @@ it('picks the left hand when its notes are the problem', () => {
 
 it('keeps one clean bar between problem bars in one cluster, and picks the heavier of two clusters', () => {
   const ex = exercise(12);
-  expect(pickSpot(ex, take(12, { ...wrongR(8), ...wrongR(16) }), true)).toEqual({ from: 1, to: 4, lead: true, hand: 'R' });
+  expect(pickSpot(ex, take(12, { ...wrongR(8), ...wrongR(16) }), true)).toEqual({
+    from: 1,
+    to: 4,
+    lead: true,
+    hand: 'R',
+  });
   const two = take(12, { ...wrongR(4), ...wrongR(36), ...missed(38), ...wrongR(40) });
   expect(pickSpot(ex, two, true)).toEqual({ from: 8, to: 10, lead: true, hand: 'R' });
 });
@@ -60,18 +91,52 @@ it('has no lead-in when the problem is in the first bar, and drops it when it wo
 
 it('gives no spot when nothing, or more than half of the bars, are in trouble, or the cluster is too wide', () => {
   expect(pickSpot(exercise(8), take(8, {}), true)).toBeUndefined();
-  expect(pickSpot(exercise(8), take(8, { ...wrongR(0), ...wrongR(4), ...wrongR(8), ...wrongR(12), ...wrongR(16) }), true)).toBeUndefined();
-  expect(pickSpot(exercise(8), take(8, { ...wrongR(0), ...wrongR(8), ...wrongR(16), ...wrongR(24) }), true)).toBeUndefined();
+  expect(
+    pickSpot(exercise(8), take(8, { ...wrongR(0), ...wrongR(4), ...wrongR(8), ...wrongR(12), ...wrongR(16) }), true),
+  ).toBeUndefined();
+  expect(
+    pickSpot(exercise(8), take(8, { ...wrongR(0), ...wrongR(8), ...wrongR(16), ...wrongR(24) }), true),
+  ).toBeUndefined();
   expect(pickSpot(exercise(8), take(8, { ...wrongR(0), ...wrongR(8), ...wrongR(16) }), true)).toBeUndefined();
 });
 
 const score = {
-  ppq: 480, notes: [0, 1, 2, 3].map(bar => ({ id: bar, bar, tick: 0, dur: 480, midi: 60 + bar, hand: 'R', staff: 1, voice: 'v' })),
-  bars: [0, 1, 2, 3].map(i => ({ index: i, number: i + 10, ticks: 1920, num: 4, den: 4, key: 0, start: i * 1920, harmony: [] })),
+  ppq: 480,
+  notes: [0, 1, 2, 3].map((bar) => ({
+    id: bar,
+    bar,
+    tick: 0,
+    dur: 480,
+    midi: 60 + bar,
+    hand: 'R',
+    staff: 1,
+    voice: 'v',
+  })),
+  bars: [0, 1, 2, 3].map((i) => ({
+    index: i,
+    number: i + 10,
+    ticks: 1920,
+    num: 4,
+    den: 4,
+    key: 0,
+    start: i * 1920,
+    harmony: [],
+  })),
 } as unknown as Score;
 const unit = (over: Partial<Unit> = {}): Unit => ({
-  id: 'R:1-4', kind: 'hand', stage: 4, title: 'Right hand', goal: '', why: '', bars: [0, 1, 2, 3, 0, 1, 2, 3], hands: ['R'], requires: [],
-  rungs: [0.5, 0.7, 1], certify: [], goalBpm: 60, ...over,
+  id: 'R:1-4',
+  kind: 'hand',
+  stage: 4,
+  title: 'Right hand',
+  goal: '',
+  why: '',
+  bars: [0, 1, 2, 3, 0, 1, 2, 3],
+  hands: ['R'],
+  requires: [],
+  rungs: [0.5, 0.7, 1],
+  certify: [],
+  goalBpm: 60,
+  ...over,
 });
 
 it('builds a spot take from play-order positions, numbering bars from the score', () => {
@@ -79,8 +144,8 @@ it('builds a spot take from play-order positions, numbering bars from the score'
   expect(ex.id).toBe(spotId('R:1-4', 2, 5, ['R']));
   expect(isSpotId(ex.id)).toBe(true);
   expect(isSpotId('R:1-4')).toBe(false);
-  expect(ex.bars.map(b => b.number)).toEqual([12, 13, 10, 11]);
-  expect(ex.events.map(e => e.notes[0].midi)).toEqual([62, 63, 60, 61]);
+  expect(ex.bars.map((b) => b.number)).toEqual([12, 13, 10, 11]);
+  expect(ex.events.map((e) => e.notes[0].midi)).toEqual([62, 63, 60, 61]);
   expect(ex.title).toBe('Right hand: bars 12, 13, 10, 11');
   expect(spotExercise(score, unit(), 1, 2, ['R']).title).toBe('Right hand: bars 11–12');
 });

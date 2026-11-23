@@ -66,7 +66,7 @@ After a take with confirmed problems the result says "Practise bars N–M". Spot
 **As built.**
 - Placement is explicit: only a take started from that control can place. Free-tempo takes still count for nothing. Wait for me cannot place.
 - A placement take is an ordinary graded take at the target tempo with the notes shown and no demonstration first.
-- It places only if the take is trusted, calibrated where tempo steps need calibration, 90% or better, and answered "Felt comfortable". The step then moves to the target and the take counts as its first clean take there. At 80% and 100% that is the notes-shown take, so two takes with fading help are still needed to certify. "Learned" still needs the top step certified on two different days.
+- It places only if the take is trusted, calibrated where tempo steps need calibration, 80% or better, and answered "Felt comfortable". The step then moves to the target and the take counts as its first clean take there. At 80% and 100% that is the notes-shown take, so two takes with fading help are still needed to certify. "Learned" still needs the top step certified on two different days.
 - A failed placement records nothing against the step: no attempt, hard-take count, step-down, history entry or personal best. The day log counts a take played.
 - A hands-together placement also raises the one-hand steps for the same bars to their highest step at or below the target, at most their own 80% top. It never certifies them and never lowers a step.
 - After a placement take the paused trouble-spot offer is not shown, though the result's "Practise bars N–M" link may be, and the next take never starts by itself.

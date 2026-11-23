@@ -27,30 +27,49 @@ describe('Today chip', () => {
 
 describe('overlay guard', () => {
   it.each([
-    [false, false, false], [true, false, true], [false, true, true], [true, true, true],
+    [false, false, false],
+    [true, false, true],
+    [false, true, true],
+    [true, true, true],
   ])('drawer %s, popover %s -> open %s', (drawer, popover, open) => expect(overlayOpen(drawer, popover)).toBe(open));
   it.each([
-    [true, 'Space', false], [true, 'ArrowUp', false], [true, 'ArrowDown', false], [true, 'ArrowLeft', false], [true, 'ArrowRight', false],
-    [true, 'KeyZ', false], [true, 'KeyQ', false], [true, 'Digit2', false], [true, 'Escape', true],
-    [false, 'Space', true], [false, 'ArrowUp', true], [false, 'KeyZ', true], [false, 'Escape', true],
+    [true, 'Space', false],
+    [true, 'ArrowUp', false],
+    [true, 'ArrowDown', false],
+    [true, 'ArrowLeft', false],
+    [true, 'ArrowRight', false],
+    [true, 'KeyZ', false],
+    [true, 'KeyQ', false],
+    [true, 'Digit2', false],
+    [true, 'Escape', true],
+    [false, 'Space', true],
+    [false, 'ArrowUp', true],
+    [false, 'KeyZ', true],
+    [false, 'Escape', true],
   ])('open %s, %s -> allowed %s', (open, code, allowed) => expect(keyAllowed(open, code)).toBe(allowed));
 });
 
 describe('lane height', () => {
-  const phone = (vh: number, laneTop: number, below: number, card = false) => laneHeight({ phone: true, vh, laneTop, below, card, notice: false });
-  const desk = (vh: number, laneTop: number, below: number, card = false, notice = false) => laneHeight({ phone: false, vh, laneTop, below, card, notice });
+  const phone = (vh: number, laneTop: number, below: number, card = false) =>
+    laneHeight({ phone: true, vh, laneTop, below, card, notice: false });
+  const desk = (vh: number, laneTop: number, below: number, card = false, notice = false) =>
+    laneHeight({ phone: false, vh, laneTop, below, card, notice });
   it.each([
     // vh, lane top, sticky block -> height
-    [844, 301, 205, 300],   // clamp(180, 344, 300) = 300 and 844 - 301 - 205 - 8 = 330
-    [844, 301, 255, 280],   // the sticky block is taller: fit wins
-    [844, 405, 205, 226],   // welcome card above
-    [664, 301, 205, 180],   // clamp(180, 164, 300) = 180
-    [700, 250, 200, 200],   // 100dvh - 500
-    [844, 600, 205, 180],   // never under 180
+    [844, 301, 205, 300], // clamp(180, 344, 300) = 300 and 844 - 301 - 205 - 8 = 330
+    [844, 301, 255, 280], // the sticky block is taller: fit wins
+    [844, 405, 205, 226], // welcome card above
+    [664, 301, 205, 180], // clamp(180, 164, 300) = 180
+    [700, 250, 200, 200], // 100dvh - 500
+    [844, 600, 205, 180], // never under 180
   ])('phone %i tall, lane at %i, block %i -> %i', (vh, top, below, h) => expect(phone(vh, top, below)).toBe(h));
   it('takes all the room on a phone while something plays', () => {
-    expect(laneHeight({ phone: true, vh: 664, laneTop: 60, below: 80, card: false, notice: false, running: true })).toBe(516);
-    expect(laneHeight({ phone: true, vh: 400, laneTop: 60, below: 200, card: false, notice: false, running: true })).toBe(180);
+    expect(
+      laneHeight({ phone: true, vh: 664, laneTop: 60, below: 80, card: false, notice: false, running: true }),
+    ).toBe(516);
+    expect(
+      laneHeight({ phone: true, vh: 400, laneTop: 60, below: 200, card: false, notice: false, running: true }),
+    ).toBe(180);
   });
   it('collapses to 160 while a result card is open on a phone', () => {
     expect(phone(844, 301, 205, true)).toBe(160);
@@ -60,28 +79,39 @@ describe('lane height', () => {
     // vh, lane top, Start below the lane, card, notice -> height
     [800, 366, 72, false, false, 354],
     [800, 286, 72, false, false, 434],
-    [1000, 286, 72, false, false, 440],  // min(440, 640, 634)
+    [1000, 286, 72, false, false, 440], // min(440, 640, 634)
     [800, 366, 134, false, true, 292],
-    [800, 366, 300, true, false, 250],   // floor 250 with a card
-    [800, 500, 72, false, false, 300],   // floor 300
-    [600, 200, 72, false, false, 300],   // 100vh - 360 = 240, floored at 300
-  ])('desktop %i tall, lane at %i, %i below -> %i', (vh, top, below, card, notice, h) => expect(desk(vh, top, below, card, notice)).toBe(h));
+    [800, 366, 300, true, false, 250], // floor 250 with a card
+    [800, 500, 72, false, false, 300], // floor 300
+    [600, 200, 72, false, false, 300], // 100vh - 360 = 240, floored at 300
+  ])('desktop %i tall, lane at %i, %i below -> %i', (vh, top, below, card, notice, h) =>
+    expect(desk(vh, top, below, card, notice)).toBe(h),
+  );
 });
 
-describe('Next in today\'s plan on stage', () => {
+describe("Next in today's plan on stage", () => {
   it.each([
-    ['done', false, true], ['learned', false, true], ['practising', true, true],
-    ['practising', false, false], ['new', false, false], ['due', false, false], ['covered', false, false],
+    ['done', false, true],
+    ['learned', false, true],
+    ['practising', true, true],
+    ['practising', false, false],
+    ['new', false, false],
+    ['due', false, false],
+    ['covered', false, false],
   ] as const)('%s, placed %s -> %s', (state, placed, show) => expect(stepFinished(state, placed)).toBe(show));
 });
 
 describe('timing leniency', () => {
   it('scales the on-time window and never reaches the pairing reach', async () => {
     const { setLeniency, timingWindow } = await import('../src/piece/grade');
-    setLeniency('standard'); expect(timingWindow(60 / 33)).toBeCloseTo(0.13);
-    setLeniency('relaxed'); expect(timingWindow(60 / 33)).toBeCloseTo(0.208);
-    setLeniency('loose'); expect(timingWindow(60 / 33)).toBeCloseTo(0.286);
-    setLeniency('loose'); expect(timingWindow(0.25)).toBeLessThan(0.25 * 0.45);
+    setLeniency('standard');
+    expect(timingWindow(60 / 33)).toBeCloseTo(0.13);
+    setLeniency('relaxed');
+    expect(timingWindow(60 / 33)).toBeCloseTo(0.208);
+    setLeniency('loose');
+    expect(timingWindow(60 / 33)).toBeCloseTo(0.286);
+    setLeniency('loose');
+    expect(timingWindow(0.25)).toBeLessThan(0.25 * 0.45);
     setLeniency('relaxed');
   });
 });
