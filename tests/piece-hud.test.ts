@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import {
+  earText,
   ladderHtml as drawLadder,
   metricsHtml as drawMetrics,
   scoreHtml as drawScore,
@@ -462,4 +463,13 @@ it('uses no banned word in anything the ladder or the score card shows', () => {
   ])
     expect(toneErrors([html]), html).not.toEqual([]);
   expect(toneErrors(['<span class="badge points reset streak">9 BPM</span>'])).toEqual([]);
+});
+
+it('words the pitch ear plainly, like the guitar course, and keeps the fallback and errors as they are', () => {
+  expect(earText('not needed')).toBe('Pitch ear loads for plucked-note checks');
+  expect(earText('CREPE loading')).toBe('Pitch ear loading…');
+  expect(earText('CREPE ready (tiny)')).toBe('Pitch ear ready');
+  expect(earText('FALLBACK: YIN')).toBe('FALLBACK: YIN');
+  expect(earText('CREPE error: boom')).toBe('CREPE error: boom');
+  for (const s of ['not needed', 'CREPE loading', 'CREPE ready (tiny)']) expect(earText(s)).not.toMatch(/CREPE/);
 });

@@ -507,6 +507,381 @@ export function judgeKeys(ex: Exercise, bpm: number, presses: readonly KeyPress[
   });
   return { notes, wrong: new Set(presses.map((_, k) => k).filter((k) => !right.has(k))) };
 }
+
+/** What one KeyJudge.sync changed. */
+export interface KeyDiff {
+  /** Note keys whose live tier was set or changed (a key that went away is not listed), in judgeKeys' order. */
+  changed: string[];
+  /** Graded events (indices into the exercise's graded events) whose notes' live or settled reading may have changed. */
+  events: number[];
+  /** Presses (indices into the presses) that became wrong or stopped being wrong, new presses included. */
+  flipped: number[];
+}
+/**
+ * judgeKeys kept up to date one press at a time, so judging a press during a take costs the same at the end of a long
+ * take as at its start. After every sync, live (the reading judgeKeys gives), settled (judgeKeys with settled true) and
+ * wrong hold exactly what judgeKeys returns for the same presses; only the order the maps list their keys in may differ.
+ *
+ * How it stays exact. Presses are grouped as groupPresses does: a press at or after every earlier one either joins
+ * the last attack or starts a new one, and an attack's time (its first press) never changes. The matching is match's
+ * own table, one column per attack: a new attack adds a column and leaves every earlier column as it was, so the
+ * trace back from the new corner is the one match would take, and once it reaches a cell of the previous trace it
+ * follows that trace to the start; only the pairs on the new part can differ. A note's tier then depends on its own
+ * attack and on which attacks lie within reach of its beat, so only notes whose pair changed, whose attack gained a
+ * press, or that a new attack is within reach of, are judged again. A press earlier than one already judged (it
+ * would regroup the presses) rebuilds everything from scratch, with the same result.
+ */
+export class KeyJudge {
+  readonly live = new Map<string, KeyLive>();
+  readonly settled = new Map<string, KeyLive>();
+  readonly wrong = new Set<number>();
+  /** The exercise's graded events, as judgeKeys numbers them. */
+  readonly graded: { e: XEvent; index: number }[];
+  private readonly period: number;
+  private readonly reach: number;
+  private readonly together: number;
+  private readonly times: Float64Array;
+  /** Event beats in time order, for finding the events near a time. */
+  private readonly byTime: Int32Array;
+  private readonly sortedTimes: Float64Array;
+  /** For each event, the other events within reach of its beat (the first half of judgeKeys' open rule). */
+  private readonly near: Int32Array[];
+  /** Every graded note, numbered in judgeKeys' order (event, then note): its event, pitch and key. */
+  private readonly noteEvent: Int32Array;
+  private readonly noteMidi: Int32Array;
+  private readonly noteKey: string[];
+  private readonly firstNote: Int32Array;
+  /** The notes behind each key (more than one only when two events share a beat and a pitch), in judgeKeys' order. */
+  private readonly owners = new Map<string, number[]>();
+  /** Per note: whether its attack holds its key. Per event: its matched attack (-1: none) and its two readings. */
+  private readonly sounded: Uint8Array;
+  private readonly matched: Int32Array;
+  private readonly liveTier: (KeyLive | undefined)[];
+  private readonly settledTier: (KeyLive | undefined)[];
+  /** Attacks: time, pitches, presses and matched event (-1: none). */
+  private readonly attackT: number[] = [];
+  private readonly attackMidis: number[][] = [];
+  private readonly attackPresses: number[][] = [];
+  private readonly attackEvent: number[] = [];
+  /** match's table: the last cost column, every column's moves, and the rows the current trace covers in each column. */
+  private cost: Float64Array;
+  private spare: Float64Array;
+  private moves: Uint8Array[] = [];
+  private traceLo: number[] = [];
+  private traceHi: number[] = [];
+  private presses: KeyPress[] = [];
+  private latest = -Infinity;
+  /** Work collected by a sync, applied at its end. */
+  private dirtyEvents = new Set<number>();
+  private dirtyAttacks = new Set<number>();
+
+  constructor(
+    readonly exercise: Exercise,
+    readonly bpm: number,
+  ) {
+    const period = (this.period = 60 / bpm);
+    this.reach = keyReach(period);
+    this.together = keyTogether(period);
+    this.graded = exercise.events.map((e, index) => ({ e, index })).filter((x) => x.e.grade !== 'none');
+    const n = this.graded.length;
+    this.times = Float64Array.from(this.graded, (x) => x.e.beat * period);
+    this.byTime = Int32Array.from(this.graded.map((_, i) => i).sort((a, b) => this.times[a] - this.times[b]));
+    this.sortedTimes = Float64Array.from(this.byTime, (i) => this.times[i]);
+    this.near = this.graded.map((_, i) => {
+      const out: number[] = [];
+      for (let p = this.lowerTime(this.times[i] - 2 * this.reach); p < n; p++) {
+        const k = this.byTime[p];
+        if (this.sortedTimes[p] > this.times[i] + 2 * this.reach) break;
+        if (k !== i && Math.abs(this.times[k] - this.times[i]) <= this.reach) out.push(k);
+      }
+      return Int32Array.from(out);
+    });
+    const count = this.graded.reduce((s, x) => s + x.e.notes.length, 0);
+    this.noteEvent = new Int32Array(count);
+    this.noteMidi = new Int32Array(count);
+    this.noteKey = new Array<string>(count);
+    this.firstNote = new Int32Array(n + 1);
+    let o = 0;
+    this.graded.forEach(({ e }, i) => {
+      this.firstNote[i] = o;
+      for (const note of e.notes) {
+        const key = `${e.beat}:${note.midi}`;
+        this.noteEvent[o] = i;
+        this.noteMidi[o] = note.midi;
+        this.noteKey[o] = key;
+        const list = this.owners.get(key);
+        if (list) list.push(o);
+        else this.owners.set(key, [o]);
+        o++;
+      }
+    });
+    this.firstNote[n] = o;
+    this.sounded = new Uint8Array(count);
+    this.matched = new Int32Array(n).fill(-1);
+    this.liveTier = new Array(n).fill(undefined);
+    this.settledTier = new Array(n).fill(undefined);
+    this.cost = new Float64Array(n + 1);
+    this.spare = new Float64Array(n + 1);
+    this.reset();
+  }
+  /** Keys of the live reading in the order judgeKeys' map lists them (by the first note that holds each key). */
+  inOrder(keys: readonly string[]): string[] {
+    const first = (key: string) => this.owners.get(key)?.find((o) => this.sounded[o]) ?? Infinity;
+    return keys
+      .map((key) => ({ key, at: first(key) }))
+      .sort((a, b) => a.at - b.at)
+      .map((x) => x.key);
+  }
+  /** When press k went down (seconds from the first beat). */
+  pressAt(k: number): number {
+    return this.presses[k].t;
+  }
+  /**
+   * Judge the presses added since the last sync (presses is the whole list so far, as judgeKeys takes it, only ever
+   * appended to). Returns what changed.
+   */
+  sync(presses: readonly KeyPress[]): KeyDiff {
+    const from = this.presses.length;
+    if (presses.length < from || (from > 0 && presses[from - 1] !== this.presses[from - 1]))
+      throw new Error('KeyJudge.sync: presses may only be appended to');
+    let rebuild = false;
+    for (let k = from; k < presses.length; k++) {
+      this.presses.push(presses[k]);
+      // A press earlier than one already judged would regroup the presses: judge them all again below.
+      if (!rebuild && presses[k].t >= this.latest) this.add(k);
+      else rebuild = true;
+      this.latest = Math.max(this.latest, presses[k].t);
+    }
+    if (rebuild) this.rebuild();
+    return this.apply();
+  }
+
+  /** The first position in time order whose beat is at or after t. */
+  private lowerTime(t: number): number {
+    let lo = 0,
+      hi = this.sortedTimes.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.sortedTimes[mid] < t) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+  /** Back to no presses: match's first column (every event missing) and its trace. */
+  private reset(): void {
+    const n = this.graded.length,
+      first = new Uint8Array(n + 1);
+    for (let i = 1; i <= n; i++) {
+      this.cost[i] = i;
+      first[i] = 1;
+    }
+    this.cost[0] = 0;
+    this.moves = [first];
+    this.traceLo = [0];
+    this.traceHi = [n];
+    this.attackT.length = this.attackMidis.length = this.attackPresses.length = this.attackEvent.length = 0;
+    this.matched.fill(-1);
+  }
+  /** Everything again from the presses in time order (stable, as groupPresses sorts them). */
+  private rebuild(): void {
+    this.reset();
+    const order = this.presses.map((p, k) => ({ p, k })).sort((a, b) => a.p.t - b.p.t);
+    for (const { k } of order) this.add(k);
+    for (let i = 0; i < this.graded.length; i++) this.dirtyEvents.add(i);
+    for (let j = 0; j < this.attackT.length; j++) this.dirtyAttacks.add(j);
+  }
+  /** One press at or after every earlier one: it joins the last attack (groupPresses' rule) or starts a new one. */
+  private add(k: number): void {
+    const p = this.presses[k],
+      last = this.attackT.length - 1;
+    if (last >= 0 && p.t - this.attackT[last] <= this.together) {
+      if (!this.attackMidis[last].includes(p.midi)) this.attackMidis[last].push(p.midi);
+      this.attackPresses[last].push(k);
+      this.dirtyAttacks.add(last);
+      if (this.attackEvent[last] >= 0) this.dirtyEvents.add(this.attackEvent[last]);
+      return;
+    }
+    this.attackT.push(p.t);
+    this.attackMidis.push([p.midi]);
+    this.attackPresses.push([k]);
+    this.attackEvent.push(-1);
+    this.dirtyAttacks.add(last + 1);
+    this.extend();
+  }
+  /** match's table gains the new attack's column; the trace is redone from the new corner until it meets the old one. */
+  private extend(): void {
+    const n = this.graded.length,
+      reach = this.reach,
+      times = this.times,
+      j = this.attackT.length - 1,
+      c = j + 1,
+      at = this.attackT[j],
+      prev = this.cost,
+      cur = this.spare,
+      move = new Uint8Array(n + 1);
+    cur[0] = c;
+    move[0] = 2;
+    for (let i = 1; i <= n; i++) {
+      const error = Math.abs(at - times[i - 1]);
+      const matched = error <= reach ? prev[i - 1] + error / reach : Infinity,
+        missing = cur[i - 1] + 1,
+        extra = prev[i] + 1;
+      if (matched <= missing && matched <= extra) {
+        cur[i] = matched;
+        move[i] = 0;
+      } else if (missing <= extra) {
+        cur[i] = missing;
+        move[i] = 1;
+      } else {
+        cur[i] = extra;
+        move[i] = 2;
+      }
+    }
+    this.cost = cur;
+    this.spare = prev;
+    this.moves.push(move);
+    this.traceLo.push(n);
+    this.traceHi.push(n);
+    // match's trace back, from the new corner, until it reaches a cell of the previous trace.
+    const pairs: number[] = [];
+    let i = n,
+      b = c,
+      column = c,
+      top = n,
+      bottom = n;
+    while (i || b) {
+      if (b < c && this.traceLo[b] <= i && i <= this.traceHi[b]) break;
+      if (b !== column) {
+        this.traceLo[column] = bottom;
+        this.traceHi[column] = top;
+        column = b;
+        top = i;
+      }
+      bottom = i;
+      const m = this.moves[b][i];
+      if (i && b && m === 0) {
+        pairs.push(--i, --b);
+      } else if (i && (!b || m === 1)) i--;
+      else b--;
+    }
+    // (i, b) is where the traces meet. Above it in its column the new trace may have come down; below, the old one stays.
+    if (b === column) this.traceHi[b] = top;
+    else {
+      this.traceLo[column] = bottom;
+      this.traceHi[column] = top;
+      this.traceHi[b] = i;
+    }
+    // The old trace's pairs from that column on are replaced by the new ones.
+    for (let g = b; g < j; g++) {
+      const e = this.attackEvent[g];
+      if (e < 0) continue;
+      this.matched[e] = -1;
+      this.attackEvent[g] = -1;
+      this.dirtyEvents.add(e);
+      this.dirtyAttacks.add(g);
+    }
+    for (let q = 0; q < pairs.length; q += 2) {
+      const e = pairs[q],
+        g = pairs[q + 1];
+      this.matched[e] = g;
+      this.attackEvent[g] = e;
+      this.dirtyEvents.add(e);
+      this.dirtyAttacks.add(g);
+    }
+    // The new attack may reopen any match within reach of it (the second half of judgeKeys' open rule).
+    for (let p = this.lowerTime(at - 2 * reach); p < n; p++) {
+      if (this.sortedTimes[p] > at + 2 * reach) break;
+      if (Math.abs(at - this.sortedTimes[p]) <= reach) this.dirtyEvents.add(this.byTime[p]);
+    }
+  }
+  /** judgeKeys' reading of event i: its tier, live and settled, and which of its keys its attack holds. */
+  private judge(i: number): void {
+    const j = this.matched[i];
+    let live: KeyLive | undefined, settled: KeyLive | undefined;
+    if (j >= 0) {
+      const at = this.attackT[j],
+        reach = this.reach,
+        t = this.times[i];
+      const judged = keyTier(at - t, this.period);
+      let open = false;
+      for (const k of this.near[i])
+        if (Math.abs(at - this.times[k]) <= reach) {
+          open = true;
+          break;
+        }
+      if (!open) {
+        // Another attack within reach of this beat. Attack times only grow, so they lie in one run of indices.
+        let lo = 0,
+          hi = this.attackT.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (this.attackT[mid] - t < -reach) lo = mid + 1;
+          else hi = mid;
+        }
+        for (let k = lo; k < this.attackT.length && this.attackT[k] - t <= reach; k++)
+          if (k !== j) {
+            open = true;
+            break;
+          }
+      }
+      settled = judged;
+      live = open ? 'played' : judged;
+    }
+    this.liveTier[i] = live;
+    this.settledTier[i] = settled;
+    for (let o = this.firstNote[i]; o < this.firstNote[i + 1]; o++)
+      this.sounded[o] = j >= 0 && this.attackMidis[j].includes(this.noteMidi[o]) ? 1 : 0;
+  }
+  /** Apply the collected work: judge the touched events and attacks again and bring the maps and the wrong set up to date. */
+  private apply(): KeyDiff {
+    const keys = new Set<string>(),
+      flipped: number[] = [];
+    for (const i of this.dirtyEvents) {
+      this.judge(i);
+      for (let o = this.firstNote[i]; o < this.firstNote[i + 1]; o++) keys.add(this.noteKey[o]);
+    }
+    // A press is right when its attack is matched to an event that has its pitch (judgeKeys' right set).
+    for (const j of this.dirtyAttacks) {
+      const i = this.attackEvent[j],
+        notes = i >= 0 ? this.graded[i].e.notes : undefined;
+      for (const k of this.attackPresses[j]) {
+        const midi = this.presses[k].midi,
+          wrong = !notes?.some((n) => n.midi === midi);
+        if (wrong === this.wrong.has(k)) continue;
+        if (wrong) this.wrong.add(k);
+        else this.wrong.delete(k);
+        flipped.push(k);
+      }
+    }
+    this.dirtyEvents.clear();
+    this.dirtyAttacks.clear();
+    const changed: { key: string; at: number }[] = [],
+      events = new Set<number>();
+    for (const key of keys) {
+      let live: KeyLive | undefined,
+        settled: KeyLive | undefined,
+        first = -1;
+      // judgeKeys sets a key once per note that holds it, in its order: the last one decides, the first places it.
+      for (const o of this.owners.get(key)!)
+        if (this.sounded[o]) {
+          live = this.liveTier[this.noteEvent[o]];
+          settled = this.settledTier[this.noteEvent[o]];
+          if (first < 0) first = o;
+        }
+      const was = this.live.get(key),
+        wasSettled = this.settled.get(key);
+      if (was === live && wasSettled === settled) continue;
+      if (live === undefined) this.live.delete(key);
+      else this.live.set(key, live);
+      if (settled === undefined) this.settled.delete(key);
+      else this.settled.set(key, settled);
+      if (live !== undefined && live !== was) changed.push({ key, at: first });
+      for (const o of this.owners.get(key)!) events.add(this.noteEvent[o]);
+    }
+    changed.sort((a, b) => a.at - b.at);
+    return { changed: changed.map((x) => x.key), events: [...events], flipped };
+  }
+}
 /**
  * Computer keys or MIDI: pitches and press times are exact, so every graded note gets a definite verdict.
  * t is seconds from the first beat. Presses close together form one attack, as a chord does.

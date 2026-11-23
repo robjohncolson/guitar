@@ -62,7 +62,10 @@ export interface ScoreView {
   pitch: number | null;
   keys: boolean;
   estimate: boolean;
-  /** Keys and MIDI takes: the longest run of right, on-time attacks (keyStats). Shown from 5 up. */
+  /**
+   * Keys and MIDI takes: the longest run of right, on-time attacks (game.ts takeRun, the count the live counter
+   * showed). Shown from 5 up.
+   */
   run?: number;
 }
 
@@ -131,4 +134,19 @@ const SEAL_DUE =
 export function starsHtml(s: StepStars): string {
   const label = `${s.stars} of 3 stars${s.learned ? ', learned' : ''}${s.due ? ', review due' : ''}`;
   return `<span class="stars step-stars" role="img" aria-label="${label}">${starSpans(s.stars)}${s.learned ? (s.due ? SEAL_DUE : SEAL) : ''}</span>`;
+}
+
+/**
+ * The pitch ear's status line in plain words, as the guitar course words it. model is the Ear's own status (read as
+ * is by audio.ts and the smoke script) or 'not needed' before it loads; the labelled fallback and any error keep
+ * their own wording.
+ */
+export function earText(model: string): string {
+  return model === 'not needed'
+    ? 'Pitch ear loads for plucked-note checks'
+    : model === 'CREPE loading'
+      ? 'Pitch ear loading…'
+      : model.startsWith('CREPE ready')
+        ? 'Pitch ear ready'
+        : model;
 }

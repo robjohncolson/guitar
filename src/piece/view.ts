@@ -491,13 +491,20 @@ export const laneAnimating = () =>
 let runMemo: RunMemo = { last: 0 },
   runMoving = false;
 /**
- * The run counter: a small ink label at the top left of the lane (runPlace), where the notes are still beats away from
- * the hit line, on a dark backing so the light never washes it out. Returns its box so the WebGL light keeps off it.
+ * The run counter: a small ink label at the top left of the lane (runPlace), past the gutter where the bar labels
+ * scroll (left), where the notes are still beats away from the hit line, on a dark backing so the light never washes
+ * it out. Returns its box so the WebGL light keeps off it.
  */
-function drawRun(p: CanvasRenderingContext2D, show: RunShow, small: boolean, avoid: readonly Rect[]): Rect {
+function drawRun(
+  p: CanvasRenderingContext2D,
+  show: RunShow,
+  small: boolean,
+  avoid: readonly Rect[],
+  left: number,
+): Rect {
   const size = (small ? 14 : 16) * show.scale;
   p.font = `600 ${size}px Segoe UI`;
-  const { x, y, w: tw, h: th } = runPlace(p.measureText(show.text).width + 20, size + 12, avoid);
+  const { x, y, w: tw, h: th } = runPlace(p.measureText(show.text).width + 20, size + 12, avoid, left);
   p.globalAlpha = show.alpha;
   p.fillStyle = 'rgba(12,16,14,.62)';
   p.beginPath();
@@ -631,9 +638,10 @@ export function drawKeys(
       p.lineTo(x, hitY);
       p.stroke();
     }
-  // Bar lines and chord names.
+  // Bar lines and chord names. The "bar N" labels scroll down a gutter at the left; the run counter starts past it.
   p.font = `${small ? 10 : 11}px Segoe UI`;
   p.textBaseline = 'middle';
+  const gutter = ex.bars.length ? 6 + p.measureText(`bar ${Math.max(...ex.bars.map((b) => b.number))}`).width + 8 : 8;
   for (const bar of ex.bars) {
     const y = Math.round(yOf(bar.beat)) + 0.5;
     if (y < 8 || y > hitY) continue;
@@ -949,10 +957,13 @@ export function drawKeys(
   runMoving = run.moving && !look.quiet;
   const runBox =
     run.show && !look.quiet
-      ? drawRun(p, run.show, small, [
-          ...(live?.message ? [pillBox(p, live.message, w, small)] : []),
-          ...(momentBox ? [momentBox] : []),
-        ])
+      ? drawRun(
+          p,
+          run.show,
+          small,
+          [...(live?.message ? [pillBox(p, live.message, w, small)] : []), ...(momentBox ? [momentBox] : [])],
+          gutter,
+        )
       : undefined;
   if (gl) {
     if (live?.message) frame.keepOut.push(pillBox(p, live.message, w, small));

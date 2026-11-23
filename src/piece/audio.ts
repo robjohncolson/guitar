@@ -9,9 +9,9 @@ import { analyzeTake } from '../trainer/analyze';
 import {
   gradeAttacks,
   gradeKeys,
-  judgeKeys,
+  KeyJudge,
   LENIENCY,
-  type KeyJudgement,
+  type KeyDiff,
   type KeyPress,
   type Leniency,
   type PieceGrade,
@@ -85,6 +85,8 @@ export class PieceAudio {
   readonly held = new Set<number>();
   private releases = new Map<number, () => void>();
   private presses?: KeyPress[];
+  /** During a keys take: its presses judged as they come, by the grade's own rules. */
+  private keyJudge?: KeyJudge;
   /** The keys take being replayed, while it plays. */
   replaying?: PieceTake;
   onTake: (take: PieceTake) => void = () => {};
@@ -138,15 +140,13 @@ export class PieceAudio {
   get laneNow(): number {
     return this.clock.at(this.context);
   }
-  /** During a keys take: the presses so far, judged by the same rules as the final grade. */
-  judge(): KeyJudgement | undefined {
-    return this.presses && this.current ? judgeKeys(this.current.exercise, this.current.bpm, this.presses) : undefined;
-  }
-  /** During a keys take: what is played, at what tempo, and the presses so far (read only), for the run counter. */
-  get keyTake(): { exercise: Exercise; bpm: number; presses: readonly KeyPress[] } | undefined {
-    return this.presses && this.current
-      ? { exercise: this.current.exercise, bpm: this.current.bpm, presses: this.presses }
-      : undefined;
+  /**
+   * During a keys take: the presses so far, judged by the same rules as the final grade (the judge's readings equal
+   * judgeKeys'), and what the presses since the last call changed.
+   */
+  judge(): { judge: KeyJudge; diff: KeyDiff } | undefined {
+    if (!this.presses || !this.current || !this.keyJudge) return undefined;
+    return { judge: this.keyJudge, diff: this.keyJudge.sync(this.presses) };
   }
   get pressCount(): number {
     return this.presses?.length ?? 0;
@@ -176,6 +176,7 @@ export class PieceAudio {
     this.locked = undefined;
     this.releases.clear();
     this.presses = undefined;
+    this.keyJudge = undefined;
     this.replaying = undefined;
     for (const pip of this.pips)
       try {
@@ -338,8 +339,10 @@ export class PieceAudio {
       this.lastTick = this.now;
       this.interrupted = false;
       this.why = '';
-      if (keys) this.presses = [];
-      else if (kind !== 'demo') {
+      if (keys) {
+        this.presses = [];
+        this.keyJudge = new KeyJudge(exercise, bpm);
+      } else if (kind !== 'demo') {
         const plan = this.plan,
           rate = this.context.sampleRate,
           from = plan.playAt - (kind === 'calibration' ? 0.25 : 0.5),

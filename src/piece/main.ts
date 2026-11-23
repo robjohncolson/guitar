@@ -79,14 +79,13 @@ import {
   type NextLine,
   type TakeFacts,
 } from './loop';
-import { ladderHtml, metricsHtml, scoreHtml, starsHtml } from './hud';
+import { earText, ladderHtml, metricsHtml, scoreHtml, starsHtml } from './hud';
 import {
   countUp,
   keyWin,
-  liveRun,
+  LiveRun,
   pieceStars,
   revealStars,
-  runEvidence,
   starChip,
   starCount,
   starMoment,
@@ -94,7 +93,6 @@ import {
   starsFor,
   starTitle,
   takeRun,
-  type RunEvidence,
 } from './game';
 import { audioNotice, notice as noticeFor, type Notice, type NoticeDetail, type NoticeSource } from './notice';
 import { keyAllowed, laneHeight, overlayOpen, statusChip, stepFinished, todayChip } from './stage';
@@ -405,19 +403,20 @@ const active = () => Boolean(wait || audio.plan || audio.busy || audio.playing |
 let wait: WaitRun | undefined;
 const wrong = new Map<number, number>();
 /**
- * A timed keys take, live: each played note's judgement (the same rules as the grade) and on-time notes in a row (streak,
- * which warms the hit line). runFrom: what the visible run counter is read from (game.ts liveRun counts attacks, like
- * the card's "Longest run").
+ * A timed keys take, live: each played note's judgement (the same rules as the grade; the take's KeyJudge keeps it up
+ * to date) and on-time notes in a row (streak, which warms the hit line). runFrom: what the visible run counter is
+ * read from (game.ts LiveRun gives liveRun's count of attacks, like the card's "Longest run").
  */
-let tiers = new Map<string, KeyLive>(),
+let tiers: ReadonlyMap<string, KeyLive> = new Map(),
   streak = 0,
-  runFrom: { ex: Exercise; period: number; ev: RunEvidence } | undefined;
+  runFrom: LiveRun | undefined;
 const lively = () => !inputPrefs.calm && !reduced.matches;
 let lastFrame = 0;
 /**
  * Judge a key press as it happens: in wait mode it moves the lane on; in a timed take the presses so far are judged by
- * the grade's own rules (judgeKeys), so the lane never says more than the result will. Only a confirmed on-time key
- * earns a flash; early or late shows calmly; a key that matches nothing tints as wrong.
+ * the grade's own rules (judgeKeys, kept up to date press by press by KeyJudge), so the lane never says more than the
+ * result will. Only a confirmed on-time key earns a flash; early or late shows calmly; a key that matches nothing
+ * tints as wrong.
  */
 function judgePress(midi: number, recorded: boolean): void {
   if (wait) {
@@ -428,18 +427,25 @@ function judgePress(midi: number, recorded: boolean): void {
   if (!plan || plan.kind !== 'practice' || audio.input !== 'keys' || !recorded) return;
   const judged = audio.judge();
   if (!judged) return;
-  if (judged.wrong.has(audio.pressCount - 1)) {
+  const { judge, diff } = judged;
+  if (judge.wrong.has(audio.pressCount - 1)) {
     wrong.set(midi, performance.now());
     streak = 0;
   }
-  for (const [key, tier] of judged.notes) {
-    if (tiers.get(key) === tier || Number(key.split(':')[1]) !== midi) continue;
+  // The notes whose tier this press set or changed, in the judgement's order; after a reset of the lane, all of them.
+  const changed =
+    tiers === judge.live
+      ? diff.changed
+      : judge.inOrder([...judge.live.keys()].filter((key) => tiers.get(key) !== judge.live.get(key)));
+  for (const key of changed) {
+    if (Number(key.split(':')[1]) !== midi) continue;
+    const tier = judge.live.get(key)!;
     keyHit(midi, tier, handColour(exercise, midi));
     streak = tier === 'perfect' || tier === 'good' ? streak + 1 : tier === 'played' ? streak : 0;
   }
-  tiers = judged.notes;
-  const k = audio.keyTake;
-  runFrom = k ? { ex: k.exercise, period: 60 / k.bpm, ev: runEvidence(k.exercise, k.bpm, k.presses) } : undefined;
+  tiers = judge.live;
+  if (runFrom?.judge === judge) runFrom.update(diff);
+  else runFrom = new LiveRun(judge);
 }
 function resetLive(): void {
   tiers = new Map();
@@ -576,6 +582,15 @@ function paintAbout(): void {
     <h3>Play it on guitar</h3><p>${pieceArr.review.map((line) => escape(line)).join(' ')}</p>
     <h3>Guitar accompaniment</h3><p>${arrangement.capo ? `Capo at fret ${arrangement.capo}. ` : 'No capo. '}Bass note on beat 1, then index, middle and ring fingers together, letting the chord ring like the piano's left hand.${arrangement.review.length ? ` Simplified: ${escape(arrangement.review.join(' '))}` : ''}</p><div class="unit-shapes">${arrangement.shapes.map((s) => chordBox(s, arrangement.capo)).join('')}</div>`;
 }
+/**
+ * The pitch ear starts loading when a guitar step that checks pitch is opened, so its first take need not wait. The
+ * step the page opens on waits for the first paint and an idle moment (as the guitar course does): fetching and
+ * starting the model would otherwise slow the page as it opens.
+ */
+let painted = false;
+function prepareEar(): void {
+  if (painted) audio.prepareFor(exercise);
+}
 const stepExercise = () =>
   instrument === 'piano'
     ? exerciseFor(score, unit)
@@ -603,7 +618,7 @@ function selectUnit(id: string): void {
   el<HTMLDetailsElement>('piece-about-step').open = false;
   unit = units().find((u) => u.id === id) ?? units()[0];
   exercise = stepExercise();
-  audio.prepareFor(exercise);
+  prepareEar();
   progress.selected.unit = unit.id;
   progress.selected.instrument = instrument;
   const stages = stagesNow();
@@ -2440,9 +2455,7 @@ function paint(): void {
   text(
     'piece-model',
     instrument === 'guitar' && exercise.events.some((e) => e.grade === 'pitch')
-      ? audio.model === 'not needed'
-        ? 'CREPE loads for plucked-note checks'
-        : audio.model
+      ? earText(audio.model)
       : 'Piano listening: on this device',
   );
   text(
@@ -2788,10 +2801,35 @@ function live(): Parameters<typeof drawKeys>[8] {
     auto: scoring ? autoKeys : undefined,
     wrong,
     streak: scoring ? streak : 0,
-    run: scoring && runFrom && plan ? liveRun(runFrom.ex, runFrom.period, runFrom.ev, audio.now - plan.playAt).run : 0,
+    run: scoring && runFrom && plan ? runFrom.now(audio.now - plan.playAt).run : 0,
   };
 }
 paintLocal();
 loadPack(progress.selected.piece || packs()[0].id);
 pressCourse();
 paint();
+// The opening step's pitch ear, if it needs one, loads once the page has painted and gone idle, and not while
+// something plays (the model's warm-up can hold the main thread for a moment). Steps opened after the first paint
+// load it at once (prepareEar).
+const whenIdle = (run: () => void) =>
+  'requestIdleCallback' in window ? requestIdleCallback(run, { timeout: 3000 }) : setTimeout(run, 500);
+function prefetchEar(): void {
+  if (active()) setTimeout(() => whenIdle(prefetchEar), 2000);
+  else audio.prepareFor(exercise);
+}
+const afterPaint = () => {
+  if (!painted) whenIdle(prefetchEar);
+  painted = true;
+};
+try {
+  // A paint entry arrives only after the first contentful frame is on screen.
+  new PerformanceObserver((list, observer) => {
+    if (list.getEntriesByName('first-contentful-paint').length) {
+      observer.disconnect();
+      afterPaint();
+    }
+  }).observe({ type: 'paint', buffered: true });
+} catch {
+  /* No paint timing: the timer below starts it. */
+}
+setTimeout(afterPaint, 4000);

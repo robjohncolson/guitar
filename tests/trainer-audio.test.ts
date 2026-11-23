@@ -215,3 +215,22 @@ it('Stop during recorded-note analysis never publishes an abandoned take', async
   expect(audio.busy).toBe(false);
   expect(audio.plan).toBeUndefined();
 });
+it('Stop during the one-at-a-time recheck (batch shape not compiled yet) never publishes an abandoned take', async () => {
+  inference.batchReady = false;
+  let resolve!: (pitch: { hz: number; confidence: number }) => void;
+  inference.infer.mockImplementation(() => new Promise((r) => (resolve = r)));
+  const audio = new TrainerAudio(),
+    onTake = vi.fn();
+  await audio.loadEar();
+  audio.onTake = onTake;
+  const completed = recordedTake(audio);
+  await vi.waitFor(() => expect(resolve).toBeDefined());
+  audio.stop();
+  resolve({ hz: 110, confidence: 0.9 });
+  await completed;
+  expect(inference.inferMany).not.toHaveBeenCalled();
+  expect(onTake).not.toHaveBeenCalled();
+  expect(audio.take).toBeUndefined();
+  expect(audio.busy).toBe(false);
+  expect(audio.plan).toBeUndefined();
+});

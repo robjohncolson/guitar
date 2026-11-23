@@ -13,7 +13,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { attackRise, eventContext, fft, pianoOnsets, verifyEvent, type PianoOnset } from '../src/piece/listen';
+import { attackRise, eventContext, fft, pianoOnsets, RULES, verifyEvent, type PianoOnset } from '../src/piece/listen';
 import { gradePiano, LENIENCY, setLeniency, type TakeAudio } from '../src/piece/grade';
 import { fromBars, type Exercise } from '../src/piece/exercise';
 import { compile } from '../src/piece/notation';
@@ -214,6 +214,22 @@ it('piano listening reproduces the golden onsets and grades exactly', { timeout:
   for (const key of Object.keys(golden)) expect(actual[key], key).toEqual(golden[key]);
 });
 
+it('the piano listening thresholds are still the frozen ones', () => {
+  expect(
+    RULES,
+    'RULES in src/piece/listen.ts changed. They are frozen by the piano listening rule in AGENTS.md ("Thresholds were set on MAESTRO dev excerpts and frozen; re-measure on held-out real recordings before changing them, and report false confirmation and false contradiction rates"). Change this literal only together with that measurement.',
+  ).toEqual({
+    snr: 12,
+    rise: 5,
+    absentSnr: 6,
+    decay: -1,
+    decayGap: 0.5,
+    attack: 13,
+    noAttack: 6,
+    single: { snr: 20, rise: 8 },
+  });
+});
+
 /** The fft listen.ts used before its speed-up, kept verbatim as the reference. */
 const referenceTwiddles = new Map<number, { cos: Float64Array; sin: Float64Array }>();
 function referenceFft(re: Float64Array, im: Float64Array): void {
@@ -259,7 +275,7 @@ function referenceFft(re: Float64Array, im: Float64Array): void {
   }
 }
 
-it('fft is bit-identical to the reference fft for sizes 256 to 32768', () => {
+it('fft is bit-identical to the reference fft for sizes 256 to 65536', () => {
   let seed = 12345;
   const random = () => {
     seed = (Math.imul(seed, 1664525) + 1013904223) | 0;
@@ -267,7 +283,7 @@ it('fft is bit-identical to the reference fft for sizes 256 to 32768', () => {
   };
   /** Compares the raw 64-bit patterns, so even -0 against +0 would count as a difference. */
   const bits = (x: Float64Array) => Array.from(new BigUint64Array(x.buffer, x.byteOffset, x.length));
-  for (let n = 256; n <= 32768; n *= 2) {
+  for (let n = 256; n <= 65536; n *= 2) {
     const inputs: [string, Float64Array, Float64Array][] = [
       ['random', Float64Array.from({ length: n }, random), Float64Array.from({ length: n }, random)],
       [

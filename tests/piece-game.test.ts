@@ -341,6 +341,27 @@ describe('run counter and run lines', () => {
     // A pill that leaves the corner free does not move it.
     expect(runPlace(90, 26, [{ x: 150, y: 10, w: 90, h: 28 }]).y).toBe(10);
   });
+
+  it('starts past the bar-label gutter, so a "bar N" label scrolling down the left edge never passes under it', () => {
+    const hits = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    // view.ts draws "bar N" at x 6, centred 7 px above its bar line; the gutter ends 8 px past the widest label.
+    for (const labelWidth of [30, 38, 46]) {
+      const gutter = 6 + labelWidth + 8,
+        labels = Array.from({ length: 120 }, (_, k): Box => ({ x: 6, y: k - 14, w: labelWidth, h: 14 }));
+      // Without the gutter the corner is under the labels' path.
+      expect(labels.some((l) => hits(runPlace(110, 26, []), l))).toBe(true);
+      for (const w of [280, 390, 1100]) {
+        const pill: Box = { x: w / 2 - 130, y: 10, w: 260, h: 28 },
+          moment: Box = { x: 8, y: 40, w: w - 16, h: 60 };
+        for (const avoid of [[], [pill], [moment], [pill, moment], [moment, pill]]) {
+          const box = runPlace(110, 26, avoid, gutter);
+          expect(box.x).toBe(gutter);
+          for (const l of labels) expect(hits(box, l)).toBe(false);
+          for (const a of avoid) expect(hits(box, a)).toBe(false);
+        }
+      }
+    }
+  });
 });
 
 /** A line of attacks (single notes or chords), one every beatStep beats. */

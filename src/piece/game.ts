@@ -1,6 +1,6 @@
 import type { Unit } from './curriculum';
 import type { Exercise } from './exercise';
-import { judgeKeys, keyReach, type KeyLive, type KeyPress } from './grade';
+import { judgeKeys, keyReach, type KeyDiff, type KeyJudge, type KeyLive, type KeyPress } from './grade';
 import { floorPct } from './pct';
 import { CLEAN, ROOM, type UnitProgress } from './progress';
 
@@ -167,6 +167,134 @@ export function liveRun(ex: Exercise, period: number, ev: RunEvidence, t: number
   }
   return { run, best };
 }
+/**
+ * liveRun during a take, cheaply: it reads the KeyJudge's own readings (kept equal to runEvidence's) and gives
+ * exactly what liveRun gives for them at each time t. liveRun walks the attacks in time order until the first one still
+ * in play; this keeps the state of that walk before each attack and walks again only from the earliest attack whose
+ * input changed: a press that changed an attack's reading or a wrong key, or a wrong key whose time the frame has
+ * just passed. Each frame then costs a few lookups, however long the take.
+ */
+export class LiveRun {
+  /** The graded events in liveRun's order (by time, ties in exercise order): time, note keys, and back. */
+  private readonly at: Float64Array;
+  private readonly keys: string[][];
+  private readonly rank: Int32Array;
+  private readonly close: number;
+  /** Times of the wrong presses, ascending. */
+  private readonly wrongAt: number[] = [];
+  /** The walk's run and best before attack p (after attack p - 1), valid for p up to valid. */
+  private readonly runBefore: Int32Array;
+  private readonly bestBefore: Int32Array;
+  private valid = 0;
+  private last = NaN;
+
+  constructor(readonly judge: KeyJudge) {
+    const period = 60 / judge.bpm;
+    this.close = 2 * keyReach(period);
+    const events = judge.graded.map(({ e }, i) => ({ at: e.beat * period, e, i })).sort((a, b) => a.at - b.at);
+    this.at = Float64Array.from(events, (x) => x.at);
+    this.keys = events.map(({ e }) => e.notes.map((n) => `${e.beat}:${n.midi}`));
+    this.rank = new Int32Array(events.length);
+    events.forEach((x, p) => (this.rank[x.i] = p));
+    this.runBefore = new Int32Array(events.length + 1);
+    this.bestBefore = new Int32Array(events.length + 1);
+    for (const k of judge.wrong) this.wrongAt.push(judge.pressAt(k));
+    this.wrongAt.sort((a, b) => a - b);
+  }
+  /** Take in what a KeyJudge.sync changed. */
+  update(diff: KeyDiff): void {
+    for (const i of diff.events) this.valid = Math.min(this.valid, this.rank[i]);
+    for (const k of diff.flipped) {
+      const t = this.judge.pressAt(k);
+      if (this.judge.wrong.has(k)) this.wrongAt.splice(lowerBound(this.wrongAt, t), 0, t);
+      else this.wrongAt.splice(lowerBound(this.wrongAt, t), 1);
+      this.valid = Math.min(this.valid, this.segment(t));
+    }
+  }
+  /** liveRun(ex, period, the judge's readings, t). */
+  now(t: number): { run: number; best: number } {
+    const at = this.at,
+      n = at.length;
+    // Time going back (or the first frame) walks from the start. Going forward, an attack the walk already decided
+    // keeps its decision when its two match reaches pass: it was decided on time or early or late, and those live
+    // readings are the settled ones. The attack still in play is read again on every frame anyway.
+    if (!(t >= this.last)) this.valid = 0;
+    else if (t !== this.last) {
+      // A wrong key at a time passed since the last frame now counts.
+      const w = upperBound(this.wrongAt, this.last);
+      if (w < this.wrongAt.length && this.wrongAt[w] <= t)
+        this.valid = Math.min(this.valid, this.segment(this.wrongAt[w]));
+    }
+    this.last = t;
+    const live = this.judge.live,
+      settled = this.judge.settled;
+    let p = this.valid,
+      run = this.runBefore[p],
+      best = this.bestBefore[p];
+    for (; p < n; p++) {
+      // Wrong keys between the previous attack and this one end the run.
+      if (this.wrongIn(p ? at[p - 1] : -Infinity, at[p], t)) run = 0;
+      const closed = t > at[p] + this.close,
+        reading = closed ? settled : live;
+      let all = true,
+        off = false;
+      for (const key of this.keys[p]) {
+        const tier = reading.get(key);
+        if (!onTime(tier)) all = false;
+        if (tier === 'early' || tier === 'late') off = true;
+      }
+      if (all) best = Math.max(best, ++run);
+      else if (closed || off) run = 0;
+      else break;
+      this.runBefore[p + 1] = run;
+      this.bestBefore[p + 1] = best;
+    }
+    this.valid = p;
+    // Past the attack still in play (or the last one), only wrong keys matter: they end the run.
+    return {
+      run: this.wrongIn(p ? at[p - 1] : -Infinity, Infinity, t) ? 0 : this.runBefore[p],
+      best: this.bestBefore[p],
+    };
+  }
+  /** Whether a wrong key went down in [from, to) and by t. */
+  private wrongIn(from: number, to: number, t: number): boolean {
+    const w = lowerBound(this.wrongAt, from);
+    return w < this.wrongAt.length && this.wrongAt[w] < to && this.wrongAt[w] <= t;
+  }
+  /** A wrong key at time w sits after every attack at or before w: the walk state before the next attack depends on it. */
+  private segment(w: number): number {
+    let lo = 0,
+      hi = this.at.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.at[mid] <= w) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+}
+/** The first index whose value is at or after x, in an ascending list. */
+function lowerBound(list: readonly number[], x: number): number {
+  let lo = 0,
+    hi = list.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (list[mid] < x) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+/** The first index whose value is after x, in an ascending list. */
+function upperBound(list: readonly number[], x: number): number {
+  let lo = 0,
+    hi = list.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (list[mid] <= x) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
 /** A finished keys take's longest run, for the card: the same count the live counter showed, at the end of the take. */
 export const takeRun = (ex: Exercise, bpm: number, presses: readonly KeyPress[]) =>
   liveRun(ex, 60 / bpm, runEvidence(ex, bpm, presses), Infinity).best;
@@ -181,10 +309,12 @@ export interface Box {
 const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 /**
  * Where the run counter sits: the top left of the lane, where notes are still beats away from the hit line, so it never
- * covers a note about to land. If a text box (the message pill, a milestone moment) is there, it moves down below it.
+ * covers a note about to land. left: its left edge, past the gutter where the "bar N" labels scroll by, so a passing
+ * label never slips under it (8 when there is no gutter). If a text box (the message pill, a milestone moment) is
+ * there, it moves down below it.
  */
-export function runPlace(w: number, h: number, avoid: readonly Box[]): Box {
-  const box = { x: 8, y: 10, w, h };
+export function runPlace(w: number, h: number, avoid: readonly Box[], left = 8): Box {
+  const box = { x: left, y: 10, w, h };
   for (let i = 0; i <= avoid.length; i++) {
     const hit = avoid.find((a) => overlaps(box, a));
     if (!hit) break;
