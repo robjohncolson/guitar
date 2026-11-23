@@ -355,13 +355,23 @@ try {
   await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'z', code: 'KeyZ', windowsVirtualKeyCode: 90 });
   phase('keys typing', { sounds: after.starts - before.starts });
 
-  // No console errors, no exceptions, no network requests from the panel (the browser fetches the tab icon itself).
+  // No console errors, no exceptions, no network requests from the panel (the browser fetches this origin's tab icon
+  // itself). What this cannot see: it reads only the page's own network events, so a request made from a web worker,
+  // or a WebSocket connection, would not show up here.
+  // The page's own piano recordings are not the panel's: the first gesture starts loading them (sampler.ts, through
+  // audio.prepare), and a played note fetches its own recording when it is not loaded yet, so on a busy machine they can
+  // arrive after the quiet wait above. Only those exact files on this origin are left out: any other address, path or
+  // query (anything that could carry pasted text) still fails the check.
   const errors = await evaluate('__smoke.errors');
   assert.deepEqual(errors, []);
   assert.deepEqual(browser.errors, []);
+  const ownPiano = new RegExp(
+    `^${new URL('piano/', `${origin}/`).href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:manifest\\.json|[A-G]b?\\d\\.mp3)$`,
+  );
+  const ownIcon = new URL('favicon.svg', `${origin}/`).href;
   const requests = browser.requests
     .slice(quietRequests)
-    .filter((u) => !/^(blob|data):/.test(u) && !/\/favicon\.svg$/.test(u));
+    .filter((u) => !/^(blob|data):/.test(u) && u !== ownIcon && !ownPiano.test(u));
   assert.deepEqual(requests, [], 'network requests from the panel');
   console.log(JSON.stringify({ phase: 'complete', width, height, phases: phases.length, errors: 0 }));
 } catch (error) {
