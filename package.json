@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@tensorflow/tfjs": "4.22.0",
+    "pdfjs-dist": "6.5.438",
     "pg": "8.23.1"
   },
   "devDependencies": {

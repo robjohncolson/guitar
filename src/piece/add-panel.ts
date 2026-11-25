@@ -30,7 +30,9 @@ import { mountPieceAccount } from '../account/pieces';
 /**
  * "Add your own piece": instructions to carry to any AI chat, the answer brought back, a check that says plainly what is
  * wrong, a comparison of two readings, and the owner's pieces, each a draft until he confirms it by ear. No network
- * request is made here and everything that came from an AI is treated as untrusted text (see add-view.ts).
+ * request is made here and everything that came from an AI is treated as untrusted text (see add-view.ts). The one
+ * exception is the reader (reader-view.ts, loaded only when its part is opened): when the owner presses Read, it sends
+ * the pictures he chose to the service he named, and its answer comes back through this panel's own Check and Compare.
  */
 export interface AddPanelHooks {
   /** Open one of his pieces after adding it. */
@@ -54,15 +56,17 @@ const fileInput = (id: string) =>
 export function addPanelMarkup(accounts: boolean): string {
   return `<div class="add-panel">
     <p id="add-announce" class="sr-only" role="status" aria-atomic="true"></p>
-    <p class="add-privacy">Nothing here is sent anywhere. You carry the instructions to your AI and bring its answer back; your pieces stay in this browser${accounts ? ' unless you choose <em>Save to my account</em>' : ''}.</p>
+    <p class="add-privacy">Nothing here is sent anywhere unless you use <em>Let an AI read it for you</em>, which sends only the pictures you choose, with your own key, to the AI service you name. Otherwise you carry the instructions to your AI and bring its answer back. Your pieces stay in this browser${accounts ? ' unless you choose <em>Save to my account</em>' : ''}.</p>
     <section class="add-step" aria-labelledby="add-h1"><h3 id="add-h1"><span class="add-num" aria-hidden="true">1</span>Copy instructions for your AI</h3>
       <p>Give your AI (ChatGPT, Gemini, Claude, DeepSeek or another) the pages of your sheet music and these instructions. It answers with a piece file.</p>
-      <div class="add-row"><button type="button" data-act="copy-guide" id="add-copy-guide">Copy instructions for your AI</button></div><div class="add-fallback-slot"></div></section>
+      <div class="add-row"><button type="button" data-act="copy-guide" id="add-copy-guide">Copy instructions for your AI</button></div><div class="add-fallback-slot"></div>
+      <button type="button" id="add-reader-toggle" data-act="toggle-reader" class="add-disclosure" aria-expanded="false" aria-controls="add-reader">Or let an AI read it for you (your own key)</button>
+      <div id="add-reader" class="add-step-body add-reader" hidden></div></section>
     <section class="add-step" aria-labelledby="add-h2"><h3 id="add-h2"><span class="add-num" aria-hidden="true">2</span>Paste its answer</h3>
       <label for="add-answer" class="add-label">The whole answer. For a long piece sent in parts, paste each answer after the one before. A file works too: open it or drop it on the box.</label>
       ${box('add-answer', 7)}
       <div class="add-row"><button type="button" data-act="check" id="add-check" class="primary">Check</button>${fileInput('add-file')}<button type="button" data-act="clear" data-box="add-answer">Clear</button></div>
-      <p class="add-status"></p><div id="add-report" class="add-report" tabindex="-1"></div></section>
+      <p class="add-status"></p><div id="add-report" class="add-report" tabindex="-1"></div><div id="add-reader-first" class="add-reader-card" tabindex="-1" hidden></div></section>
     <section class="add-step" aria-labelledby="add-h3"><h3 id="add-h3"><button type="button" id="add-compare-toggle" data-act="toggle-compare" class="add-disclosure" aria-expanded="false" aria-controls="add-compare"><span class="add-num" aria-hidden="true">3</span>Compare with a second reading (recommended)</button></h3>
       <div id="add-compare" class="add-step-body" hidden>
       <p>A second reading made from the pages alone, in a fresh chat or by another AI, catches many mistakes. Give it the pages and these instructions, then paste its answer below.</p>
@@ -71,7 +75,7 @@ export function addPanelMarkup(accounts: boolean): string {
       <label for="add-second" class="add-label">The second reading (the first reading is the one in step 2)</label>
       ${box('add-second', 6)}
       <div class="add-row"><button type="button" data-act="compare" id="add-compare-go">Compare</button>${fileInput('add-second-file')}<button type="button" data-act="clear" data-box="add-second">Clear</button></div>
-      <p class="add-status"></p><div id="add-compare-report" class="add-report"></div></div></section>
+      <p class="add-status"></p><div id="add-compare-report" class="add-report" tabindex="-1"></div><div id="add-reader-second" class="add-reader-card" tabindex="-1" hidden></div></div></section>
     <section class="add-step" aria-labelledby="add-h4"><h3 id="add-h4" tabindex="-1"><span class="add-num" aria-hidden="true">4</span>Your pieces</h3>
       <p class="add-hint">A new piece is a draft until you have listened to it with <em>Hear the whole piece</em> and pressed <em>It sounds right</em>.</p>
       <div id="add-list" class="add-list"></div><p class="add-status"></p></section>
@@ -128,11 +132,12 @@ export function mountAddPanel(hooks: AddPanelHooks): { paint: () => void } {
   }
 
   let lastChecked: Checked | undefined;
-  function check(button: HTMLElement): void {
+  /** Check step 2's box; the result is also what the reader sends back as problems. */
+  function check(button: HTMLElement): Checked | undefined {
     if (!answer.value.trim()) {
       report.innerHTML = '';
       say(button, 'Paste the AI’s answer into the box first, or open a file.');
-      return;
+      return undefined;
     }
     const c = (lastChecked = checkAnswer(answer.value));
     report.innerHTML = checkHtml(c);
@@ -144,6 +149,7 @@ export function mountAddPanel(hooks: AddPanelHooks): { paint: () => void } {
           ? `Read and checked “${c.title || 'No title'}”: ${c.bars} bars and ${c.notes} notes.${c.warnings.length ? ` ${c.warnings.length} warnings.` : ''}${c.paste ? ` ${c.paste}` : ''}`
           : `The app cannot read it yet: ${c.errors.length} problems. Copy them for your AI.`,
     );
+    return c;
   }
 
   /** The piece the last question offered to replace. */
@@ -279,36 +285,89 @@ export function mountAddPanel(hooks: AddPanelHooks): { paint: () => void } {
     if (open) offerOpen();
   };
   el<HTMLDetailsElement>('piece-add').addEventListener('toggle', () => {
-    if (!el<HTMLDetailsElement>('piece-add').open) expand(false);
+    if (!el<HTMLDetailsElement>('piece-add').open) {
+      expand(false);
+      openReader(false);
+    }
     offerOpen();
   });
 
   let lastComparison = '',
     lastSecond: Checked | undefined;
-  function compare(button: HTMLElement): void {
+  /**
+   * Compare the two boxes. Returns the second reading as checked when the first could be read, so that the reader
+   * sends back only problems this report shows; nothing when the first cannot be read (no comparison was made).
+   */
+  function compare(button: HTMLElement): Checked | undefined {
     lastComparison = '';
     lastSecond = undefined;
     compareReport.innerHTML = '';
-    if (!answer.value.trim()) return say(button, 'Paste the first reading in step 2 first (or use your open piece).');
-    if (!second.value.trim()) return say(button, 'Paste the second reading into the box first.');
+    if (!answer.value.trim()) {
+      say(button, 'Paste the first reading in step 2 first (or use your open piece).');
+      return undefined;
+    }
+    if (!second.value.trim()) {
+      say(button, 'Paste the second reading into the box first.');
+      return undefined;
+    }
     const a = checkAnswer(answer.value),
       b = checkAnswer(second.value);
     quiet(button);
     if (!a.ok) {
       compareReport.innerHTML = `<p class="add-bad">${esc(a.paste ?? 'The app cannot read the first reading yet. Check it in step 2 first.')}</p>`;
-      return announce(compareReport.textContent ?? '');
+      announce(compareReport.textContent ?? '');
+      return undefined;
     }
     if (!b.ok) {
       if (b.errors.length) {
         lastSecond = b;
         compareReport.innerHTML = `<p class="add-bad">The app cannot read the second reading yet: ${b.errors.length} problem${b.errors.length === 1 ? '' : 's'}.</p>${problemListHtml([...b.errors, ...b.warnings])}<div class="add-row"><button type="button" data-act="copy-second-problems">Copy problems for your AI</button></div><div class="add-fallback-slot"></div>`;
       } else compareReport.innerHTML = `<p class="add-bad">${esc(b.paste ?? '')}</p>`;
-      return announce('The app cannot read the second reading yet.');
+      announce('The app cannot read the second reading yet.');
+      return b;
     }
     const c = compareReadings(a.score!, b.score!);
     lastComparison = differencesMessage(c);
     compareReport.innerHTML = compareHtml(c, [pitchMode(a.text), pitchMode(b.text)]);
     announce(compareReport.querySelector('p')?.textContent ?? '');
+    return b;
+  }
+
+  // The reader ("Or let an AI read it for you"): its code loads the first time its part opens, and the panel closing
+  // closes it, like step 3. A request already running goes on, and its answer still arrives in the box.
+  const readerToggle = el('add-reader-toggle'),
+    readerBody = el('add-reader');
+  let reader: Promise<void> | undefined;
+  function openReader(open: boolean): void {
+    readerBody.hidden = !open;
+    readerToggle.setAttribute('aria-expanded', String(open));
+    if (!open || reader) return;
+    readerBody.innerHTML = '<p class="add-hint">Loading…</p>';
+    reader = import('./reader-view').then(
+      ({ mountReader }) =>
+        mountReader({
+          root: readerBody,
+          cards: { first: el('add-reader-first'), second: el('add-reader-second') },
+          boxes: { first: answer, second },
+          reports: { first: report, second: compareReport },
+          deliver: (reading, text) => {
+            const target = reading === 'first' ? answer : second;
+            if (reading === 'second') expand(true);
+            target.value = text;
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+            return reading === 'first' ? check(el('add-check')) : compare(el('add-compare-go'));
+          },
+          reveal: (reading) => {
+            if (reading === 'second') expand(true);
+          },
+          announce,
+        }),
+      () => {
+        reader = undefined;
+        readerBody.innerHTML =
+          '<p class="add-bad">This part could not be loaded. Check the connection, then close it and open it again.</p>';
+      },
+    );
   }
 
   // His pieces.
@@ -365,6 +424,9 @@ export function mountAddPanel(hooks: AddPanelHooks): { paint: () => void } {
         break;
       case 'toggle-compare':
         expand(toggle.getAttribute('aria-expanded') !== 'true');
+        break;
+      case 'toggle-reader':
+        openReader(readerToggle.getAttribute('aria-expanded') !== 'true');
         break;
       case 'check':
         check(button);
