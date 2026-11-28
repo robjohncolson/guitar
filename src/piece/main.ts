@@ -3,7 +3,8 @@ import '../trainer/styles.css';
 import './styles.css';
 import './hud.css';
 import './stage.css';
-import { compile } from './notation';
+import { compile, type Diagnostic } from './notation';
+import { pickPack } from './pack';
 import { buildCurriculum, exerciseFor, STAGES, type Curriculum, type Unit } from './curriculum';
 import { arrange, guitarExerciseFor, guitarUnits, GUITAR_STAGES, melodyBacking, type Arrangement } from './guitar';
 import { fromBars, sliceExercise, type Exercise, type XEvent } from './exercise';
@@ -511,26 +512,31 @@ function stateLabel(u: Unit): string {
           : 'learned';
 }
 
+/** A piece file's first errors, in the one plain sentence the stage shows. */
+function pieceProblems(diagnostics: readonly Diagnostic[]): string {
+  const errors = diagnostics.filter((d) => d.level === 'error');
+  return (errors.length ? errors : diagnostics)
+    .slice(0, 3)
+    .map((d) => `line ${d.line}: ${d.message}`)
+    .join(' ');
+}
 function loadPack(id: string): void {
   audio.stop();
   player.pause();
   spot = undefined;
   choice = undefined;
   offer = undefined;
-  const all = packs();
-  pack = all.find((p) => p.id === id) ?? all[0];
-  const compiled = compile(pack.text);
-  if (!compiled.score) {
-    say(
-      'piece-error',
-      compiled.diagnostics
-        .slice(0, 3)
-        .map((d) => `line ${d.line}: ${d.message}`)
-        .join(' '),
-    );
+  const all = packs(),
+    load = pickPack(all, id);
+  if (!load) {
+    // Nothing readable at all: say why, keep whatever was open in place, and still fill the picker.
+    const broken = all.find((p) => p.id === id) ?? all[0];
+    say('piece-error', broken ? pieceProblems(compile(broken.text).diagnostics) : '');
+    paintPicker(all);
     return;
   }
-  score = compiled.score;
+  pack = load.pack;
+  score = load.compiled.score;
   {
     const midis = score.notes.map((n) => n.midi);
     if (midis.length) audio.pianoRange = [Math.min(...midis), Math.max(...midis)];
@@ -552,13 +558,15 @@ function loadPack(id: string): void {
   const wanted =
     progress.selected.unit && units().some((u) => u.id === progress.selected.unit) ? progress.selected.unit : landing();
   selectUnit(wanted);
+  // selectUnit clears NOTICE, so a piece file's problem is said once the fallback step has opened.
+  if (load.refused) say('piece-error', pieceProblems(load.refused.compiled.diagnostics));
 }
 /** The piece picker (pickerLabel: his own pieces say "yours", and "draft" until he has confirmed them by ear). */
 function paintPicker(all = packs()): void {
   el<HTMLSelectElement>('piece-select').innerHTML = all
     .map((p) => {
       const meta = pieceMeta(p.text);
-      return `<option value="${escape(p.id)}"${p.id === pack.id ? ' selected' : ''}>${escape(pickerLabel(meta.title ?? p.id, p.origin, meta.verified))}</option>`;
+      return `<option value="${escape(p.id)}"${p.id === pack?.id ? ' selected' : ''}>${escape(pickerLabel(meta.title ?? p.id, p.origin, meta.verified))}</option>`;
     })
     .join('');
 }
@@ -2221,13 +2229,28 @@ window.addEventListener('keydown', (event) => {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && active()) stopEverything('hidden');
 });
-const timer = window.setInterval(() => audio.tick(), 10);
+// The 10 ms frame timer. A page restored from the back/forward cache has no timer (pagehide cleared it), so
+// pageshow starts it again; otherwise playback would silently never finish.
+let tickTimer: number | undefined;
+function startTick(): void {
+  if (tickTimer === undefined) tickTimer = window.setInterval(() => audio.tick(), 10);
+}
+function stopTick(): void {
+  if (tickTimer !== undefined) {
+    clearInterval(tickTimer);
+    tickTimer = undefined;
+  }
+}
+startTick();
 window.addEventListener('pagehide', () => {
-  clearInterval(timer);
+  stopTick();
   audio.dispose();
   player.pause();
   URL.revokeObjectURL(wavUrl);
   URL.revokeObjectURL(traceUrl);
+});
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) startTick();
 });
 
 // The frame loop writes text and states only when they change, and finds each element once.

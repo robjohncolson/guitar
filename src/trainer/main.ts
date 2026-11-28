@@ -464,13 +464,28 @@ document.addEventListener('visibilitychange', () => {
     feedback = 'Practice paused while the page was hidden. Start a fresh take when ready.';
   }
 });
-const timer = window.setInterval(() => audio.tick(), 10);
+// The 10 ms frame timer. A page restored from the back/forward cache has no timer (pagehide cleared it), so
+// pageshow starts it again; otherwise playback would silently never finish.
+let tickTimer: number | undefined;
+function startTick(): void {
+  if (tickTimer === undefined) tickTimer = window.setInterval(() => audio.tick(), 10);
+}
+function stopTick(): void {
+  if (tickTimer !== undefined) {
+    clearInterval(tickTimer);
+    tickTimer = undefined;
+  }
+}
+startTick();
 window.addEventListener('pagehide', () => {
-  clearInterval(timer);
+  stopTick();
   audio.stop();
   player.pause();
   URL.revokeObjectURL(wavUrl);
   URL.revokeObjectURL(traceUrl);
+});
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) startTick();
 });
 function paint(): void {
   requestAnimationFrame(paint);

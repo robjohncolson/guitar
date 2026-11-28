@@ -223,8 +223,8 @@ export class PieceAudio {
     return this.earLoading;
   }
   /** Begin loading the pitch ear when a guitar step that checks pitch is opened, so its first take need not wait. */
-  prepareFor(exercise: Exercise): void {
-    if (exercise.instrument === 'guitar' && exercise.events.some((e) => e.grade === 'pitch'))
+  prepareFor(exercise: Exercise | undefined): void {
+    if (exercise?.instrument === 'guitar' && exercise.events.some((e) => e.grade === 'pitch'))
       this.loadEar().catch((error: unknown) => console.error('Pitch ear loading failed:', error));
   }
   private async microphone(generation: number, calibrating = false): Promise<boolean> {
