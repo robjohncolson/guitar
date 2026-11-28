@@ -71,6 +71,24 @@ export interface TakeBest {
 export const DAY = 86400000;
 const REVIEW_DAYS = [1, 2, 4, 8, 16, 32];
 export const LOG_DAYS = 120;
+/** Every course key a piece's progress can live under (piano, guitar course, guitar piece). */
+const courseKeys = (piece: string) => [piece, `${piece}#guitar`, `${piece}#guitar-piece`];
+/**
+ * Removes everything saved for one piece, across all three courses: steps, today's checklist, personal bests, the tempo
+ * goal and the takes in history. Other pieces are left exactly as they were. Used both for "Reset progress for this
+ * piece" and when a locally added piece is removed, so its progress cannot be inherited by a future piece of that name.
+ */
+export function clearPieceProgress(progress: PieceProgress, piece: string): void {
+  const keys = courseKeys(piece),
+    own = (id: string) => keys.some((k) => id.startsWith(`${k}|`));
+  for (const id of Object.keys(progress.units)) if (own(id)) delete progress.units[id];
+  for (const id of Object.keys(progress.bests)) if (own(id)) delete progress.bests[id];
+  for (const k of keys) {
+    delete progress.today[k];
+    delete progress.goals[k];
+  }
+  progress.history = progress.history.filter((h) => h.piece !== piece);
+}
 const bounded = (n: unknown, min: number, max: number, fallback: number) =>
   typeof n === 'number' && Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
 export const initialUnit = (): UnitProgress => ({

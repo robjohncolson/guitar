@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { Unit } from '../src/piece/curriculum';
 import {
   advanceUnit,
+  clearPieceProgress,
   DAY,
   initialUnit,
   parsePieceProgress,
   progressId,
+  type PieceProgress,
+  type TakeBest,
   type UnitProgress,
 } from '../src/piece/progress';
 
@@ -177,6 +180,54 @@ it('carries a pending clean or needs-more-room take across midnight', () => {
   const eased = nextDay(take(start, 0.95, false).progress, 0.95, false);
   expect(eased.progress).toMatchObject({ rung: 1, hard: 0 });
   expect(eased.event.kind).toBe('step-down');
+});
+
+it('clears one piece’s steps, today rows, bests, goal and history across all three courses without touching another', () => {
+  const best = (score: number): TakeBest => ({ score, tight: 40, last: 0.8, memory: false, date: now }),
+    step = (rung: number): UnitProgress => ({ ...initialUnit(), rung, attempts: 1 }),
+    progress: PieceProgress = parsePieceProgress(null);
+  progress.units = {
+    [progressId('gone', 'LR:1-4')]: step(2),
+    [progressId('gone#guitar', 'chord')]: step(1),
+    [progressId('gone#guitar-piece', 'seam')]: step(3),
+    [progressId('gone-extra', 'LR:1-4')]: step(1),
+    [progressId('stays', 'LR:1-4')]: step(4),
+  };
+  progress.today = {
+    gone: { day: '2026-11-14', rows: [] },
+    'gone#guitar': { day: '2026-11-14', rows: [] },
+    'gone#guitar-piece': { day: '2026-11-14', rows: [] },
+    'gone-extra': { day: '2026-11-14', rows: [] },
+    stays: { day: '2026-11-14', rows: [] },
+  };
+  progress.goals = { gone: 90, 'gone#guitar': 80, 'gone-extra': 70, stays: 100 };
+  progress.bests = {
+    [`${progressId('gone', 'LR:1-4')}@60m`]: best(0.9),
+    [`${progressId('gone#guitar', 'chord')}@80k`]: best(0.8),
+    [`${progressId('gone#guitar-piece', 'seam')}@90m`]: best(0.7),
+    [`${progressId('gone-extra', 'LR:1-4')}@60m`]: best(0.6),
+    [`${progressId('stays', 'LR:1-4')}@60m`]: best(0.95),
+  };
+  progress.history = [
+    { date: now, piece: 'gone', unit: 'LR:1-4', bpm: 60, score: 0.9, trusted: true, clean: true },
+    { date: now, piece: 'gone', unit: 'chord', bpm: 80, score: 0.7, trusted: true },
+    { date: now, piece: 'gone-extra', unit: 'LR:1-4', bpm: 60, score: 0.6, trusted: true },
+    { date: now, piece: 'stays', unit: 'LR:1-4', bpm: 60, score: 0.95, trusted: true },
+  ];
+
+  clearPieceProgress(progress, 'gone');
+
+  expect(Object.keys(progress.units).sort()).toEqual([
+    progressId('gone-extra', 'LR:1-4'),
+    progressId('stays', 'LR:1-4'),
+  ]);
+  expect(Object.keys(progress.today).sort()).toEqual(['gone-extra', 'stays']);
+  expect(progress.goals).toEqual({ 'gone-extra': 70, stays: 100 });
+  expect(Object.keys(progress.bests).sort()).toEqual([
+    `${progressId('gone-extra', 'LR:1-4')}@60m`,
+    `${progressId('stays', 'LR:1-4')}@60m`,
+  ]);
+  expect(progress.history.map((h) => h.piece)).toEqual(['gone-extra', 'stays']);
 });
 
 describe('calibration latency', () => {

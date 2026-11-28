@@ -12,6 +12,8 @@ export interface Skill {
   mastered: boolean;
   due: number;
   last: number;
+  /** Review spacing in days (see REVIEW_DAYS); 0 until the lesson is first mastered. */
+  interval: number;
 }
 export interface History {
   date: number;
@@ -42,7 +44,11 @@ export const initialSkill = (lesson: Lesson): Skill => ({
   mastered: false,
   due: 0,
   last: 0,
+  interval: 0,
 });
+/** Review spacing after a mastered lesson is played again cleanly; capped at the longest rung. */
+const DAY = 86400000;
+const REVIEW_DAYS = [1, 2, 4, 8, 16, 32];
 export function parseProgress(raw: string | null): Progress {
   const result: Progress = {
     version: 1,
@@ -70,12 +76,13 @@ export function parseProgress(raw: string | null): Progress {
         bpm: Math.round(bounded(saved.bpm, 40, lesson.maxBpm, lesson.startBpm)),
         best: Math.round(bounded(saved.best, 0, lesson.maxBpm, 0)),
         support: Math.round(bounded(saved.support, 0, 2, 0)) as 0 | 1 | 2,
-        clean: 0,
-        hard: 0,
+        clean: Math.floor(bounded(saved.clean, 0, 2, 0)),
+        hard: Math.floor(bounded(saved.hard, 0, 1, 0)),
         attempts: Math.floor(bounded(saved.attempts, 0, 100000, 0)),
         mastered: saved.mastered === true,
         due: bounded(saved.due, 0, 1e14, 0),
         last: bounded(saved.last, 0, 1e14, 0),
+        interval: bounded(saved.interval, 0, 365, 0),
       };
     }
     if (Array.isArray(value.history))
@@ -174,7 +181,8 @@ export function advance(
   }
   next.best = Math.max(next.best, next.bpm);
   next.mastered = true;
-  next.due = now + 86400000;
+  next.interval = REVIEW_DAYS[Math.min(REVIEW_DAYS.length - 1, REVIEW_DAYS.indexOf(next.interval) + 1)] ?? 1;
+  next.due = now + next.interval * DAY;
   if (auto) next.bpm = Math.min(lesson.maxBpm, next.bpm + 2);
   return {
     skill: next,

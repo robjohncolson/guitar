@@ -29,6 +29,15 @@ it('does not lower tempo after one miss and keeps fixed-tempo practice fixed', (
   expect(first.bpm).toBe(50);
   expect(advance(first, lesson, bad, true, 2, false).skill.bpm).toBe(50);
 });
+it('keeps bounded clean and hard counts and the review interval through a save and a reload', () => {
+  const saved = (extra: Record<string, unknown>) =>
+    parseProgress(JSON.stringify({ version: 1, skills: { [lesson.id]: { ...initialSkill(lesson), ...extra } } }))
+      .skills[lesson.id];
+  expect(saved({ clean: 2, hard: 1, interval: 4 })).toMatchObject({ clean: 2, hard: 1, interval: 4 });
+  expect(saved({ clean: 9, hard: 9, interval: 999 })).toMatchObject({ clean: 2, hard: 1, interval: 365 });
+  expect(saved({ clean: -1.7, hard: -1, interval: -2 })).toMatchObject({ clean: 0, hard: 0, interval: 0 });
+  expect(saved({ clean: '2', hard: null })).toMatchObject({ clean: 0, hard: 0 });
+});
 it('restores only bounded known progress and reviews a previously mastered lesson when due', () => {
   const progress = parseProgress(
     JSON.stringify({

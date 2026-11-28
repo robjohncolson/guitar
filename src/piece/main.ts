@@ -13,6 +13,7 @@ import {
   advanceUnit,
   canPlace,
   CLEAN,
+  clearPieceProgress,
   dayOf,
   initialUnit,
   logDay,
@@ -2070,6 +2071,9 @@ mountAddPanel({
     paintPicker();
   },
   removed: (id) => {
+    clearPieceProgress(progress, id);
+    visit.forget(id);
+    persist();
     if (pack.id === id) loadPack(packs()[0].id);
     else paintPicker();
   },
@@ -2095,16 +2099,7 @@ el('piece-reset').onclick = () => {
   }
   resetArmed = false;
   el('piece-reset').textContent = 'Reset progress for this piece';
-  for (const id of Object.keys(progress.units))
-    if (
-      id.startsWith(`${pack.id}|`) ||
-      id.startsWith(`${pack.id}#guitar|`) ||
-      id.startsWith(`${pack.id}#guitar-piece|`)
-    )
-      delete progress.units[id];
-  delete progress.today[pack.id];
-  delete progress.today[`${pack.id}#guitar`];
-  delete progress.today[`${pack.id}#guitar-piece`];
+  clearPieceProgress(progress, pack.id);
   visit.forget(pack.id);
   persist();
   selectUnit(unit.id);
