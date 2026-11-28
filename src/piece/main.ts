@@ -67,7 +67,19 @@ import {
   type PieceGrade,
 } from './grade';
 import { noteName, type Hand, type Score } from './score';
-import { barsText, isSpotId, pickSpot, slowerBpm, spotExercise, spotId, spotOffered, type SpotPick } from './spot';
+import {
+  barsText,
+  fasterBpm,
+  isSpotId,
+  pickSpot,
+  rememberWeakSpot,
+  rescheduleWeakSpot,
+  slowerBpm,
+  spotExercise,
+  spotId,
+  spotOffered,
+  type SpotPick,
+} from './spot';
 import {
   answerLines,
   capNote,
@@ -253,6 +265,10 @@ let spot:
     }
   | undefined;
 let choiceAt = 0;
+/** Loop bars: whether a trusted spot take starts the next one on its own, and the pending repeat. */
+let autoRepeat = false,
+  repeatTimer: number | undefined,
+  rangeOpen = false;
 /** The tempo step a placement would target (default the top one), and the step a placement take in progress is aimed at. */
 let placeAt: number | undefined, placing: number | undefined;
 let choice: 'offer' | 'pass' | undefined, offer: { pick: SpotPick | 'choose'; bpm: number } | undefined;
@@ -558,6 +574,7 @@ function pieceProblems(diagnostics: readonly Diagnostic[]): string {
 function loadPack(id: string): void {
   audio.stop();
   player.pause();
+  clearRepeat();
   spot = undefined;
   choice = undefined;
   offer = undefined;
@@ -646,6 +663,7 @@ function selectUnit(id: string): void {
   const dropped = Boolean(pending);
   audio.stop();
   player.pause();
+  clearRepeat();
   stopWait();
   resetLive();
   endReveal();
@@ -737,7 +755,7 @@ function todayPlan(): PlanRow[] {
       const u = units().find((x) => x.id === r.id);
       return u ? [{ unit: u, reason: r.reason, slot: r.slot }] : [];
     });
-  const rows = suggestToday({ ...curriculum, units: units() }, get, now);
+  const rows = suggestToday({ ...curriculum, units: units() }, get, now, progress.weakSpots[courseKey()] ?? []);
   for (const [k, t] of Object.entries(progress.today)) if (t.day !== day) delete progress.today[k];
   progress.today[courseKey()] = { day, rows: rows.map((r) => ({ id: r.unit.id, reason: r.reason, slot: r.slot })) };
   return rows;
@@ -746,7 +764,10 @@ const takesToday = (id: string) => {
   const day = dayOf(Date.now());
   return progress.history.filter((h) => h.piece === pack.id && h.unit === id && dayOf(h.date) === day);
 };
-const isDone = (r: PlanRow) => rowDone(r, get(r.unit.id), takesToday(r.unit.id), Date.now());
+const isDone = (r: PlanRow) =>
+  r.slot === 'weak'
+    ? !(progress.weakSpots[courseKey()] ?? []).some((s) => s.unit === r.unit.id && s.due <= Date.now())
+    : rowDone(r, get(r.unit.id), takesToday(r.unit.id), Date.now());
 /** Where a visit lands: the first unfinished row of today's plan. */
 const landing = () => {
   const plan = todayPlan();
@@ -754,7 +775,7 @@ const landing = () => {
 };
 /** The next step: today's first unfinished row, then fresh suggestions once the plan is done. Continuing is always allowed. */
 function nextRow(): PlanRow | undefined {
-  const fresh = suggestToday({ ...curriculum, units: units() }, get, Date.now());
+  const fresh = suggestToday({ ...curriculum, units: units() }, get, Date.now(), progress.weakSpots[courseKey()] ?? []);
   return (
     [...todayPlan(), ...fresh].find((r) => r.unit.id !== unit.id && !isDone(r)) ??
     fresh.find((r) => r.unit.id !== unit.id && r.slot === 'phrase') ??
@@ -768,10 +789,17 @@ function paintToday(): void {
     finished = plan.length > 0 && done.every(Boolean);
   el('today-list').innerHTML =
     plan
-      .map(
-        (p, i) =>
-          `<li><button class="today-step${done[i] ? ' done' : ''}" data-unit="${escape(p.unit.id)}" aria-current="${p.unit.id === unit?.id}"><span>${done[i] ? '<span class="tick" aria-hidden="true">✓</span> ' : ''}${escape(p.unit.title)}</span><span class="muted">${done[i] ? 'done today' : escape(p.reason)} · ${escape(stateLabel(p.unit))}</span></button></li>`,
-      )
+      .map((p, i) => {
+        const w =
+            p.slot === 'weak'
+              ? (progress.weakSpots[courseKey()] ?? []).find(
+                  (s) => s.unit === p.unit.id && s.due <= Date.now() && s.to < p.unit.bars.length,
+                )
+              : undefined,
+          bars = w ? ` · ${escape(barsText(problemNumbers(p.unit, { from: w.from, to: w.to, lead: false })))}` : '',
+          weak = w ? ` data-weak="${w.from}-${w.to}"` : '';
+        return `<li><button class="today-step${done[i] ? ' done' : ''}" data-unit="${escape(p.unit.id)}"${weak} aria-current="${p.unit.id === unit?.id}"><span>${done[i] ? '<span class="tick" aria-hidden="true">✓</span> ' : ''}${escape(p.unit.title)}</span><span class="muted">${done[i] ? 'done today' : `${escape(p.reason)}${bars}`} · ${escape(stateLabel(p.unit))}</span></button></li>`;
+      })
       .join('') ||
     '<li class="muted">Everything here is learned. Play the whole piece, or choose a review from the map.</li>';
   el('today-count').textContent = plan.length ? `· ${done.filter(Boolean).length} of ${plan.length} done` : '';
@@ -848,6 +876,7 @@ function otherPart(): XEvent[] {
 }
 /** place: a placement take aimed at that tempo step. */
 async function start(kind: 'practice' | 'demo', place?: number): Promise<void> {
+  clearRepeat();
   if (
     place !== undefined &&
     (kind !== 'practice' || wait || spot || unit.kind === 'listen' || !canPlace(unit, current(), place))
@@ -1155,14 +1184,25 @@ audio.onTake = (take) => {
   el('piece-details').textContent =
     `${problems.join(' · ')}${result.extraNotes.length ? ` · possible extra note${result.extraNotes.length > 1 ? 's' : ''} near ${[...new Set(result.extraNotes.map((x) => noteName(x.midi, take.exercise.keySig)))].join(', ')}` : ''}${result.trusted ? '' : ` · ${result.reason}`}${Math.abs(result.tuning) >= 8 ? ` · your piano reads about ${Math.round(result.tuning)} cents from A440; checks allowed for it` : ''}`;
   const hint = !isSpot && spotOffered(instrument, unit) ? pickSpot(take.exercise, result, timed(take)) : undefined;
+  if (!isSpot && trusted && hint && hint !== 'choose')
+    progress.weakSpots[courseKey()] = rememberWeakSpot(progress.weakSpots[courseKey()] ?? [], unit.id, hint, now);
   el('piece-spot-hint').hidden = !hint || hint === 'choose';
   if (hint && hint !== 'choose')
     el('piece-spot-hint').textContent =
       `Practise ${barsText(problemNumbers(unit, hint))}: that is where this take's confirmed problems are.`;
   if (isSpot) {
     spot!.clean = trusted && clean ? spot!.clean + 1 : 0;
+    if (trusted && clean)
+      progress.weakSpots[courseKey()] = rescheduleWeakSpot(
+        progress.weakSpots[courseKey()] ?? [],
+        unit.id,
+        spot!.from,
+        spot!.to,
+        now,
+      );
     choice = 'pass';
     paintChoices();
+    if (autoRepeat && spot!.clean < 2) scheduleRepeat();
   }
   el('piece-result').hidden = false;
   persist();
@@ -1491,9 +1531,11 @@ function paintChoices(): void {
       : spot.clean === 1
         ? 'Clean pass. One more in a row, then back to the step.'
         : 'Again until it comes out clean, or slow it down.';
-    const slowBtn = button('slower', `${down}Slower (${slower} BPM)`, false, 'ArrowDown', !canSlow);
+    const slowBtn = button('slower', `${down}Slower (${slower} BPM)`, false, 'ArrowDown', !canSlow),
+      faster = fasterBpm(spot.parent, spot.bpm, rungBpm(spot.parent, current()));
     actions.innerHTML = twice
       ? button('back', `${space}Back to ${first === last ? `bar ${first}` : `bars ${first}–${last}`}`, true, 'Space') +
+        (faster > spot.bpm ? button('faster', `Step up to ${faster} BPM`, false) : '') +
         button('again', `${up}Again`, false, 'ArrowUp') +
         slowBtn
       : button('again', `${space}Again`, true, 'Space') +
@@ -1501,6 +1543,58 @@ function paintChoices(): void {
         button('back', `${up}Back to the step`, false, 'ArrowUp');
   }
   shown.delete('choices:disabled');
+}
+function clearRepeat(): void {
+  if (repeatTimer !== undefined) {
+    window.clearTimeout(repeatTimer);
+    repeatTimer = undefined;
+  }
+}
+/** Loop bars with Repeat takes: a spot pass leads straight into the next, stopping when two come out clean. */
+function scheduleRepeat(): void {
+  clearRepeat();
+  const id = spot?.id;
+  if (!autoRepeat || !id) return;
+  repeatTimer = window.setTimeout(() => {
+    repeatTimer = undefined;
+    if (spot?.id === id && !active() && choice === 'pass') void start('practice');
+  }, 1000);
+}
+/** The Loop bars control: any A–B range of the step, by play-order position, with an optional repeat. */
+function paintRange(running: boolean): void {
+  const offered = Boolean(unit) && spotOffered(instrument, unit),
+    visible = Boolean(unit) && (offered || Boolean(spot));
+  if (shown.get('range:hidden') !== String(!visible)) {
+    shown.set('range:hidden', String(!visible));
+    el('piece-loop-bars').hidden = !visible;
+  }
+  if (!visible) return;
+  const sig = `${unit.id}|${spot?.id ?? ''}`;
+  if (shown.get('range:options') !== sig) {
+    shown.set('range:options', sig);
+    const from = el<HTMLSelectElement>('piece-loop-from'),
+      to = el<HTMLSelectElement>('piece-loop-to');
+    if (spot) {
+      from.value = String(spot.from);
+      to.value = String(spot.to);
+    } else {
+      const options = unit.bars.map((_, i) => `<option value="${i}">${barNumber(unit, i)}</option>`).join('');
+      from.innerHTML = to.innerHTML = options;
+      from.value = '0';
+      to.value = String(Math.min(1, unit.bars.length - 1));
+    }
+  }
+  el('piece-loop-form').hidden = !rangeOpen;
+  el('piece-loop-open').setAttribute('aria-expanded', String(rangeOpen));
+  el<HTMLInputElement>('piece-loop-repeat').checked = autoRepeat;
+  el('piece-loop-start').hidden = Boolean(spot);
+  el('piece-loop-stop').hidden = !spot;
+  disable('piece-loop-open', running);
+  disable('piece-loop-from', running || Boolean(spot));
+  disable('piece-loop-to', running || Boolean(spot));
+  disable('piece-loop-start', running);
+  disable('piece-loop-stop', running);
+  disable('piece-loop-repeat', running || Boolean(spot));
 }
 function enterSpot(pick: { from: number; to: number; lead: boolean }, hands: Hand[], bpm: number): void {
   const id = spotId(unit.id, pick.from, pick.to, hands);
@@ -1518,6 +1612,7 @@ function enterSpot(pick: { from: number; to: number; lead: boolean }, hands: Han
   applyInput();
 }
 function leaveSpot(): void {
+  clearRepeat();
   spot = undefined;
   choice = undefined;
   offer = undefined;
@@ -1530,6 +1625,7 @@ function leaveSpot(): void {
 }
 function choose(what: string): void {
   if (active()) return;
+  clearRepeat();
   if (what === 'back') {
     if (!spot) return;
     leaveSpot();
@@ -1543,7 +1639,7 @@ function choose(what: string): void {
     void start('practice');
     return;
   }
-  if (what === 'again' || what === 'slower') {
+  if (what === 'again' || what === 'slower' || what === 'faster') {
     if (!spot) return;
     if (what === 'slower') {
       const slower = slowerBpm(spot.parent, spot.bpm);
@@ -1551,6 +1647,12 @@ function choose(what: string): void {
       spot.bpm = slower;
       spot.clean = 0;
       el<HTMLInputElement>('piece-bpm').value = String(slower);
+    } else if (what === 'faster') {
+      const faster = fasterBpm(spot.parent, spot.bpm, rungBpm(spot.parent, current()));
+      if (faster <= spot.bpm) return;
+      spot.bpm = faster;
+      spot.clean = 0;
+      el<HTMLInputElement>('piece-bpm').value = String(faster);
     }
     void start('practice');
     return;
@@ -1582,6 +1684,31 @@ for (const id of ['piece-choices', 'piece-spot-banner'])
     const b = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-choice]');
     if (b && !b.disabled) choose(b.dataset.choice!);
   };
+el('piece-loop-open').onclick = () => {
+  rangeOpen = !rangeOpen;
+  el('piece-loop-form').hidden = !rangeOpen;
+  el('piece-loop-open').setAttribute('aria-expanded', String(rangeOpen));
+};
+el<HTMLInputElement>('piece-loop-repeat').onchange = () => {
+  autoRepeat = el<HTMLInputElement>('piece-loop-repeat').checked;
+  if (!autoRepeat) clearRepeat();
+};
+el('piece-loop-start').onclick = () => {
+  if (!unit || active()) return;
+  const a = Number(el<HTMLSelectElement>('piece-loop-from').value),
+    b = Number(el<HTMLSelectElement>('piece-loop-to').value),
+    from = Math.min(a, b),
+    to = Math.max(a, b);
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to >= unit.bars.length) return;
+  clearRepeat();
+  enterSpot({ from, to, lead: false }, unit.hands, rungBpm(unit, current()));
+  void start('practice');
+};
+el('piece-loop-stop').onclick = () => {
+  if (active()) return;
+  clearRepeat();
+  leaveSpot();
+};
 el<HTMLSelectElement>('piece-select').onchange = () => {
   progress.selected.unit = '';
   loadPack(el<HTMLSelectElement>('piece-select').value);
@@ -1722,6 +1849,7 @@ function stopAll(): void {
 }
 /** A take (or its analysis) stopped says so; a Wait for me run says it stopped; anything else drops a NOTICE it made obsolete. */
 function stopEverything(said: 'stopped' | 'hidden'): void {
+  clearRepeat();
   const take = audio.plan?.kind === 'practice' || (audio.busy && Boolean(audio.analysis)),
     waiting = Boolean(wait);
   stopWait();
@@ -1777,6 +1905,11 @@ el('today-list').onclick = (event) => {
   if (b && !active()) {
     closeOverlays();
     selectUnit(b.dataset.unit!);
+    const [from, to] = (b.dataset.weak ?? '').split('-').map(Number);
+    if (Number.isInteger(from) && Number.isInteger(to) && from >= 0 && to >= from && to < unit.bars.length) {
+      enterSpot({ from, to, lead: false }, unit.hands, rungBpm(unit, current()));
+      void start('practice');
+    }
   }
 };
 function clearBpmError(): void {
@@ -2117,7 +2250,8 @@ el('piece-finish').onclick = () => {
   player.pause();
   // After a counted take in this visit, the summary card (summary.ts); otherwise the one sentence, as before.
   const piece = pieceCourses(pack.id, courseTag(), curriculum.units, pUnits, gUnits),
-    plan = (time: number) => suggestToday({ ...curriculum, units: units() }, get, time),
+    plan = (time: number) =>
+      suggestToday({ ...curriculum, units: units() }, get, time, progress.weakSpots[courseKey()] ?? []),
     title = (id: string) => titleIn(packs(), id),
     shown = finishView({ progress, visit, piece, title, notes: session.notes, plan, now: Date.now() });
   el('piece-session').hidden = false;
@@ -2504,6 +2638,7 @@ function paint(): void {
     shown.set('spot:banner', String(Boolean(spot)));
     el('piece-spot-banner').hidden = !spot;
   }
+  paintRange(running);
   disable('piece-comfortable', !pending || running);
   disable('piece-struggling', !pending || running);
   // A finished take asks for focus here, once its answer buttons are enabled (they are enabled by this frame, not by the take handler).

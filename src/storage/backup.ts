@@ -5,6 +5,7 @@
  */
 import { defaultStore, loadVersioned, quarantineRaw, type StorageLike } from './migrate';
 import { parseProgress, type Progress } from '../trainer/progress';
+import { mergeWeakSpots } from '../piece/spot';
 import { LOG_DAYS, parsePieceProgress, type DayLog, type PieceProgress, type PieceTake } from '../piece/progress';
 import { MAX_BYTES, MAX_PIECES, type Mine } from '../piece/mine';
 
@@ -87,7 +88,7 @@ function readTrainer(value: unknown): Progress | undefined {
 
 function readPiece(value: unknown): PieceProgress | undefined {
   if (!isRecord(value) || value.version !== BACKUP_VERSION) return undefined;
-  for (const part of ['units', 'goals', 'bests', 'today'] as const)
+  for (const part of ['units', 'goals', 'bests', 'today', 'weakSpots'] as const)
     if (value[part] !== undefined && !isRecord(value[part])) return undefined;
   for (const part of ['history', 'log'] as const)
     if (value[part] !== undefined && !Array.isArray(value[part])) return undefined;
@@ -341,6 +342,7 @@ function mergePiece(local: PieceProgress, incoming: PieceProgress): PieceProgres
     // The learner's own goals and today's fixed checklist win; the backup fills in what this browser has no copy of.
     goals: { ...incoming.goals, ...local.goals },
     today: { ...incoming.today, ...local.today },
+    weakSpots: mergeWeakSpots(local.weakSpots ?? {}, incoming.weakSpots ?? {}),
     history: mergePieceHistory(local.history, incoming.history),
     log: mergeDays(local.log, incoming.log),
     dailyGoal: local.dailyGoal === 6 ? incoming.dailyGoal : local.dailyGoal,

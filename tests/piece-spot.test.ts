@@ -5,13 +5,18 @@ import type { Unit } from '../src/piece/curriculum';
 import type { Score } from '../src/piece/score';
 import {
   barsText,
+  fasterBpm,
   isSpotId,
+  mergeWeakSpots,
   pickSpot,
   problemBars,
+  rememberWeakSpot,
+  rescheduleWeakSpot,
   slowerBpm,
   spotExercise,
   spotId,
   spotOffered,
+  WEAK_MAX,
 } from '../src/piece/spot';
 
 /** An exercise of n four-beat bars with a right-hand and a left-hand note on every beat 0 and 2 of each bar. */
@@ -156,6 +161,48 @@ it('chooses a slower tempo from the rungs, or 15% slower below them', () => {
   expect(slowerBpm(unit(), 31)).toBe(30);
   expect(slowerBpm(unit(), 30)).toBe(26);
   expect(slowerBpm(unit(), 20)).toBe(20);
+});
+
+it('steps up one rung at a time and never past the parent step tempo', () => {
+  expect(fasterBpm(unit(), 30, 60)).toBe(42);
+  expect(fasterBpm(unit(), 42, 60)).toBe(60);
+  expect(fasterBpm(unit(), 60, 60)).toBe(60);
+  expect(fasterBpm(unit(), 20, 60)).toBe(30);
+  expect(fasterBpm(unit(), 42, 50)).toBe(48);
+});
+
+it('remembers confirmed passages with a spaced review, bounded per course', () => {
+  const now = Date.UTC(2026, 10, 14),
+    pick = (from: number) => ({ from, to: from + 1, lead: false, hand: 'R' as const });
+  let list = rememberWeakSpot([], 'R:1-4', pick(4), now);
+  expect(list).toHaveLength(1);
+  expect(list[0]).toMatchObject({ unit: 'R:1-4', from: 4, to: 5, hands: ['R'], count: 1 });
+  const firstDue = list[0].due;
+  list = rememberWeakSpot(list, 'R:1-4', pick(4), now + 1000);
+  expect(list[0]).toMatchObject({ count: 2 });
+  expect(list[0].due).toBeGreaterThan(firstDue);
+  // A trusted pass moves the next review out without growing the count.
+  const due = list[0].due;
+  list = rescheduleWeakSpot(list, 'R:1-4', 4, 5, now + 2000);
+  expect(list[0].due).toBeGreaterThan(due);
+  // More passages than the cap: the five most recurring are kept.
+  for (let i = 0; i < WEAK_MAX + 3; i++) list = rememberWeakSpot(list, 'R:1-4', pick(i + 8), now);
+  expect(list).toHaveLength(WEAK_MAX);
+});
+
+it('merges two saved weak-spot lists without losing either browser’s passages', () => {
+  const at = (from: number, count: number) => ({
+    unit: 'R:1-4',
+    from,
+    to: from + 1,
+    hands: ['R' as const],
+    due: 1000 + from,
+    count,
+  });
+  const merged = mergeWeakSpots({ x: [at(0, 2), at(2, 1)] }, { x: [at(0, 1), at(4, 3)], y: [at(6, 1)] });
+  expect(merged.x.map((s) => s.from).sort((a, b) => a - b)).toEqual([0, 2, 4]);
+  expect(merged.x.find((s) => s.from === 0)?.count).toBe(2);
+  expect(merged.y).toHaveLength(1);
 });
 
 it('words bar runs', () => {

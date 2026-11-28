@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Unit } from '../src/piece/curriculum';
+import type { WeakSpot } from '../src/piece/spot';
 import {
   advanceUnit,
   clearPieceProgress,
   DAY,
   initialUnit,
   parsePieceProgress,
+  PLAN_MAX,
   progressId,
+  suggestToday,
   type PieceProgress,
   type TakeBest,
   type UnitProgress,
@@ -214,6 +217,14 @@ it('clears one piece’s steps, today rows, bests, goal and history across all t
     { date: now, piece: 'gone-extra', unit: 'LR:1-4', bpm: 60, score: 0.6, trusted: true },
     { date: now, piece: 'stays', unit: 'LR:1-4', bpm: 60, score: 0.95, trusted: true },
   ];
+  const weak = (unit: string): WeakSpot => ({ unit, from: 0, to: 1, hands: ['R'], due: now, count: 1 });
+  progress.weakSpots = {
+    gone: [weak('LR:1-4')],
+    'gone#guitar': [weak('chord')],
+    'gone#guitar-piece': [weak('seam')],
+    'gone-extra': [weak('LR:1-4')],
+    stays: [weak('LR:1-4')],
+  };
 
   clearPieceProgress(progress, 'gone');
 
@@ -228,6 +239,7 @@ it('clears one piece’s steps, today rows, bests, goal and history across all t
     `${progressId('stays', 'LR:1-4')}@60m`,
   ]);
   expect(progress.history.map((h) => h.piece)).toEqual(['gone-extra', 'stays']);
+  expect(Object.keys(progress.weakSpots).sort()).toEqual(['gone-extra', 'stays']);
 });
 
 describe('calibration latency', () => {
@@ -250,4 +262,79 @@ it('climbs after two clean takes at a step even with a weaker take between them'
   const two = take(weaker.progress, 0.93, true);
   expect(two.progress).toMatchObject({ rung: 2, clean: 0 });
   expect(two.event.kind).toBe('climb');
+});
+
+describe('weak spots', () => {
+  it('reads an older save without weak spots as an empty list and keeps everything else', () => {
+    const old = parsePieceProgress(
+      JSON.stringify({ version: 1, units: { [id]: { ...initialUnit(), rung: 2 } }, history: [] }),
+    );
+    expect(old.weakSpots).toEqual({});
+    expect(old.units[id].rung).toBe(2);
+    expect(parsePieceProgress(null).weakSpots).toEqual({});
+  });
+
+  it('round-trips weak spots and stays bounded and sanitised', () => {
+    const spot = (over: Partial<WeakSpot> = {}): WeakSpot => ({
+      unit: 'u',
+      from: 1,
+      to: 2,
+      hands: ['R'],
+      due: now,
+      count: 1,
+      ...over,
+    });
+    const saved = parsePieceProgress(
+      JSON.stringify({ version: 1, units: {}, weakSpots: { course: [spot({ hands: ['L', 'R'], count: 3 })] } }),
+    );
+    expect(parsePieceProgress(JSON.stringify(saved)).weakSpots).toEqual(saved.weakSpots);
+    expect(saved.weakSpots.course[0]).toMatchObject({ hands: ['L', 'R'], count: 3 });
+
+    const list = Array.from({ length: 9 }, (_, i) => spot({ unit: `u${i}`, count: i + 1 }));
+    expect(
+      parsePieceProgress(JSON.stringify({ version: 1, weakSpots: { course: list } })).weakSpots.course,
+    ).toHaveLength(5);
+
+    const messy = parsePieceProgress(
+      JSON.stringify({
+        version: 1,
+        weakSpots: {
+          course: [
+            spot({ unit: '', from: 0, to: 1 }),
+            spot({ from: -1, to: 1 }),
+            spot({ from: 3, to: 2 }),
+            spot({ hands: ['X'] as unknown as WeakSpot['hands'] }),
+            spot({ hands: ['R', 'L', 'X'] as unknown as WeakSpot['hands'], due: -5, count: 99 }),
+            spot({ unit: 'kept', from: 0, to: 2 }),
+          ],
+        },
+      }),
+    ).weakSpots.course;
+    expect(messy).toHaveLength(2);
+    expect(messy[0]).toMatchObject({ hands: ['R', 'L'], due: 0, count: 5 });
+    expect(messy[1]).toMatchObject({ unit: 'kept', from: 0, to: 2 });
+  });
+
+  it('brings due passages into today’s plan without growing it past its size', () => {
+    const many = (n: number): Unit[] =>
+      Array.from({ length: n }, (_, i) => ({
+        ...unit,
+        id: `u${i}`,
+        title: `u${i}`,
+        bars: [i * 2, i * 2 + 1],
+      }));
+    const units = many(8),
+      course = { title: '', key: '', goalBpm: 66, units, summary: [] },
+      spots: WeakSpot[] = units.map((u, i) => ({
+        unit: u.id,
+        from: 0,
+        to: 1,
+        hands: ['R'],
+        due: i < 2 ? now - DAY : now + DAY,
+        count: 1,
+      }));
+    const plan = suggestToday(course, () => undefined, now, spots);
+    expect(plan.filter((r) => r.slot === 'weak').map((r) => r.unit.id)).toEqual(['u0', 'u1']);
+    expect(plan.length).toBeLessThanOrEqual(PLAN_MAX);
+  });
 });

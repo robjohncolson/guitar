@@ -541,6 +541,24 @@
   color: #d4e0c7;
   overflow-wrap: anywhere;
 }
+.loop-bars {
+  margin: 6px 0;
+  font-size: 13px;
+}
+.loop-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid #3d5440;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.loop-form select {
+  max-width: 100%;
+}
 .lane-wrap {
   position: relative;
 }

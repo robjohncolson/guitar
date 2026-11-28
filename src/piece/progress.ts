@@ -1,4 +1,5 @@
 import { loadVersioned, type Loaded, type StorageLike } from '../storage/migrate';
+import { WEAK_MAX, type WeakSpot } from './spot';
 import type { Curriculum, Unit } from './curriculum';
 
 /** Bounded local progress for piece practice. Never stores audio. */
@@ -60,6 +61,8 @@ export interface PieceProgress {
   dailyGoal: number;
   /** Today's checklist per course (piece id, plus #guitar). Other days are dropped. */
   today: Record<string, TodayPlan>;
+  /** Recurring passages per course (piece id, plus #guitar). Five at most per course. */
+  weakSpots: Record<string, WeakSpot[]>;
 }
 /** A step's record at one tempo and input: best score, tightest median timing (ms), last take's on-time share, a clean take from memory. */
 export interface TakeBest {
@@ -76,8 +79,9 @@ export const LOG_DAYS = 120;
 const courseKeys = (piece: string) => [piece, `${piece}#guitar`, `${piece}#guitar-piece`];
 /**
  * Removes everything saved for one piece, across all three courses: steps, today's checklist, personal bests, the tempo
- * goal and the takes in history. Other pieces are left exactly as they were. Used both for "Reset progress for this
- * piece" and when a locally added piece is removed, so its progress cannot be inherited by a future piece of that name.
+ * goal, remembered weak passages and the takes in history. Other pieces are left exactly as they were. Used both for
+ * "Reset progress for this piece" and when a locally added piece is removed, so its progress cannot be inherited by a
+ * future piece of that name.
  */
 export function clearPieceProgress(progress: PieceProgress, piece: string): void {
   const keys = courseKeys(piece),
@@ -87,6 +91,7 @@ export function clearPieceProgress(progress: PieceProgress, piece: string): void
   for (const k of keys) {
     delete progress.today[k];
     delete progress.goals[k];
+    delete progress.weakSpots[k];
   }
   progress.history = progress.history.filter((h) => h.piece !== piece);
 }
@@ -127,6 +132,7 @@ export function parsePieceProgress(
     log: [],
     dailyGoal: 6,
     today: {},
+    weakSpots: {},
   };
   try {
     const value = JSON.parse(raw ?? '{}');
@@ -217,6 +223,35 @@ export function parsePieceProgress(
           .slice(0, 12)
           .map((r) => ({ id: r.id.slice(0, 160), reason: r.reason.slice(0, 80), slot: r.slot })),
       };
+    }
+    const weak =
+      value.weakSpots && typeof value.weakSpots === 'object' && !Array.isArray(value.weakSpots)
+        ? (value.weakSpots as Record<string, unknown>)
+        : {};
+    for (const [course, list] of Object.entries(weak).slice(0, 40)) {
+      if (course.length > 140 || !Array.isArray(list)) continue;
+      const spots: WeakSpot[] = [];
+      for (const raw of list.slice(0, WEAK_MAX * 4)) {
+        const s = raw as Partial<WeakSpot>;
+        if (!s || typeof s !== 'object') continue;
+        const unit = typeof s.unit === 'string' ? s.unit.slice(0, 160) : '',
+          from = Math.floor(bounded(s.from, -1, 100000, -1)),
+          to = Math.floor(bounded(s.to, -1, 100000, -1)),
+          hands = Array.isArray(s.hands)
+            ? (s.hands.filter((h) => h === 'L' || h === 'R').slice(0, 2) as WeakSpot['hands'])
+            : [];
+        if (!unit || from < 0 || to < from || !hands.length) continue;
+        spots.push({
+          unit,
+          from,
+          to,
+          hands,
+          due: bounded(s.due, 0, 1e14, 0),
+          count: Math.floor(bounded(s.count, 1, WEAK_MAX, 1)),
+        });
+        if (spots.length >= WEAK_MAX) break;
+      }
+      if (spots.length) result.weakSpots[course] = spots;
     }
     const bests =
       value.bests && typeof value.bests === 'object'
@@ -522,8 +557,10 @@ export function ready(unit: Unit, units: (id: string) => UnitProgress | undefine
   return unit.requires.every((r) => reached(units(r.id), r.at));
 }
 
-export type PlanSlot = 'listen' | 'warm' | 'review' | 'second' | 'chord' | 'phrase' | 'run';
-const SLOTS: PlanSlot[] = ['listen', 'warm', 'review', 'second', 'chord', 'phrase', 'run'];
+export type PlanSlot = 'listen' | 'warm' | 'review' | 'second' | 'chord' | 'phrase' | 'run' | 'weak';
+const SLOTS: PlanSlot[] = ['listen', 'warm', 'review', 'second', 'chord', 'phrase', 'run', 'weak'];
+/** The most rows a day's plan holds, even when everything is due at once. */
+export const PLAN_MAX = 12;
 export interface PlanRow {
   unit: Unit;
   reason: string;
@@ -564,14 +601,16 @@ const open = (u: Unit, get: (id: string) => UnitProgress | undefined, now: numbe
 
 /**
  * A short session built around one phrase of the music: hear the piece first; then a key drill to warm up, reviews that
- * are due (two at most, oldest first), steps certified on an earlier day that need their second day (two at most), one
- * chord or change the music so far needs, today's phrase (two passages or joins at most), and one play-through.
- * Prerequisites stay advisory. Deterministic in the course and the saved progress.
+ * are due (two at most, oldest first), steps certified on an earlier day that need their second day (two at most), a
+ * passage a trusted take flagged before (two at most), one chord or change the music so far needs, today's phrase (two
+ * passages or joins at most), and one play-through. Prerequisites stay advisory. Deterministic in the course and the
+ * saved progress. Never longer than PLAN_MAX rows.
  */
 export function suggestToday(
   curriculum: Curriculum,
   get: (id: string) => UnitProgress | undefined,
   now: number,
+  weakSpots: readonly WeakSpot[] = [],
 ): PlanRow[] {
   const plan: PlanRow[] = [],
     used = new Set<string>(),
@@ -602,6 +641,14 @@ export function suggestToday(
   });
   for (const u of second.sort((a, b) => get(a.id)!.last - get(b.id)!.last).slice(0, 2))
     add(u, 'Second day: play it again', 'second');
+  // A passage a trusted take confirmed comes back on its due day, one more look rather than a verdict.
+  for (const w of [...weakSpots]
+    .filter((s) => s.due <= now)
+    .sort((a, b) => a.due - b.due)
+    .slice(0, 2)) {
+    const u = curriculum.units.find((x) => x.id === w.unit);
+    add(u && resolve(u), 'A passage to revisit', 'weak');
+  }
   const music = phrases(curriculum);
   const members = (p: Phrase) =>
     [...new Set([...p.units, ...p.extras.filter((u) => u.kind === 'seam')].map(resolve))].filter((u) =>
@@ -631,7 +678,7 @@ export function suggestToday(
     )
     .sort((a, b) => b.bars.length - a.bars.length);
   add(runs[0], 'Play through without stopping', 'run');
-  return plan;
+  return plan.slice(0, PLAN_MAX);
 }
 
 /** A plan row is done for today from what was played today: listened, reviewed, confirmed, three clean takes, or one trusted run. */
@@ -652,6 +699,7 @@ export function rowDone(
       return Boolean(p && (p.learned || p.days.includes(today)));
     case 'warm':
     case 'run':
+    case 'weak':
       return takesToday.some((t) => t.trusted);
     default:
       return takesToday.filter((t) => t.clean).length >= 3 || ['done', 'learned', 'due'].includes(state);

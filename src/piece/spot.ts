@@ -92,6 +92,81 @@ export function slowerBpm(unit: Unit, bpm: number): number {
   return below.length ? Math.max(...below) : Math.max(20, Math.round(bpm * 0.85));
 }
 
+/** The next tempo rung above bpm, never past cap (the parent step's own tempo), or 15% faster when none is. */
+export function fasterBpm(unit: Unit, bpm: number, cap = Infinity): number {
+  const above = unit.rungs.map((r) => Math.max(20, Math.round(unit.goalBpm * r))).filter((c) => c > bpm && c <= cap);
+  if (above.length) return Math.min(...above);
+  return Math.max(20, Math.min(cap, Math.round(bpm * 1.15)));
+}
+
+/** The most weak passages kept for one course. */
+export const WEAK_MAX = 5;
+const WEAK_DAYS = [1, 2, 4, 8, 16];
+const DAY_MS = 86400000;
+
+/**
+ * A passage that recurring, trusted takes have confirmed needs another look. It is remembered by play-order bar
+ * positions inside a step, with a spaced-review due date. It never implies failure: the plan offers it again like any
+ * other passage and the step's own tempo ladder is untouched.
+ */
+export interface WeakSpot {
+  unit: string;
+  from: number;
+  to: number;
+  hands: Hand[];
+  due: number;
+  count: number;
+}
+const weakKey = (s: Pick<WeakSpot, 'unit' | 'from' | 'to' | 'hands'>) =>
+  `${s.unit}|${s.from}-${s.to}|${s.hands.join('')}`;
+const weakRank = (a: WeakSpot, b: WeakSpot) => b.count - a.count || a.due - b.due || a.unit.localeCompare(b.unit);
+const weakDue = (count: number, now: number) => now + WEAK_DAYS[Math.min(WEAK_DAYS.length - 1, count - 1)] * DAY_MS;
+
+/** Adds or repeats a confirmed problem range from one trusted take; keeps the five most recurring per course. */
+export function rememberWeakSpot(list: WeakSpot[], unit: string, pick: SpotPick, now: number): WeakSpot[] {
+  const hands: Hand[] = [pick.hand],
+    key = weakKey({ unit, from: pick.from, to: pick.to, hands }),
+    next = list.map((s) => ({ ...s, hands: [...s.hands] })),
+    found = next.find((s) => weakKey(s) === key);
+  if (found) {
+    found.count = Math.min(WEAK_MAX, found.count + 1);
+    found.due = weakDue(found.count, now);
+  } else next.push({ unit, from: pick.from, to: pick.to, hands, due: weakDue(1, now), count: 1 });
+  return next.sort(weakRank).slice(0, WEAK_MAX);
+}
+
+/** A trusted spot pass on a remembered range moves its next review out; anything else leaves the list alone. */
+export function rescheduleWeakSpot(list: WeakSpot[], unit: string, from: number, to: number, now: number): WeakSpot[] {
+  const found = list.find((s) => s.unit === unit && s.from === from && s.to === to);
+  if (!found) return list;
+  return list.map((s) =>
+    s === found ? { ...s, hands: [...s.hands], due: weakDue(s.count, now) } : { ...s, hands: [...s.hands] },
+  );
+}
+
+/** Combines two saved lists without losing either browser's passages, then keeps the five most recurring. */
+export function mergeWeakSpots(
+  local: Readonly<Record<string, WeakSpot[]>>,
+  incoming: Readonly<Record<string, WeakSpot[]>>,
+): Record<string, WeakSpot[]> {
+  const out: Record<string, WeakSpot[]> = {};
+  for (const [course, list] of Object.entries(local))
+    out[course] = list
+      .map((s) => ({ ...s, hands: [...s.hands] }))
+      .sort(weakRank)
+      .slice(0, WEAK_MAX);
+  for (const [course, list] of Object.entries(incoming)) {
+    const byKey = new Map((out[course] ?? []).map((s) => [weakKey(s), s]));
+    for (const s of list) {
+      const before = byKey.get(weakKey(s));
+      if (!before || s.count > before.count || (s.count === before.count && s.due > before.due))
+        byKey.set(weakKey(s), { ...s, hands: [...s.hands] });
+    }
+    out[course] = [...byKey.values()].sort(weakRank).slice(0, WEAK_MAX);
+  }
+  return out;
+}
+
 export function barsText(numbers: number[]): string {
   if (numbers.length === 1) return `bar ${numbers[0]}`;
   const run = numbers.length > 1 && numbers.every((v, i) => i === 0 || v === numbers[i - 1] + 1);

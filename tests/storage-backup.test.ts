@@ -106,6 +106,28 @@ describe('offline JSON backup', () => {
     expect(target.getItem('guitar.sync.v1')).toBeNull();
   });
 
+  it('round-trips saves with weak spots, and still reads saves without them', () => {
+    const weak = { unit: 'R:1-4', from: 1, to: 2, hands: ['R'] as ('L' | 'R')[], due: 1000, count: 2 };
+    const source = new Store();
+    source.setItem('piece.trainer.v1', JSON.stringify(piece({ weakSpots: { one: [weak] } })));
+    const { backup } = createBackup(source);
+    const read = readBackup(backupText(backup));
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    const target = new Store();
+    expect(restoreBackup(read.backup, 'replace', target).ok).toBe(true);
+    expect(JSON.parse(target.getItem('piece.trainer.v1')!).weakSpots).toEqual({ one: [weak] });
+
+    const old = new Store();
+    old.setItem('piece.trainer.v1', JSON.stringify({ version: 1, units: {} }));
+    const oldBackup = createBackup(old).backup;
+    const oldRead = readBackup(backupText(oldBackup));
+    expect(oldRead.ok).toBe(true);
+    const oldTarget = new Store();
+    expect(restoreBackup(oldBackup, 'replace', oldTarget).ok).toBe(true);
+    expect(JSON.parse(oldTarget.getItem('piece.trainer.v1')!).weakSpots).toEqual({});
+  });
+
   it('rejects malformed, future and foreign files without writing anything', () => {
     const store = new Store();
     store.setItem('guitar.trainer.v1', JSON.stringify(trainer()));
