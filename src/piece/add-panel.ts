@@ -26,6 +26,7 @@ import {
   problemListHtml,
 } from './add-view';
 import { mountPieceAccount } from '../account/pieces';
+import { accountsEnabled } from '../account/config';
 
 /**
  * "Add your own piece": instructions to carry to any AI chat, the answer brought back, a check that says plainly what is
@@ -523,18 +524,20 @@ export function mountAddPanel(hooks: AddPanelHooks): { paint: () => void } {
     }
   });
 
-  const account = mountPieceAccount({
-    container: el('piece-account-list'),
-    readMine,
-    titleOf: (text) => titleOf(text) ?? 'Untitled piece',
-    refresh: () => paint(),
-    addMine: (m) => {
-      const mine = readMine();
-      if (mine.length >= MAX_PIECES && !mine.some((x) => x.id === m.id)) return false;
-      if (textBytes(m.text) > MAX_BYTES) return false;
-      return writeMine([...mine.filter((x) => x.id !== m.id), m]);
-    },
-  });
+  const account = accountsEnabled
+    ? mountPieceAccount({
+        container: el('piece-account-list'),
+        readMine,
+        titleOf: (text) => titleOf(text) ?? 'Untitled piece',
+        refresh: () => paint(),
+        addMine: (m) => {
+          const mine = readMine();
+          if (mine.length >= MAX_PIECES && !mine.some((x) => x.id === m.id)) return false;
+          if (textBytes(m.text) > MAX_BYTES) return false;
+          return writeMine([...mine.filter((x) => x.id !== m.id), m]);
+        },
+      })
+    : { paint: () => undefined };
   paint();
   return { paint };
 }

@@ -7,6 +7,17 @@ import { resultView } from './result';
 import { drawLane, fretGuide, nameOf, trainerShell } from './view';
 import { TapTempo } from '../audio/tap-tempo';
 import type { SessionKind } from './session';
+import {
+  backupFilename,
+  backupText,
+  createBackup,
+  readBackup,
+  restoreBackup,
+  summaryOf,
+  summaryText,
+  type Backup,
+  type RestoreMode,
+} from '../storage/backup';
 
 trainerShell();
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -17,6 +28,8 @@ const audio = new TrainerAudio(),
   heard = new Set<string>();
 /** Boot reads must not rewrite saved text that was never understood; a future or unsafe save stays read-only. */
 let booting = true;
+/** Set once an imported backup is written: the page is about to reload, so nothing in memory may overwrite it. */
+let restoring = false;
 const storageBlocked = loaded.readOnly;
 let lesson = lessonById(progress.selected),
   feedback = 'One phrase, at a pace that leaves room to listen.';
@@ -34,7 +47,7 @@ const skill = (): Skill => (progress.skills[lesson.id] ??= initialSkill(lesson))
 const active = () => Boolean(audio.plan || audio.busy || audio.playing || !player.paused);
 function persist(): void {
   // Opening the page must never overwrite a save that was not read (corrupt or from a newer version).
-  if (booting) return;
+  if (booting || restoring) return;
   if (storageBlocked) {
     el('storage-status').textContent =
       loaded.warning ?? 'Saved progress was left untouched because it could not be read safely.';
@@ -440,6 +453,79 @@ el('trainer-reset').onclick = () => {
   el('trainer-reset').textContent = 'Reset learning progress';
   selectLesson('pulse');
   feedback = 'Lesson progress cleared. Your timing calibration is retained.';
+};
+/**
+ * Offline backup: one JSON file out, validated before anything is written on the way in. An import reloads the page,
+ * because this page's in-memory progress would otherwise save over what was just restored.
+ */
+let pendingBackup: Backup | undefined;
+const backupStatus = el('trainer-backup-status'),
+  backupPreview = el('trainer-backup-preview');
+const backupSay = (text: string) => (backupStatus.textContent = text);
+const backupImportFile = el<HTMLInputElement>('trainer-import-file');
+el('trainer-export').onclick = () => {
+  const { backup, skipped } = createBackup();
+  if (!Object.keys(backup.data).length) {
+    backupSay('There is no saved progress to export yet.');
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([backupText(backup)], { type: 'application/json' })),
+    link = document.createElement('a');
+  link.href = url;
+  link.download = backupFilename(new Date(backup.exportedAt));
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  backupSay(
+    `${summaryText(summaryOf(backup))} Saved as ${link.download}.${
+      skipped.length ? ' One saved part could not be read and was left out.' : ''
+    }`,
+  );
+};
+el('trainer-import').onclick = () => backupImportFile.click();
+backupImportFile.onchange = async () => {
+  const file = backupImportFile.files?.[0];
+  backupImportFile.value = '';
+  pendingBackup = undefined;
+  backupPreview.hidden = true;
+  if (!file) return;
+  let text = '';
+  try {
+    text = await file.text();
+  } catch {
+    backupSay('That file could not be read, so nothing was imported.');
+    return;
+  }
+  const read = readBackup(text);
+  if (!read.ok) {
+    backupSay(read.reason);
+    return;
+  }
+  pendingBackup = read.backup;
+  el('trainer-backup-summary').textContent = summaryText(read.summary);
+  backupPreview.hidden = false;
+  backupSay('Choose Merge or Replace. Nothing has been changed yet.');
+};
+const restoreFromBackup = (mode: RestoreMode) => {
+  if (!pendingBackup) return;
+  const result = restoreBackup(pendingBackup, mode);
+  if (!result.ok) {
+    backupSay(result.reason);
+    return;
+  }
+  pendingBackup = undefined;
+  backupPreview.hidden = true;
+  backupSay('Backup imported. Reloading to use it…');
+  restoring = true;
+  setTimeout(() => location.reload(), 600);
+};
+el('trainer-backup-merge').onclick = () => restoreFromBackup('merge');
+el('trainer-backup-replace').onclick = () => restoreFromBackup('replace');
+el('trainer-backup-cancel').onclick = () => {
+  pendingBackup = undefined;
+  backupPreview.hidden = true;
+  backupSay('Nothing was changed.');
 };
 navigator.mediaDevices?.addEventListener('devicechange', () => {
   progress.calibrated = false;

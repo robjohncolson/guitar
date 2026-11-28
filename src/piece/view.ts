@@ -25,6 +25,7 @@ import { glLight, type LightLayer } from './lightgl';
 import { runCounter, runPlace, type RunMemo, type RunShow } from './game';
 import { siteNav } from '../ui/nav';
 import { addPanelMarkup } from './add-panel';
+import { accountsEnabled } from '../account/config';
 
 const ICON_MENU =
   '<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
@@ -92,10 +93,16 @@ export function pieceShell(): void {
         <div class="honesty"><p><strong>What the microphone can and cannot tell</strong></p><p>Timing comes from each attack. For piano, a note counts as <em>heard</em> only when its own partials rise at the attack; <em>not heard</em> needs them to stay quiet. Notes doubled an octave or a twelfth above another note have no partials of their own: <em>can't check</em>. Everything else is <em>unclear</em> and counts neither way. Tested on real piano recordings, a played note was called missing or wrong about 2% of the time and an unplayed note was confirmed under 1% of the time. Your room and piano may differ; listen back to your takes.</p><p>For guitar, a single plucked string is checked for pitch; two or more strings at once, and strums, are timing only. Fingering, hand position, pedalling, tone and which strings rang stay for you to judge.</p></div>
       </details>
       <details id="piece-about"><summary>About this piece</summary><p id="piece-summary" class="intro"></p><div id="piece-about-body"></div><button id="piece-listen">Hear the whole piece</button></details>
-      <details id="piece-add"><summary>Add your own piece</summary>${addPanelMarkup(import.meta.env.VITE_ACCOUNTS !== 'off')}</details>
+      <details id="piece-add"><summary>Add your own piece</summary>${addPanelMarkup(accountsEnabled)}</details>
       <details id="piece-last"><summary>Last take</summary><p id="piece-last-empty" class="muted">No take yet on this page.</p><div id="piece-last-slot"></div>
         <div id="piece-review" hidden><div class="review-heading"><span>Hear yourself</span><span id="piece-take" class="muted"></span></div><audio id="piece-player" controls></audio><div class="review-actions"><button id="piece-previous">Hear previous take</button><button id="piece-latest">Hear latest take</button><button id="piece-loop">Loop latest · play along</button><a id="piece-download" download="take.wav">Download WAV</a><a id="piece-trace" download="take.json">Note details</a></div><p id="piece-review-note" class="muted">Playback stops the microphone. Takes stay in this page.</p></div></details>
       <details id="piece-journal"><summary>Your practice today</summary><div id="piece-journal-list"></div><button id="piece-finish">Finish this session</button><div id="piece-session" role="status" hidden></div><button id="piece-reset" class="text-button">Reset progress for this piece</button><p id="piece-storage" class="muted">Progress stays in this browser. Audio is never saved automatically.</p></details>
+      <details id="piece-backup"><summary>Back up &amp; move progress</summary>
+        <p>Download one JSON file with your guitar course progress, Pieces progress, your own pieces and input settings. Your AI reader key and sync bookkeeping are never included.</p>
+        <p class="backup-actions"><button id="piece-export" type="button">Export backup</button><button id="piece-import" type="button">Import backup…</button><input id="piece-import-file" class="sr-only" type="file" accept=".json,application/json" aria-label="Import a Clean Take backup file"></p>
+        <div id="piece-backup-preview" hidden><p id="piece-backup-summary"></p><p class="backup-actions"><button id="piece-backup-merge" type="button">Merge into this browser</button><button id="piece-backup-replace" type="button">Replace saved progress</button><button id="piece-backup-cancel" type="button" class="text-button">Cancel</button></p><p class="muted">Merge keeps this browser’s newer steps and adds what the file has. Replace uses the file’s copy for the parts it contains. Nothing has changed yet.</p></div>
+        <p id="piece-backup-status" class="muted" role="status" aria-atomic="true"></p>
+      </details>
       <details id="piece-keys"><summary>Keyboard shortcuts</summary><footer><span><kbd>Space</kbd> start practice</span><span><kbd>Esc</kbd> stop everything</span><span><kbd>↑</kbd> <kbd>↓</kbd> answer after a take</span><span>Listening happens in this browser; nothing is uploaded, except pictures of pages you send yourself to an AI from Add your own piece.</span></footer></details>
       </div>
     </div></dialog>
