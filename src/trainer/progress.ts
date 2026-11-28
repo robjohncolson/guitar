@@ -1,6 +1,7 @@
 import { lessonById, lessons, type Lesson } from './curriculum';
 import type { Grade } from './grader';
 import { saveTracked } from '../account/changes';
+import { loadVersioned, type Loaded, type StorageLike } from '../storage/migrate';
 export const progressKey = 'guitar.trainer.v1';
 export interface Skill {
   bpm: number;
@@ -108,11 +109,18 @@ export function parseProgress(raw: string | null): Progress {
   return result;
 }
 export function loadProgress(): Progress {
-  try {
-    return parseProgress(localStorage.getItem(progressKey));
-  } catch {
-    return parseProgress(null);
-  }
+  return readProgress().value;
+}
+/** Reads the saved progress through the versioned loader: old saves are migrated with a backup, unreadable ones are quarantined. */
+export function readProgress(store?: StorageLike): Loaded<Progress> {
+  return loadVersioned<Progress>(
+    progressKey,
+    {
+      currentVersion: 1,
+      parse: (value) => parseProgress(value == null ? null : JSON.stringify(value)),
+    },
+    store,
+  );
 }
 export function saveProgress(progress: Progress): boolean {
   try {

@@ -22,6 +22,7 @@ import {
   placeHands,
   placeUnit,
   progressId,
+  readPieceProgress,
   ready,
   rowDone,
   rungBpm,
@@ -144,13 +145,26 @@ const trainerCalibration = (() => {
     return undefined;
   }
 })();
-const progress: PieceProgress = (() => {
+const pieceLoad = (() => {
   try {
-    return parsePieceProgress(localStorage.getItem(pieceProgressKey), trainerCalibration);
+    return readPieceProgress(trainerCalibration);
   } catch {
-    return parsePieceProgress(null, trainerCalibration);
+    return {
+      value: parsePieceProgress(null, trainerCalibration),
+      status: 'missing' as const,
+      version: null,
+      changed: false,
+      readOnly: false,
+      raw: null,
+      sourceKey: pieceProgressKey,
+      warning: undefined as string | undefined,
+    };
   }
 })();
+const progress: PieceProgress = pieceLoad.value;
+/** Boot reads must not rewrite saved text that was never understood; a future or unsafe save stays read-only. */
+let booting = true;
+const storageBlocked = pieceLoad.readOnly;
 const audio = new PieceAudio();
 // Browser checks reach the audio engine in development builds only.
 if (import.meta.env.DEV)
@@ -486,6 +500,13 @@ function finishWait(run: WaitRun): void {
   if (mistakes === 0) celebrate();
 }
 function persist(): void {
+  // Opening the page must never overwrite a save that was not read (corrupt or from a newer version).
+  if (booting) return;
+  if (storageBlocked) {
+    el('piece-storage').textContent =
+      pieceLoad.warning ?? 'Saved progress was left untouched because it could not be read safely.';
+    return;
+  }
   try {
     saveTracked(pieceProgressKey, JSON.stringify(progress));
     el('piece-storage').textContent = 'Progress stays in this browser. Audio is never saved automatically.';
@@ -2777,6 +2798,8 @@ function live(): Parameters<typeof drawKeys>[8] {
   };
 }
 loadPack(progress.selected.piece || packs()[0].id);
+booting = false;
+if (pieceLoad.warning) el('piece-storage').textContent = pieceLoad.warning;
 pressCourse();
 paint();
 // The opening step's pitch ear, if it needs one, loads once the page has painted and gone idle, and not while

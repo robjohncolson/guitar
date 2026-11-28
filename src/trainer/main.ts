@@ -2,7 +2,7 @@ import '../styles.css';
 import './styles.css';
 import { TrainerAudio, type TrainerTake } from './audio';
 import { lessons, lessonById, stages, cueMidi, openStrings } from './curriculum';
-import { advance, initialSkill, loadProgress, recommended, saveProgress, type Skill } from './progress';
+import { advance, initialSkill, readProgress, recommended, saveProgress, type Skill } from './progress';
 import { resultView } from './result';
 import { drawLane, fretGuide, nameOf, trainerShell } from './view';
 import { TapTempo } from '../audio/tap-tempo';
@@ -11,9 +11,13 @@ import type { SessionKind } from './session';
 trainerShell();
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const audio = new TrainerAudio(),
-  progress = loadProgress(),
+  loaded = readProgress(),
+  progress = loaded.value,
   taps = new TapTempo(),
   heard = new Set<string>();
+/** Boot reads must not rewrite saved text that was never understood; a future or unsafe save stays read-only. */
+let booting = true;
+const storageBlocked = loaded.readOnly;
 let lesson = lessonById(progress.selected),
   feedback = 'One phrase, at a pace that leaves room to listen.';
 let pending: { take: TrainerTake; skill: Skill } | undefined, attemptSkill: Skill | undefined;
@@ -29,6 +33,13 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const skill = (): Skill => (progress.skills[lesson.id] ??= initialSkill(lesson));
 const active = () => Boolean(audio.plan || audio.busy || audio.playing || !player.paused);
 function persist(): void {
+  // Opening the page must never overwrite a save that was not read (corrupt or from a newer version).
+  if (booting) return;
+  if (storageBlocked) {
+    el('storage-status').textContent =
+      loaded.warning ?? 'Saved progress was left untouched because it could not be read safely.';
+    return;
+  }
   el('storage-status').textContent = saveProgress(progress)
     ? 'Progress stays in this browser. Audio is never saved automatically.'
     : 'Storage is unavailable. Practice works, but progress will last only for this page.';
@@ -579,6 +590,8 @@ function paint(): void {
   );
 }
 selectLesson(lesson.id);
+booting = false;
+if (loaded.warning) el('storage-status').textContent = loaded.warning;
 paint();
 // Fetch the pitch ear once the page has painted and gone idle, so the first take rarely waits for it. Not while
 // something plays: the model's WebGL warm-up can hold the main thread for a moment.

@@ -1,3 +1,4 @@
+import { loadVersioned, type Loaded, type StorageLike } from '../storage/migrate';
 import type { Curriculum, Unit } from './curriculum';
 
 /** Bounded local progress for piece practice. Never stores audio. */
@@ -235,6 +236,21 @@ export function parsePieceProgress(
     /* An old or unreadable save never blocks practice. */
   }
   return result;
+}
+
+/** Reads the saved progress through the versioned loader: old saves are migrated with a backup, unreadable ones are quarantined. */
+export function readPieceProgress(
+  fallbackCalibration?: { offset: number; calibrated: boolean; calibrationKey: string },
+  store?: StorageLike,
+): Loaded<PieceProgress> {
+  return loadVersioned<PieceProgress>(
+    pieceProgressKey,
+    {
+      currentVersion: 1,
+      parse: (value) => parsePieceProgress(value == null ? null : JSON.stringify(value), fallbackCalibration),
+    },
+    store,
+  );
 }
 
 export const dayOf = (time: number) => {

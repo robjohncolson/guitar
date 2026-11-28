@@ -1,4 +1,5 @@
 import { PIECES_KEY } from '../account/config';
+import { defaultStore, quarantineRaw, type StorageLike } from '../storage/migrate';
 import { compile } from './notation';
 import { BODY_LINE, code, MAX_BYTES, textBytes } from './import';
 import type { ScoreMeta } from './score';
@@ -23,11 +24,23 @@ export function parseMine(raw: string | null): Mine[] {
     return [];
   }
 }
-export function readMine(): Mine[] {
+export function readMine(store?: StorageLike): Mine[] {
   try {
-    return parseMine(localStorage.getItem(MINE_KEY));
+    const s = store ?? defaultStore();
+    if (!s) return [];
+    const raw = s.getItem(MINE_KEY);
+    // Unreadable text is copied aside instead of being silently lost on the next write.
+    if (raw !== null && !readableMine(raw)) quarantineRaw(MINE_KEY, raw, s);
+    return parseMine(raw);
   } catch {
     return [];
+  }
+}
+function readableMine(raw: string): boolean {
+  try {
+    return Array.isArray(JSON.parse(raw));
+  } catch {
+    return false;
   }
 }
 /** False when browser storage is full or unavailable. */

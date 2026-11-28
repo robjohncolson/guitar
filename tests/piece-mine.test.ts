@@ -9,9 +9,11 @@ import {
   isDraft,
   MAX_BYTES,
   MAX_PIECES,
+  MINE_KEY,
   parseMine,
   pickerLabel,
   pieceMeta,
+  readMine,
   removePiece,
   slugId,
   titleKey,
@@ -237,5 +239,21 @@ describe('adding to his pieces', () => {
     expect(parseMine(JSON.stringify(Array.from({ length: 40 }, (_, i) => ({ id: `${i}`, text: '' }))))).toHaveLength(
       MAX_PIECES,
     );
+  });
+
+  it('quarantines an unreadable saved list instead of losing it on the next write', () => {
+    const data = new Map<string, string>([[MINE_KEY, '{"id":"not a list"}']]),
+      store = {
+        getItem: (key: string) => data.get(key) ?? null,
+        setItem: (key: string, value: string) => data.set(key, value),
+      };
+
+    expect(readMine(store)).toEqual([]);
+    expect(data.get(MINE_KEY)).toBe('{"id":"not a list"}');
+    expect(data.get(`${MINE_KEY}.quarantine`)).toBe('{"id":"not a list"}');
+    // A second read keeps the first quarantine copy.
+    data.set(`${MINE_KEY}.quarantine`, 'first copy');
+    readMine(store);
+    expect(data.get(`${MINE_KEY}.quarantine`)).toBe('first copy');
   });
 });
